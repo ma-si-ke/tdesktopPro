@@ -1445,6 +1445,7 @@ PRIVATE
     media/view/media_view_overlay_raster.h
     media/view/media_view_overlay_rhi.cpp
     media/view/media_view_overlay_rhi.h
+    media/view/media_view_metal_texture.h
     media/view/media_view_overlay_renderer.h
     media/view/media_view_overlay_widget.cpp
     media/view/media_view_overlay_widget.h
@@ -1968,6 +1969,7 @@ if (APPLE)
     nice_target_sources(Telegram ${src_loc}
     PRIVATE
         tray_accounts_menu.cpp
+        media/view/media_view_metal_texture.mm
     )
 else()
     nice_target_sources(Telegram ${src_loc}
