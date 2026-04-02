@@ -4158,6 +4158,14 @@ void HistoryInner::setItemsRevealHeight(int revealHeight) {
 	_revealHeight = revealHeight;
 }
 
+void HistoryInner::changeCollapseHeight(int collapseHeight) {
+	if (_collapseHeight == collapseHeight) {
+		return;
+	}
+	_collapseHeight = collapseHeight;
+	updateSize();
+}
+
 void HistoryInner::changeItemsRevealHeight(int revealHeight) {
 	if (_revealHeight == revealHeight) {
 		return;
@@ -4168,7 +4176,7 @@ void HistoryInner::changeItemsRevealHeight(int revealHeight) {
 
 void HistoryInner::updateSize() {
 	const auto visibleHeight = _scroll->height();
-	const auto itemsHeight = historyHeight() - _revealHeight;
+	const auto itemsHeight = historyHeight() - _revealHeight + _collapseHeight;
 	const auto aboutAboveHistory = _aboutView && _aboutView->aboveHistory();
 	const auto aboutBelowHistory = _aboutView && !aboutAboveHistory;
 	auto newHistoryMarginBottom = st::historyPaddingBottom;
@@ -4303,6 +4311,8 @@ void HistoryInner::captureViewForThanosEffect(
 	_thanosEffect->addItem(
 		std::move(image),
 		QRect(globalPos, QSize(viewWidth, viewHeight)));
+
+	_widget->startCollapseAnimation(viewHeight);
 }
 
 HistoryInner::~HistoryInner() {
