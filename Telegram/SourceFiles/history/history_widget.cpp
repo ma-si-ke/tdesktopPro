@@ -7651,11 +7651,17 @@ void HistoryWidget::startCollapseAnimation(int height, int itemTop) {
 		return;
 	}
 
+	if (_collapseAnimation.animating()) {
+		for (auto &gap : _collapseGaps) {
+			gap.startHeight = gap.currentHeight;
+		}
+	}
+
 	auto merged = false;
 	for (auto &gap : _collapseGaps) {
-		if (gap.absY + gap.startHeight == itemTop
+		if (gap.absY + gap.currentHeight == itemTop
 			|| (gap.absY <= itemTop
-				&& itemTop <= gap.absY + gap.startHeight)) {
+				&& itemTop <= gap.absY + gap.currentHeight)) {
 			gap.startHeight += height;
 			gap.currentHeight += height;
 			merged = true;
@@ -7680,7 +7686,6 @@ void HistoryWidget::startCollapseAnimation(int height, int itemTop) {
 	}
 
 	syncCollapseGapsToList();
-	synteticScrollToY(scrollTop + height);
 
 	auto totalHeight = 0;
 	for (const auto &gap : _collapseGaps) {
@@ -7712,10 +7717,8 @@ void HistoryWidget::collapseAnimationCallback() {
 		gap.currentHeight = newHeight;
 	}
 
-	if (totalDelta > 0) {
+	if (totalDelta != 0) {
 		syncCollapseGapsToList();
-		const auto scrollTop = _scroll->scrollTop();
-		synteticScrollToY(std::max(scrollTop - totalDelta, 0));
 	}
 
 	if (!_collapseAnimation.animating()) {
