@@ -834,6 +834,10 @@ Ui::ScrollArea *PinnedWidget::listScrollArea() const {
 	return _scroll.get();
 }
 
+bool PinnedWidget::listThanosEffectEnabled() const {
+	return false;
+}
+
 void PinnedWidget::confirmDeleteSelected() {
 	ConfirmDeleteSelectedItems(_inner);
 }
