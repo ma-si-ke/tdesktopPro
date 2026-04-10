@@ -830,6 +830,10 @@ void PinnedWidget::listAddTranslatedItems(
 	not_null<TranslateTracker*> tracker) {
 }
 
+Ui::ScrollArea *PinnedWidget::listScrollArea() const {
+	return _scroll.get();
+}
+
 void PinnedWidget::confirmDeleteSelected() {
 	ConfirmDeleteSelectedItems(_inner);
 }
