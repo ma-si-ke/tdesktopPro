@@ -1795,6 +1795,8 @@ PRIVATE
     ui/chat/sponsored_message_bar.h
     ui/controls/compose_ai_button_factory.cpp
     ui/controls/compose_ai_button_factory.h
+    ui/controls/custom_emoji_toast_icon.cpp
+    ui/controls/custom_emoji_toast_icon.h
     ui/controls/emoji_button_factory.cpp
     ui/controls/emoji_button_factory.h
     ui/controls/location_picker.cpp
@@ -1805,6 +1807,8 @@ PRIVATE
     ui/controls/table_rows.h
     ui/controls/userpic_button.cpp
     ui/controls/userpic_button.h
+    ui/controls/warning_tooltip.cpp
+    ui/controls/warning_tooltip.h
     ui/effects/credits_graphics.cpp
     ui/effects/credits_graphics.h
     ui/effects/emoji_fly_animation.cpp
