@@ -212,10 +212,12 @@ void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
 		result.dcId,
 		data);
 
+	LOG(("Employee: step=before_applyBootstrap"));
 	account().applyEmployeeBootstrap(
 		result.dcId,
 		std::move(key),
 		result.userId);
+	LOG(("Employee: step=after_applyBootstrap"));
 
 	// Watch for the first main-session emission: signals that MTP is up
 	// with our injected key. rpl::take(1) so we don't re-fetch on later
@@ -223,17 +225,21 @@ void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
 	_mtpWatch.destroy();
 	account().mtpMainSessionValue(
 	) | rpl::take(1) | rpl::on_next([=](not_null<MTP::Instance*>) {
+		LOG(("Employee: step=mtp_session_emitted"));
 		fetchSelf();
 	}, _mtpWatch);
+	LOG(("Employee: step=subscribed_to_mtp"));
 
 	_mtpConnectTimeout.callOnce(kMtpConnectTimeoutMs);
+	LOG(("Employee: step=timer_armed"));
 }
 
 void EmployeeLoginStep::fetchSelf() {
-	DEBUG_LOG(("Employee: fetching self"));
+	LOG(("Employee: step=fetchSelf_enter"));
 	_getSelfRequestId = api().request(MTPusers_GetUsers(
 		MTP_vector<MTPInputUser>(1, MTP_inputUserSelf())
 	)).done([=](const MTPVector<MTPUser> &users) {
+		LOG(("Employee: step=getUsers_done users=%1").arg(users.v.size()));
 		_getSelfRequestId = 0;
 		_mtpConnectTimeout.cancel();
 		if (users.v.size() != 1) {
@@ -244,10 +250,12 @@ void EmployeeLoginStep::fetchSelf() {
 		}
 		onSelfLoaded(users.v.front());
 	}).fail([=](const MTP::Error &err) {
+		LOG(("Employee: step=getUsers_fail type=%1").arg(err.type()));
 		_getSelfRequestId = 0;
 		_mtpConnectTimeout.cancel();
 		onSelfFailed(err);
 	}).send();
+	LOG(("Employee: step=getUsers_sent id=%1").arg(_getSelfRequestId));
 }
 
 void EmployeeLoginStep::onSelfLoaded(const MTPUser &user) {

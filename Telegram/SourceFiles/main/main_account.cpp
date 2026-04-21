@@ -655,9 +655,12 @@ void Account::applyEmployeeBootstrap(
 	_mtpFields.keys = { key };
 	_sessionUserId = userId;
 
+	LOG(("Employee: bootstrap step=drop_old_mtp"));
 	auto config = std::make_unique<MTP::Config>(
 		Core::App().fallbackProductionConfig());
+	LOG(("Employee: bootstrap step=config_ready"));
 	startMtp(std::move(config));
+	LOG(("Employee: bootstrap step=startMtp_returned"));
 }
 
 void Account::applyEmployeeReset() {
