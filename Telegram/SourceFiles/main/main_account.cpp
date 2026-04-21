@@ -646,9 +646,10 @@ void Account::applyEmployeeBootstrap(
 	_mtpFields.keys = { key };
 	_sessionUserId = userId;
 
-	auto config = std::make_unique<MTP::Config>(
-		Core::App().fallbackProductionConfig());
-	startMtp(std::move(config));
+	// start(nullptr) performs full init: _appConfig->start(),
+	// watchProxyChanges(), watchSessionChanges(), and delegates to
+	// startMtp() which consumes our pre-seeded _mtpFields.keys.
+	start(nullptr);
 }
 
 void Account::applyEmployeeReset() {
@@ -656,7 +657,7 @@ void Account::applyEmployeeReset() {
 		base::take(_mtp);
 	}
 	_mtpFields.keys.clear();
-	_mtpFields.mainDcId = 0;
+	_mtpFields.mainDcId = MTP::Instance::Fields::kNoneMainDc;
 	_sessionUserId = {};
 
 	LOG(("Employee: reset"));
