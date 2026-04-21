@@ -144,8 +144,12 @@ void EmployeeLoginStep::showLocalError(QString text) {
 }
 
 void EmployeeLoginStep::submit() {
-	if (_auth) {
-		return;  // A login attempt is in flight.
+	if (_auth || _bootstrapInFlight) {
+		// HTTP is in flight OR HTTP succeeded and we're mid-bootstrap
+		// (MTP rebuilt, waiting for users.GetUsers). A second entry
+		// would tear down the active _mtp under the in-flight request
+		// → UAF. Ignore until the flow completes or resetForRetry runs.
+		return;
 	}
 	startLogin();
 }
@@ -192,6 +196,7 @@ void EmployeeLoginStep::onLoginSuccess(AuthSuccess result) {
 		).arg(result.dcId
 		).arg(result.userId.bare));
 	_auth.reset();
+	_bootstrapInFlight = true;  // stays true until finish() or resetForRetry
 	injectAndFetchSelf(result);
 }
 
@@ -326,6 +331,7 @@ void EmployeeLoginStep::resetForRetry() {
 		_getSelfRequestId = 0;
 	}
 	account().applyEmployeeReset();
+	_bootstrapInFlight = false;
 	lockInputs(false);
 }
 
