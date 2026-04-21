@@ -113,6 +113,15 @@ public:
 	void setHandleLoginCode(Fn<void(QString)> callback);
 	void handleLoginCode(const QString &code) const;
 
+	// TelegramProDesktop: replace the currently-started-but-empty MTP
+	// instance with a session derived from a backend-provided AuthKey.
+	// Must be called after start() on a fresh account (sessionExists()
+	// is false). Restarts MTP with the injected key and userId.
+	void applyEmployeeBootstrap(
+		MTP::DcId dcId,
+		std::shared_ptr<MTP::AuthKey> key,
+		UserId userId);
+
 	[[nodiscard]] rpl::lifetime &lifetime() {
 		return _lifetime;
 	}

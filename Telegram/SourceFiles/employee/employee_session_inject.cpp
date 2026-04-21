@@ -42,9 +42,14 @@ bool InjectSessionInto(
 		MTP::DcId(stored.session.dcId),
 		keyData);
 
-	account->setMtpMainDcId(MTP::DcId(stored.session.dcId));
-	account->setLegacyMtpKey(std::move(authKey));
-	account->setSessionUserId(UserId(BareId(stored.session.userId)));
+	// Account::start() runs very early in Application::startDomain(), so
+	// by the time we can intervene the Account already has an empty MTP
+	// instance. Use applyEmployeeBootstrap() to tear it down and rebuild
+	// with our injected key.
+	account->applyEmployeeBootstrap(
+		MTP::DcId(stored.session.dcId),
+		std::move(authKey),
+		UserId(BareId(stored.session.userId)));
 
 	return true;
 }

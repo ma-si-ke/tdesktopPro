@@ -823,6 +823,8 @@ PRIVATE
     employee/employee_login_box.h
     employee/employee_session_inject.cpp
     employee/employee_session_inject.h
+    employee/employee_startup.cpp
+    employee/employee_startup.h
     employee/employee_storage.cpp
     employee/employee_storage.h
     export/export_manager.cpp

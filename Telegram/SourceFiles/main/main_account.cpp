@@ -628,4 +628,30 @@ void Account::resetAuthorizationKeys() {
 	local().writeMtpData();
 }
 
+void Account::applyEmployeeBootstrap(
+		MTP::DcId dcId,
+		std::shared_ptr<MTP::AuthKey> key,
+		UserId userId) {
+	Expects(!sessionExists());
+	Expects(key != nullptr);
+
+	// Tear down the empty MTP instance created by startMtp().
+	if (_mtp) {
+		const auto old = base::take(_mtp);
+	}
+	_mtpKeysToDestroy.clear();
+	_mtpForKeysDestroy.reset();
+
+	// Populate the fields that startMtp will consume.
+	_mtpFields.mainDcId = dcId;
+	_mtpFields.keys.clear();
+	_mtpFields.keys.push_back(std::move(key));
+	_sessionUserId = userId;
+
+	auto config = std::make_unique<MTP::Config>(
+		Core::App().fallbackProductionConfig());
+	startMtp(std::move(config));
+	local().writeMtpData();
+}
+
 } // namespace Main

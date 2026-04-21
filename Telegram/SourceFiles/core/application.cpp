@@ -55,6 +55,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/click_handler_types.h" // ClickHandlerContext.
 #include "core/crash_reports.h"
 #include "main/main_account.h"
+#include "employee/employee_startup.h"
 #include "main/main_domain.h"
 #include "main/main_session.h"
 #include "media/view/media_view_overlay_widget.h"
@@ -382,6 +383,13 @@ void Application::run() {
 	DEBUG_LOG(("Application Info: window created..."));
 
 	startDomain();
+
+	// TelegramProDesktop: after the domain has loaded any existing tdata
+	// account, check for a saved employee session or prompt to log in.
+	if (_domain->started()) {
+		Employee::MaybeInjectOrPromptLogin(&_domain->active());
+	}
+
 	startTray();
 
 	_lastActivePrimaryWindow->firstShow();
