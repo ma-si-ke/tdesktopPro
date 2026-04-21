@@ -147,19 +147,61 @@ void EmployeeLoginStep::showLocalError(QString text) {
 }
 
 void EmployeeLoginStep::submit() {
-	DEBUG_LOG(("Employee: submit (skeleton)"));
+	if (_auth) {
+		return;  // A login attempt is in flight.
+	}
+	startLogin();
 }
 
 void EmployeeLoginStep::startLogin() {
-}
+	const auto username = _username->getLastText().trimmed();
+	const auto password = _password->getLastText();
+	if (username.isEmpty() || password.isEmpty()) {
+		showLocalError(tr::lng_employee_err_empty(tr::now));
+		return;
+	}
 
-void EmployeeLoginStep::onLoginSuccess(AuthSuccess result) {
+	showLocalError(QString());
+	lockInputs(true);
+
+	const auto &info = BackendInfoFor(_chosenBackend);
+	LOG(("Employee: login attempt backend=%1 user=%2"
+		).arg(info.label
+		).arg(username));
+
+	_auth = std::make_unique<AuthClient>(this);
+	_auth->login(
+		_chosenBackend,
+		username,
+		password,
+		crl::guard(this, [this](AuthResult result) {
+			if (auto *success = std::get_if<AuthSuccess>(&result)) {
+				onLoginSuccess(*success);
+			} else {
+				onLoginFailure(std::get<AuthFailure>(result));
+			}
+		}));
 }
 
 void EmployeeLoginStep::onLoginFailure(AuthFailure result) {
+	LOG(("Employee: login failed kind=%1").arg(int(result.kind)));
+	_auth.reset();
+	lockInputs(false);
+	showLocalError(result.message);
 }
 
-void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
+void EmployeeLoginStep::onLoginSuccess(AuthSuccess result) {
+	LOG(("Employee: login ok dcId=%1 userId=%2"
+		).arg(result.dcId
+		).arg(result.userId.bare));
+	_auth.reset();
+	injectAndFetchSelf(result);  // Stub in this task; real impl in Task 10.
+}
+
+void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess) {
+	// Task 10 fills this in. Show a placeholder so UI isn't stuck.
+	showLocalError(u"(HTTP ok — bootstrap not wired yet)"_q);
+	lockInputs(false);
 }
 
 void EmployeeLoginStep::fetchSelf() {
