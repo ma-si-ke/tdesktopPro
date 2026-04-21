@@ -62,6 +62,7 @@ private:
 	BackendType _chosenBackend = BackendType::Customer;
 
 	std::unique_ptr<AuthClient> _auth;
+	bool _bootstrapInFlight = false;
 	mtpRequestId _getSelfRequestId = 0;
 	base::Timer _mtpConnectTimeout;
 	rpl::lifetime _mtpWatch;
