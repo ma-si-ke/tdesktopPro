@@ -34,7 +34,7 @@ EmployeeLoginStep::EmployeeLoginStep(
 	not_null<Main::Account*> account,
 	not_null<Intro::details::Data*> data)
 : Step(parent, account, data)
-, _username(this, st::introPhone, tr::lng_employee_label_user())
+, _username(this, st::introPassword, tr::lng_employee_label_user())
 , _password(this, st::introPassword, tr::lng_employee_label_pass())
 , _backendLabel(this, QString(), st::introDescription)
 , _backendButton(this)
@@ -81,7 +81,7 @@ void EmployeeLoginStep::setupLayout() {
 
 void EmployeeLoginStep::resizeEvent(QResizeEvent *e) {
 	Step::resizeEvent(e);
-	const auto fieldWidth = st::introPhone.width;
+	const auto fieldWidth = st::introPassword.width;
 	auto y = contentTop() + st::introStepFieldTop;
 
 	_backendLabel->resizeToWidth(fieldWidth);
