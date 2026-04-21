@@ -2281,6 +2281,7 @@ target_compile_definitions(Telegram
 PRIVATE
     TDESKTOP_API_ID=${TDESKTOP_API_ID}
     TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
+    TDESKTOP_EMPLOYEE_MODE=1
     G_LOG_DOMAIN="Telegram"
 )
 
@@ -2300,6 +2301,7 @@ if (MSVC)
     target_link_libraries(Telegram
     PRIVATE
         delayimp
+        Dnsapi
     )
     target_link_options(Telegram
     PRIVATE
@@ -2315,6 +2317,7 @@ if (MSVC)
         /DELAYLOAD:oleaut32.dll
         /DELAYLOAD:shlwapi.dll
         /DELAYLOAD:iphlpapi.dll
+        /DELAYLOAD:dnsapi.dll
         /DELAYLOAD:gdiplus.dll
         /DELAYLOAD:version.dll
         /DELAYLOAD:dwmapi.dll
