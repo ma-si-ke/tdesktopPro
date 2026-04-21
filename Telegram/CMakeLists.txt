@@ -819,6 +819,8 @@ PRIVATE
     employee/employee_auth.h
     employee/employee_config.cpp
     employee/employee_config.h
+    employee/employee_login_box.cpp
+    employee/employee_login_box.h
     export/export_manager.cpp
     export/export_manager.h
     export/view/export_view_content.cpp
