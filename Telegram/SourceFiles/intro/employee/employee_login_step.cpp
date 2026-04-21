@@ -12,6 +12,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "intro/employee/employee_prefs.h"
 #include "base/debug_log.h"
 #include "lang/lang_keys.h"
+#include "main/main_account.h"
+#include "mtproto/mtp_instance.h"
+#include "mtproto/mtproto_auth_key.h"
 #include "styles/style_intro.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/fields/password_input.h"
@@ -22,7 +25,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Intro::Employee {
 namespace {
 
-[[maybe_unused]] constexpr auto kMtpConnectTimeoutMs = crl::time(15 * 1000);
+constexpr auto kMtpConnectTimeoutMs = crl::time(15 * 1000);
 
 } // namespace
 
@@ -195,25 +198,99 @@ void EmployeeLoginStep::onLoginSuccess(AuthSuccess result) {
 		).arg(result.dcId
 		).arg(result.userId.bare));
 	_auth.reset();
-	injectAndFetchSelf(result);  // Stub in this task; real impl in Task 10.
+	injectAndFetchSelf(result);
 }
 
-void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess) {
-	// Task 10 fills this in. Show a placeholder so UI isn't stuck.
-	showLocalError(u"(HTTP ok — bootstrap not wired yet)"_q);
-	lockInputs(false);
+void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
+	Expects(result.authKey.size() == int(MTP::AuthKey::kSize));
+
+	// Copy the 256 raw bytes into MTP::AuthKey::Data
+	// (std::array<gsl::byte, 256>), mirroring the pattern used in
+	// storage/details/storage_settings_scheme.cpp:158 and
+	// main/main_account.cpp:404.
+	auto data = MTP::AuthKey::Data{ { gsl::byte{} } };
+	memcpy(
+		data.data(),
+		result.authKey.constData(),
+		MTP::AuthKey::kSize);
+	auto key = std::make_shared<MTP::AuthKey>(
+		MTP::AuthKey::Type::ReadFromFile,
+		result.dcId,
+		data);
+
+	account().applyEmployeeBootstrap(
+		result.dcId,
+		std::move(key),
+		result.userId);
+
+	// Watch for the first main-session emission: signals that MTP is up
+	// with our injected key. rpl::take(1) so we don't re-fetch on later
+	// main-DC changes.
+	_mtpWatch.destroy();
+	account().mtpMainSessionValue(
+	) | rpl::take(1) | rpl::on_next([=](not_null<MTP::Instance*>) {
+		fetchSelf();
+	}, _mtpWatch);
+
+	_mtpConnectTimeout.callOnce(kMtpConnectTimeoutMs);
 }
 
 void EmployeeLoginStep::fetchSelf() {
+	DEBUG_LOG(("Employee: fetching self"));
+	_getSelfRequestId = api().request(MTPusers_GetUsers(
+		MTP_vector<MTPInputUser>(1, MTP_inputUserSelf())
+	)).done([=](const MTPVector<MTPUser> &users) {
+		_getSelfRequestId = 0;
+		_mtpConnectTimeout.cancel();
+		if (users.v.size() != 1) {
+			onSelfFailed(MTP::Error::Local(
+				u"BAD_RESPONSE"_q,
+				u"expected 1 user in GetUsers response"_q));
+			return;
+		}
+		onSelfLoaded(users.v.front());
+	}).fail([=](const MTP::Error &err) {
+		_getSelfRequestId = 0;
+		_mtpConnectTimeout.cancel();
+		onSelfFailed(err);
+	}).send();
 }
 
 void EmployeeLoginStep::onSelfLoaded(const MTPUser &user) {
+	Prefs::SetLastBackend(_chosenBackend);
+	Prefs::SetLastUsername(_username->getLastText().trimmed());
+	LOG(("Employee: bootstrap complete"));
+	finish(user);
 }
 
 void EmployeeLoginStep::onSelfFailed(const MTP::Error &err) {
+	LOG(("Employee: getUsers failed type=%1").arg(err.type()));
+	resetForRetry();
+
+	if (err.type().startsWith(u"FLOOD_WAIT_"_q)) {
+		const auto seconds = err.type().mid(
+			QString(u"FLOOD_WAIT_"_q).size()).toInt();
+		showLocalError(tr::lng_employee_err_flood(
+			tr::now,
+			lt_seconds,
+			QString::number(seconds)));
+		return;
+	} else if (err.type() == u"TIMEOUT"_q) {
+		showLocalError(tr::lng_employee_err_mtp_timeout(tr::now));
+		return;
+	}
+	showLocalError(tr::lng_employee_err_mtp_auth(tr::now));
 }
 
 void EmployeeLoginStep::resetForRetry() {
+	_mtpWatch.destroy();
+	_mtpConnectTimeout.cancel();
+	if (_getSelfRequestId) {
+		api().request(_getSelfRequestId).cancel();
+		_getSelfRequestId = 0;
+	}
+	account().applyEmployeeReset();
+	lockInputs(false);
 }
 
 } // namespace Intro::Employee
