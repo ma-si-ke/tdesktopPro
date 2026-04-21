@@ -7958,4 +7958,20 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_sr_languages_column_native" = "Native name";
 "lng_sr_languages_column_name" = "Language name";
 
+"lng_employee_err_network" = "无法连接到服务器，请检查网络";
+"lng_employee_err_auth" = "用户名或密码错误";
+"lng_employee_err_server" = "服务暂时不可用";
+"lng_employee_err_already" = "该账号已在其他设备登录";
+"lng_employee_err_not_bound" = "账号未绑定 Telegram，请联系管理员";
+"lng_employee_err_bad_json" = "服务器响应异常";
+"lng_employee_err_mtp_timeout" = "连接 Telegram 超时，请重试";
+"lng_employee_err_mtp_auth" = "账号验证失败";
+"lng_employee_err_flood" = "请 {seconds} 秒后重试";
+"lng_employee_err_empty" = "请输入用户名和密码";
+"lng_employee_btn_login" = "登录";
+"lng_employee_label_user" = "用户名";
+"lng_employee_label_pass" = "密码";
+"lng_employee_label_backend" = "服务器";
+"lng_employee_connecting" = "正在登录...";
+
 // Keys finished
