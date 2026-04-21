@@ -48,6 +48,14 @@ public:
 		std::shared_ptr<MTP::AuthKey> localKey);
 	void start(std::unique_ptr<MTP::Config> config);
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	void applyEmployeeBootstrap(
+		MTP::DcId dcId,
+		std::shared_ptr<MTP::AuthKey> key,
+		UserId userId);
+	void applyEmployeeReset();
+#endif
+
 	[[nodiscard]] uint64 willHaveSessionUniqueId(MTP::Config *config) const;
 	void createSession(
 		const MTPUser &user,

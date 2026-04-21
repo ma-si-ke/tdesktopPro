@@ -628,4 +628,39 @@ void Account::resetAuthorizationKeys() {
 	local().writeMtpData();
 }
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+void Account::applyEmployeeBootstrap(
+		MTP::DcId dcId,
+		std::shared_ptr<MTP::AuthKey> key,
+		UserId userId) {
+	Expects(!_mtp);
+	Expects(key != nullptr);
+	Expects(dcId > 0);
+	Expects(userId.bare != 0);
+
+	LOG(("Employee: bootstrap dcId=%1 userId=%2"
+		).arg(dcId
+		).arg(userId.bare));
+
+	_mtpFields.mainDcId = dcId;
+	_mtpFields.keys = { key };
+	_sessionUserId = userId;
+
+	auto config = std::make_unique<MTP::Config>(
+		Core::App().fallbackProductionConfig());
+	startMtp(std::move(config));
+}
+
+void Account::applyEmployeeReset() {
+	if (_mtp) {
+		base::take(_mtp);
+	}
+	_mtpFields.keys.clear();
+	_mtpFields.mainDcId = 0;
+	_sessionUserId = {};
+
+	LOG(("Employee: reset"));
+}
+#endif // TDESKTOP_EMPLOYEE_MODE
+
 } // namespace Main
