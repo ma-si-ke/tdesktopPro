@@ -89,14 +89,20 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 	if (dcId <= 0 || authKeyHex.size() != kAuthKeyHexChars) {
 		if (authKeyHex.size() != kAuthKeyHexChars) {
 			LOG(("Employee: authkey length invalid"));
+		} else {
+			LOG(("Employee: bad json"));
 		}
-		return MakeBadJson();
+		return MakeFailure(
+			AuthFailure::Kind::BadJson,
+			tr::lng_employee_err_bad_json(tr::now));
 	}
 
 	const auto keyBytes = QByteArray::fromHex(authKeyHex.toLatin1());
 	if (keyBytes.size() != 256) {
 		LOG(("Employee: authkey hex decode failed"));
-		return MakeBadJson();
+		return MakeFailure(
+			AuthFailure::Kind::BadJson,
+			tr::lng_employee_err_bad_json(tr::now));
 	}
 
 	const auto userId = UserId(userIdRaw.toVariant().toLongLong());
