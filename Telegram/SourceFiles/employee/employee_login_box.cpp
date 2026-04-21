@@ -6,6 +6,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "employee/employee_login_box.h"
 
+#include "employee/employee_storage.h"
+#include "core/application.h"
+#include "settings.h"
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/fields/input_field.h"
@@ -62,6 +65,32 @@ struct LoginState {
 	bool pending = false;
 	Fn<void(bool)> submit;
 };
+
+void ShowClearCacheConfirm(not_null<Ui::GenericBox*> parentBox) {
+	parentBox->getDelegate()->show(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(rpl::single(u"清除缓存"_q));
+		const auto layout = box->verticalLayout();
+
+		const auto addLine = [&](const QString &text) {
+			layout->add(
+				object_ptr<Ui::FlatLabel>(box, text, st::boxLabel),
+				st::boxRowPadding);
+		};
+		addLine(u"确定要清除所有缓存数据吗？"_q);
+		addLine(u"清除后软件将自动重启，您需要重新登录。"_q);
+
+		box->addButton(rpl::single(u"确认清除"_q), [=] {
+			ClearSession();
+			// 清空整个 tdata 目录——tdesktop 重启后会把自己当作全新安装。
+			QDir(cWorkingDir() + u"tdata"_q).removeRecursively();
+			box->closeBox();
+			Core::Restart();
+		});
+		box->addButton(rpl::single(u"取消"_q), [=] {
+			box->closeBox();
+		});
+	}));
+}
 
 void ShowConflictBox(
 		not_null<Ui::GenericBox*> parentBox,
@@ -203,7 +232,7 @@ void EmployeeLoginBox(
 		state->submit(false);
 	});
 	box->addButton(rpl::single(u"清除缓存"_q), [=] {
-		// TODO Step 6：清 employee.dat 并重启
+		ShowClearCacheConfirm(box);
 	});
 
 	box->setFocusCallback([=] {

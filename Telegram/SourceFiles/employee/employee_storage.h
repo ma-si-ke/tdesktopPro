@@ -36,4 +36,12 @@ void ClearSession();
 // 返回 tdata/employee.dat 的绝对路径（便于调试）。
 [[nodiscard]] QString SessionFilePath();
 
+// 是否当前处于员工模式（即 tdata/employee.dat 存在）。
+// 注意：这个读文件，不要高频调用。启动时缓存结果更好。
+[[nodiscard]] bool IsActive();
+
+// 读一次 employee.dat 里的员工姓名，用于 Telegram 活动会话里的设备名。
+// 无效时返回空串。
+[[nodiscard]] QString CurrentEmployeeDeviceName();
+
 } // namespace Employee

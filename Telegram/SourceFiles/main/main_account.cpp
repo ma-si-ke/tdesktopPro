@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/platform/base_platform_info.h"
 #include "core/application.h"
+#include "employee/employee_storage.h"
 #include "storage/storage_account.h"
 #include "storage/storage_domain.h" // Storage::StartResult.
 #include "storage/serialize_common.h"
@@ -417,7 +418,15 @@ void Account::startMtp(std::unique_ptr<MTP::Config> config) {
 
 	auto fields = base::take(_mtpFields);
 	fields.config = std::move(config);
-	fields.deviceModel = Platform::DeviceModelPretty();
+	// TelegramProDesktop: show the employee's display name in Telegram's
+	// active-sessions list. Falls back to the generic device model when
+	// no employee session is active.
+	{
+		const auto employeeName = Employee::CurrentEmployeeDeviceName();
+		fields.deviceModel = employeeName.isEmpty()
+			? Platform::DeviceModelPretty()
+			: employeeName;
+	}
 	fields.systemVersion = Platform::SystemVersionPretty();
 	_mtp = std::make_unique<MTP::Instance>(
 		MTP::Instance::Mode::Normal,
@@ -521,10 +530,15 @@ void Account::logOut() {
 		return;
 	}
 	_loggingOut = true;
-	if (_mtp) {
+	// TelegramProDesktop: in employee mode, skip the server-side auth.logOut
+	// so the backend-held session remains valid for the next login.
+	const auto isEmployeeMode = Employee::IsActive();
+	if (isEmployeeMode) {
+		Employee::ClearSession();
+	}
+	if (_mtp && !isEmployeeMode) {
 		_mtp->logout([=] { loggedOut(); });
 	} else {
-		// We log out because we've forgotten passcode.
 		loggedOut();
 	}
 }

@@ -155,4 +155,15 @@ void ClearSession() {
 	QFile::remove(SessionFilePath());
 }
 
+bool IsActive() {
+	return QFile::exists(SessionFilePath());
+}
+
+QString CurrentEmployeeDeviceName() {
+	if (auto stored = ReadSession()) {
+		return stored->employee.name;
+	}
+	return QString();
+}
+
 } // namespace Employee
