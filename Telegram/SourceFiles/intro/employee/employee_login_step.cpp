@@ -207,10 +207,26 @@ void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
 		data.data(),
 		result.authKey.constData(),
 		MTP::AuthKey::kSize);
+	// Diagnostic: first 4 bytes of raw key (hex) — cheap sanity check
+	// that the data block is not all zeros, all FFs, or obviously byte-
+	// reversed vs what a real Telegram authKey looks like.
+	const auto rawHead = result.authKey.left(4).toHex();
+	const auto rawTail = result.authKey.right(4).toHex();
+	LOG(("Employee: authkey raw bytes head=%1 tail=%2 size=%3"
+		).arg(QString::fromLatin1(rawHead)
+		).arg(QString::fromLatin1(rawTail)
+		).arg(result.authKey.size()));
+
 	auto key = std::make_shared<MTP::AuthKey>(
 		MTP::AuthKey::Type::ReadFromFile,
 		result.dcId,
 		data);
+	// keyId is sha1(authKey)[-8..] as uint64 — 0 or all-bits-set would
+	// indicate bad data; real keys are large random-looking values.
+	LOG(("Employee: authkey keyId=%1 dcId=%2 type=%3"
+		).arg(key->keyId()
+		).arg(key->dcId()
+		).arg(int(key->type())));
 
 	LOG(("Employee: step=before_applyBootstrap"));
 	account().applyEmployeeBootstrap(
