@@ -252,9 +252,13 @@ void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
 
 void EmployeeLoginStep::fetchSelf() {
 	LOG(("Employee: step=fetchSelf_enter"));
-	_getSelfRequestId = api().request(MTPusers_GetUsers(
-		MTP_vector<MTPInputUser>(1, MTP_inputUserSelf())
-	)).done([=](const MTPVector<MTPUser> &users) {
+	auto &sender = api();
+	LOG(("Employee: step=fetchSelf_after_api"));
+	auto builder = sender.request(MTPusers_GetUsers(
+		MTP_vector<MTPInputUser>(1, MTP_inputUserSelf())));
+	LOG(("Employee: step=fetchSelf_after_build"));
+	_getSelfRequestId = std::move(builder).done([=](
+			const MTPVector<MTPUser> &users) {
 		LOG(("Employee: step=getUsers_done users=%1").arg(users.v.size()));
 		_getSelfRequestId = 0;
 		_mtpConnectTimeout.cancel();
@@ -275,10 +279,23 @@ void EmployeeLoginStep::fetchSelf() {
 }
 
 void EmployeeLoginStep::onSelfLoaded(const MTPUser &user) {
+	LOG(("Employee: step=onSelfLoaded_enter type=%1").arg(user.type()));
 	Prefs::SetLastBackend(_chosenBackend);
 	Prefs::SetLastUsername(_username->getLastText().trimmed());
-	LOG(("Employee: bootstrap complete"));
+	if (user.type() != mtpc_user) {
+		LOG(("Employee: step=onSelfLoaded_not_user"));
+		showLocalError(tr::lng_employee_err_bad_json(tr::now));
+		return;
+	}
+	const auto &data = user.c_user();
+	LOG(("Employee: step=onSelfLoaded_ok isSelf=%1 firstNameEmpty=%2"
+		).arg(data.is_self() ? "Y" : "N"
+		).arg(qs(data.vfirst_name()).isEmpty() ? "Y" : "N"));
+	LOG(("Employee: bootstrap complete, calling finish(user)"));
 	finish(user);
+	// This line may not execute — finish() can trigger Step destruction
+	// through setupMain(). If you see it, finish() returned normally.
+	LOG(("Employee: step=finish_returned"));
 }
 
 void EmployeeLoginStep::onSelfFailed(const MTP::Error &err) {
