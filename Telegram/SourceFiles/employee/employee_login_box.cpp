@@ -10,6 +10,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 #include "settings.h"
 #include "ui/layers/generic_box.h"
+#include "ui/rp_widget.h"
+#include "ui/vertical_list.h"
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/fields/password_input.h"
@@ -65,6 +67,31 @@ struct LoginState {
 	bool pending = false;
 	Fn<void(bool)> submit;
 };
+
+// PasswordInput 基类是 QLineEdit 而非 Ui::RpWidget，不能直接给
+// GenericBox::addRow(object_ptr<RpWidget>) 用。套一层 RpWidget 并
+// 同步尺寸。
+[[nodiscard]] Ui::PasswordInput *AddPasswordRow(
+		not_null<Ui::GenericBox*> box,
+		rpl::producer<QString> placeholder) {
+	auto wrap = object_ptr<Ui::RpWidget>(box);
+	const auto wrapPtr = wrap.data();
+	const auto field = Ui::CreateChild<Ui::PasswordInput>(
+		wrapPtr,
+		st::defaultInputField,
+		std::move(placeholder));
+	field->move(0, 0);
+	field->heightValue(
+	) | rpl::on_next([=](int height) {
+		wrapPtr->resize(wrapPtr->width(), height);
+	}, field->lifetime());
+	wrapPtr->widthValue(
+	) | rpl::on_next([=](int width) {
+		field->resize(width, field->height());
+	}, field->lifetime());
+	box->addRow(std::move(wrap));
+	return field;
+}
 
 void ShowClearCacheConfirm(not_null<Ui::GenericBox*> parentBox) {
 	parentBox->getDelegate()->show(Box([=](not_null<Ui::GenericBox*> box) {
@@ -169,11 +196,7 @@ void EmployeeLoginBox(
 			st::defaultInputField,
 			rpl::single(u"工号"_q)));
 
-	const auto passwordField = box->addRow(
-		object_ptr<Ui::PasswordInput>(
-			box,
-			st::defaultInputField,
-			rpl::single(u"密码"_q)));
+	const auto passwordField = AddPasswordRow(box, rpl::single(u"密码"_q));
 
 	const auto errorLabel = box->addRow(
 		object_ptr<Ui::FlatLabel>(

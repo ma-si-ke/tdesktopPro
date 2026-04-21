@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "logs.h"
 #include "main/main_account.h"
 #include "ui/layers/box_content.h"
+#include "ui/layers/generic_box.h"
 #include "window/window_controller.h"
 
 namespace Employee {
