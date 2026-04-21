@@ -31,6 +31,7 @@ constexpr auto kAuthKeyHexChars = 512;  // 256 bytes * 2
 }
 
 [[nodiscard]] AuthResult MakeBadJson() {
+	LOG(("Employee: bad json"));
 	return MakeFailure(
 		AuthFailure::Kind::BadJson,
 		tr::lng_employee_err_bad_json(tr::now));
@@ -40,6 +41,7 @@ constexpr auto kAuthKeyHexChars = 512;  // 256 bytes * 2
 
 AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 	if (httpStatus >= 500) {
+		LOG(("Employee: server error http=%1").arg(httpStatus));
 		return MakeFailure(
 			AuthFailure::Kind::Http5xx,
 			tr::lng_employee_err_server(tr::now));
@@ -55,10 +57,12 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 	if (root.contains("code")) {
 		const auto code = root.value("code").toString();
 		if (code == u"ALREADY_ONLINE"_q) {
+			LOG(("Employee: already online"));
 			return MakeFailure(
 				AuthFailure::Kind::AlreadyOnline,
 				tr::lng_employee_err_already(tr::now));
 		} else if (code == u"NOT_BOUND"_q) {
+			LOG(("Employee: not bound"));
 			return MakeFailure(
 				AuthFailure::Kind::NotBound,
 				tr::lng_employee_err_not_bound(tr::now));
@@ -66,6 +70,7 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 	}
 
 	if (httpStatus >= 400) {
+		LOG(("Employee: auth denied http=%1").arg(httpStatus));
 		return MakeFailure(
 			AuthFailure::Kind::Http4xx,
 			tr::lng_employee_err_auth(tr::now));
