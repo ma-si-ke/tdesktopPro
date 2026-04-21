@@ -22,13 +22,12 @@ const std::array<BackendInfo, 4> kBackends = { {
 } // namespace
 
 const BackendInfo &BackendInfoFor(BackendType type) {
-	const auto index = static_cast<int>(type);
-	Expects(index >= 0 && index < int(kBackends.size()));
+	Expects(int(type) >= 0 && int(type) < int(kBackends.size()));
 
-	return kBackends[index];
+	return kBackends[int(type)];
 }
 
-std::array<BackendInfo, 4> AllBackends() {
+const std::array<BackendInfo, 4> &AllBackends() {
 	return kBackends;
 }
 
