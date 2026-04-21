@@ -415,13 +415,25 @@ void Account::setMtpAuthorization(const QByteArray &serialized) {
 void Account::startMtp(std::unique_ptr<MTP::Config> config) {
 	Expects(!_mtp);
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	LOG(("Employee: startMtp step=enter keys=%1 mainDcId=%2"
+		).arg(_mtpFields.keys.size()
+		).arg(_mtpFields.mainDcId));
+#endif
 	auto fields = base::take(_mtpFields);
 	fields.config = std::move(config);
 	fields.deviceModel = Platform::DeviceModelPretty();
 	fields.systemVersion = Platform::SystemVersionPretty();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	LOG(("Employee: startMtp step=fields_ready deviceModel=%1"
+		).arg(fields.deviceModel));
+#endif
 	_mtp = std::make_unique<MTP::Instance>(
 		MTP::Instance::Mode::Normal,
 		std::move(fields));
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	LOG(("Employee: startMtp step=instance_built"));
+#endif
 
 	const auto writingKeys = _mtp->lifetime().make_state<bool>(false);
 	_mtp->writeKeysRequests(
@@ -476,6 +488,10 @@ void Account::startMtp(std::unique_ptr<MTP::Config> config) {
 	if (!_mtpKeysToDestroy.empty()) {
 		destroyMtpKeys(base::take(_mtpKeysToDestroy));
 	}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	LOG(("Employee: startMtp step=handlers_set sessionUserId=%1"
+		).arg(_sessionUserId.bare));
+#endif
 
 	if (_sessionUserId) {
 		createSession(
@@ -487,6 +503,9 @@ void Account::startMtp(std::unique_ptr<MTP::Config> config) {
 				: std::make_unique<SessionSettings>()));
 	}
 	_storedSessionSettings = nullptr;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	LOG(("Employee: startMtp step=session_maybe_created"));
+#endif
 
 	if (const auto session = maybeSession()) {
 		// Skip all pending self updates so that we won't local().writeSelf.
