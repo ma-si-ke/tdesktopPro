@@ -13,6 +13,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "intro/intro_code.h"
 #include "intro/intro_signup.h"
 #include "intro/intro_password_check.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_login_step.h"
+#endif
 #include "lang/lang_keys.h"
 #include "lang/lang_instance.h"
 #include "lang/lang_cloud_manager.h"
@@ -103,6 +106,10 @@ Widget::Widget(
 		crl::on_main(this, [=] { createLanguageLink(); });
 	}, lifetime());
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	(void)point;
+	appendStep(new Employee::EmployeeLoginStep(this, _account, getData()));
+#else
 	switch (point) {
 	case EnterPoint::Start:
 		getNearestDC();
@@ -116,6 +123,7 @@ Widget::Widget(
 		break;
 	default: Unexpected("Enter point in Intro::Widget::Widget.");
 	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 	setupStep();
 	fixOrder();
