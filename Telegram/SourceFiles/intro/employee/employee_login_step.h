@@ -58,7 +58,6 @@ private:
 	object_ptr<Ui::PasswordInput> _password;
 	object_ptr<Ui::FlatLabel> _backendLabel;
 	object_ptr<Ui::AbstractButton> _backendButton;
-	object_ptr<Ui::FlatLabel> _errorLabel;
 
 	BackendType _chosenBackend = BackendType::Customer;
 

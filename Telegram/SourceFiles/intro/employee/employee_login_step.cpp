@@ -38,7 +38,6 @@ EmployeeLoginStep::EmployeeLoginStep(
 , _password(this, st::introPassword, tr::lng_employee_label_pass())
 , _backendLabel(this, QString(), st::introDescription)
 , _backendButton(this)
-, _errorLabel(this, QString(), st::introError)
 , _chosenBackend(Prefs::LastBackend())
 , _mtpConnectTimeout([=] {
 	onSelfFailed(MTP::Error::Local(
@@ -68,8 +67,6 @@ void EmployeeLoginStep::setupLayout() {
 
 	_backendButton->setClickedCallback([=] { openBackendMenu(); });
 	refreshBackendLabel();
-
-	_errorLabel->setVisible(false);
 
 	connect(
 		_password,
@@ -102,10 +99,6 @@ void EmployeeLoginStep::resizeEvent(QResizeEvent *e) {
 
 	_password->resize(fieldWidth, _password->height());
 	_password->moveToLeft(contentLeft(), y);
-	y += _password->height() + st::introPhoneTop;
-
-	_errorLabel->resizeToWidth(fieldWidth);
-	_errorLabel->moveToLeft(contentLeft(), y);
 }
 
 rpl::producer<QString> EmployeeLoginStep::nextButtonText() const {
@@ -145,8 +138,9 @@ void EmployeeLoginStep::lockInputs(bool locked) {
 }
 
 void EmployeeLoginStep::showLocalError(QString text) {
-	_errorLabel->setText(text);
-	_errorLabel->setVisible(!text.isEmpty());
+	// 使用基类 Step::showError —— 位置由 st::introErrorTop 控制，
+	// 和 next 按钮的布局互不干扰。
+	showError(rpl::single(text));
 }
 
 void EmployeeLoginStep::submit() {
