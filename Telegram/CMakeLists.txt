@@ -815,6 +815,10 @@ PRIVATE
     editor/photo_editor_layer_widget.h
     editor/scene/scene_item_sticker.cpp
     editor/scene/scene_item_sticker.h
+    employee/employee_auth.cpp
+    employee/employee_auth.h
+    employee/employee_config.cpp
+    employee/employee_config.h
     export/export_manager.cpp
     export/export_manager.h
     export/view/export_view_content.cpp
