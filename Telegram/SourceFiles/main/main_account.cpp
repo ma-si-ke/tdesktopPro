@@ -660,16 +660,6 @@ void Account::applyEmployeeBootstrap(
 		).arg(dcId
 		).arg(userId.bare));
 
-	// Domain::start() already ran Account::start(...) at launch, so _mtp
-	// exists as a fresh "about to authenticate" instance with no key.
-	// Drop it and create a new one with our pre-negotiated key — mirrors
-	// the pattern in resetAuthorizationKeys() above. _appConfig and the
-	// proxy/session watchers set up by the first start() are kept in
-	// place; recreating them isn't needed (and would leak watcher subs).
-	if (_mtp) {
-		base::take(_mtp);
-	}
-
 	// Do NOT assign _sessionUserId here: startMtp() below checks that
 	// field and, if non-empty, auto-calls createSession(UserId, serialized,
 	// ...) with stub serialized data — exactly the broken path that
@@ -680,12 +670,24 @@ void Account::applyEmployeeBootstrap(
 	_mtpFields.keys = { key };
 	(void)userId;  // consumed by the caller's UI feedback only
 
-	LOG(("Employee: bootstrap step=drop_old_mtp"));
-	auto config = std::make_unique<MTP::Config>(
-		Core::App().fallbackProductionConfig());
-	LOG(("Employee: bootstrap step=config_ready"));
-	startMtp(std::move(config));
-	LOG(("Employee: bootstrap step=startMtp_returned"));
+	// Domain::start() already ran Account::start(...) at launch, so _mtp
+	// exists as a fresh "about to authenticate" instance with no key.
+	// Replace it with one that holds our pre-negotiated key — use the
+	// same scoped-local pattern as resetAuthorizationKeys() so the OLD
+	// _mtp outlives startMtp(): when startMtp fires _mtpValue at its
+	// tail, existing rpl subscribers (e.g. Intro::Widget's MTP::Sender)
+	// tear down their old Sender-over-old-Instance; that teardown path
+	// still dereferences the old Instance, so it must not be freed yet.
+	{
+		const auto old = _mtp ? base::take(_mtp) : nullptr;
+		LOG(("Employee: bootstrap step=drop_old_mtp"));
+		auto config = std::make_unique<MTP::Config>(
+			Core::App().fallbackProductionConfig());
+		LOG(("Employee: bootstrap step=config_ready"));
+		startMtp(std::move(config));
+		LOG(("Employee: bootstrap step=startMtp_returned"));
+	}  // old _mtp destroyed here, after all subscribers have rebound
+	LOG(("Employee: bootstrap step=old_mtp_destroyed"));
 }
 
 void Account::applyEmployeeReset() {
