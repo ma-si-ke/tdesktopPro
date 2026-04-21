@@ -267,10 +267,13 @@ void EmployeeLoginBox(
 		passwordField->setFocus();
 	}, box->lifetime());
 
-	passwordField->submits(
-	) | rpl::on_next([=] {
-		state->submit(false);
-	}, box->lifetime());
+	// PasswordInput 继承自 MaskedInputField，用经典 Qt 信号 submitted()，
+	// 不是 rpl producer——直接用 QObject::connect。
+	QObject::connect(
+		passwordField,
+		&Ui::MaskedInputField::submitted,
+		box,
+		[=](Qt::KeyboardModifiers) { state->submit(false); });
 }
 
 } // namespace Employee
