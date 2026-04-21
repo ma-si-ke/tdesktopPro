@@ -651,9 +651,15 @@ void Account::applyEmployeeBootstrap(
 		base::take(_mtp);
 	}
 
+	// Do NOT assign _sessionUserId here: startMtp() below checks that
+	// field and, if non-empty, auto-calls createSession(UserId, serialized,
+	// ...) with stub serialized data — exactly the broken path that
+	// crashed the previous implementation. The real MTPUser comes later
+	// via users.GetUsers → inherited Step::finish(MTPUser) →
+	// createSession(MTPUser, settings).
 	_mtpFields.mainDcId = dcId;
 	_mtpFields.keys = { key };
-	_sessionUserId = userId;
+	(void)userId;  // consumed by the caller's UI feedback only
 
 	LOG(("Employee: bootstrap step=drop_old_mtp"));
 	auto config = std::make_unique<MTP::Config>(
