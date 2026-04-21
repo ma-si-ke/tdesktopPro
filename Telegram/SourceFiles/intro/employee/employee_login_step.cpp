@@ -288,9 +288,10 @@ void EmployeeLoginStep::onSelfLoaded(const MTPUser &user) {
 		return;
 	}
 	const auto &data = user.c_user();
-	LOG(("Employee: step=onSelfLoaded_ok isSelf=%1 firstNameEmpty=%2"
+	LOG(("Employee: step=onSelfLoaded_ok isSelf=%1 hasFirstName=%2 id=%3"
 		).arg(data.is_self() ? "Y" : "N"
-		).arg(qs(data.vfirst_name()).isEmpty() ? "Y" : "N"));
+		).arg(data.vfirst_name() ? "Y" : "N"
+		).arg(data.vid().v));
 	LOG(("Employee: bootstrap complete, calling finish(user)"));
 	finish(user);
 	// This line may not execute — finish() can trigger Step destruction
