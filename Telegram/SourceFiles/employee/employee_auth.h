@@ -34,6 +34,7 @@ struct LoginRequest {
 struct TdesktopSession {
 	int dcId = 0;
 	QByteArray authKey; // 原始 256 字节，非 hex
+	qint64 userId = 0;  // Telegram 用户 ID (GramJS StringSession.userId)
 };
 
 struct EmployeeInfo {

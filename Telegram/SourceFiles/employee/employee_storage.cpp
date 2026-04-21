@@ -88,6 +88,15 @@ std::optional<StoredSession> ReadSession() {
 	if (result.session.authKey.size() != 256) {
 		return std::nullopt;
 	}
+	const auto userIdValue = sessionObj.value(u"userId"_q);
+	if (userIdValue.isString()) {
+		result.session.userId = userIdValue.toString().toLongLong();
+	} else {
+		result.session.userId = userIdValue.toInteger(0);
+	}
+	if (result.session.userId <= 0) {
+		return std::nullopt;
+	}
 
 	return result;
 }
@@ -112,6 +121,10 @@ bool WriteSession(const StoredSession &session) {
 	sessionObj.insert(
 		u"authKeyHex"_q,
 		QString::fromLatin1(session.session.authKey.toHex()));
+	// 存为字符串避免 JSON 双精度精度损失（Telegram userId 可能接近 2^53）
+	sessionObj.insert(
+		u"userId"_q,
+		QString::number(session.session.userId));
 	obj.insert(u"session"_q, sessionObj);
 
 	const auto data = QJsonDocument(obj).toJson(QJsonDocument::Indented);

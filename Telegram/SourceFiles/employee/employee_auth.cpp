@@ -163,6 +163,15 @@ std::optional<LoginSuccess> AuthClient::parseSuccess(
 	if (result.session.authKey.size() != 256) {
 		return fail(u"authKeyHex 不是合法十六进制"_q);
 	}
+	const auto userIdValue = sessionObj.value(u"userId"_q);
+	if (userIdValue.isString()) {
+		result.session.userId = userIdValue.toString().toLongLong();
+	} else {
+		result.session.userId = userIdValue.toInteger(0);
+	}
+	if (result.session.userId <= 0) {
+		return fail(u"响应缺少 tdesktopSession.userId（后端需要附加此字段）"_q);
+	}
 
 	result.permissions = obj.value(u"permissions"_q).toObject();
 	return result;
