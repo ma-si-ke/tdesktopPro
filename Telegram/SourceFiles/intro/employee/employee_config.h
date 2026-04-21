@@ -27,7 +27,7 @@ struct BackendInfo {
 };
 
 [[nodiscard]] const BackendInfo &BackendInfoFor(BackendType type);
-[[nodiscard]] std::array<BackendInfo, 4> AllBackends();
+[[nodiscard]] const std::array<BackendInfo, 4> &AllBackends();
 
 } // namespace Intro::Employee
 
