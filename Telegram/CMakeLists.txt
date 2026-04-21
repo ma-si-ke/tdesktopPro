@@ -1345,6 +1345,8 @@ PRIVATE
     intro/employee/employee_auth.h
     intro/employee/employee_config.cpp
     intro/employee/employee_config.h
+    intro/employee/employee_prefs.cpp
+    intro/employee/employee_prefs.h
     intro/intro_code.cpp
     intro/intro_code.h
     intro/intro_email.cpp
