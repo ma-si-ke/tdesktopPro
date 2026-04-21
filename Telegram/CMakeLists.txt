@@ -2165,6 +2165,7 @@ if (MSVC)
     target_link_libraries(Telegram
     PRIVATE
         delayimp
+        Dnsapi
     )
     target_link_options(Telegram
     PRIVATE
@@ -2180,6 +2181,7 @@ if (MSVC)
         /DELAYLOAD:oleaut32.dll
         /DELAYLOAD:shlwapi.dll
         /DELAYLOAD:iphlpapi.dll
+        /DELAYLOAD:dnsapi.dll
         /DELAYLOAD:gdiplus.dll
         /DELAYLOAD:version.dll
         /DELAYLOAD:dwmapi.dll
