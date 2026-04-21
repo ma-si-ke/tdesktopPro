@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QSysInfo>
 #include <QtCore/QUrl>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
@@ -40,42 +41,57 @@ constexpr auto kAuthKeyHexChars = 512;  // 256 bytes * 2
 } // namespace
 
 AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
-	if (httpStatus >= 500) {
-		LOG(("Employee: server error http=%1").arg(httpStatus));
-		return MakeFailure(
-			AuthFailure::Kind::Http5xx,
-			tr::lng_employee_err_server(tr::now));
-	}
 	auto parseError = QJsonParseError{};
 	const auto doc = QJsonDocument::fromJson(body, &parseError);
-	if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-		return MakeBadJson();
-	}
-	const auto root = doc.object();
-
-	// Business error codes from our backend.
-	if (root.contains("code")) {
-		const auto code = root.value("code").toString();
-		if (code == u"ALREADY_ONLINE"_q) {
-			LOG(("Employee: already online"));
-			return MakeFailure(
-				AuthFailure::Kind::AlreadyOnline,
-				tr::lng_employee_err_already(tr::now));
-		} else if (code == u"NOT_BOUND"_q) {
-			LOG(("Employee: not bound"));
-			return MakeFailure(
-				AuthFailure::Kind::NotBound,
-				tr::lng_employee_err_not_bound(tr::now));
-		}
-	}
+	const auto parsedOk = (parseError.error == QJsonParseError::NoError)
+		&& doc.isObject();
+	const auto root = parsedOk ? doc.object() : QJsonObject();
 
 	if (httpStatus >= 400) {
-		LOG(("Employee: auth denied http=%1").arg(httpStatus));
+		// 业务码优先：ALREADY_ONLINE / NOT_BOUND 用本地化文案。
+		if (parsedOk && root.contains("code")) {
+			const auto code = root.value("code").toString();
+			if (code == u"ALREADY_ONLINE"_q) {
+				LOG(("Employee: already online"));
+				return MakeFailure(
+					AuthFailure::Kind::AlreadyOnline,
+					tr::lng_employee_err_already(tr::now));
+			} else if (code == u"NOT_BOUND"_q) {
+				LOG(("Employee: not bound"));
+				return MakeFailure(
+					AuthFailure::Kind::NotBound,
+					tr::lng_employee_err_not_bound(tr::now));
+			}
+		}
+		// 其他 4xx/5xx：优先用后端 body.error 中文文案，否则回退本地化。
+		const auto serverText = parsedOk
+			? root.value("error").toString()
+			: QString();
+		if (httpStatus >= 500) {
+			LOG(("Employee: server error http=%1 error=%2"
+				).arg(httpStatus
+				).arg(serverText));
+			return MakeFailure(
+				AuthFailure::Kind::Http5xx,
+				serverText.isEmpty()
+					? tr::lng_employee_err_server(tr::now)
+					: serverText);
+		}
+		LOG(("Employee: auth denied http=%1 error=%2"
+			).arg(httpStatus
+			).arg(serverText));
 		return MakeFailure(
 			AuthFailure::Kind::Http4xx,
-			tr::lng_employee_err_auth(tr::now));
+			serverText.isEmpty()
+				? tr::lng_employee_err_auth(tr::now)
+				: serverText);
 	}
-	if (httpStatus < 200 || httpStatus >= 300) {
+
+	// 2xx 但 JSON 解析失败：当作 BadJson。
+	if (!parsedOk) {
+		return MakeBadJson();
+	}
+	if (httpStatus < 200) {
 		return MakeBadJson();
 	}
 
@@ -128,7 +144,7 @@ AuthClient::~AuthClient() {
 
 void AuthClient::login(
 		BackendType backend,
-		QString username,
+		QString employeeId,
 		QString password,
 		Fn<void(AuthResult)> done) {
 	cancel();
@@ -146,8 +162,16 @@ void AuthClient::login(
 		u"application/json"_q);
 
 	auto body = QJsonObject();
-	body.insert(u"username"_q, username);
+	body.insert(u"employeeId"_q, employeeId);
 	body.insert(u"password"_q, password);
+	// deviceId 可选；用 QSysInfo::machineUniqueId() 生成稳定标识，
+	// 不持久化（每次启动能算出同样值）。空值时不塞入 body。
+	const auto machineId = QSysInfo::machineUniqueId();
+	if (!machineId.isEmpty()) {
+		body.insert(
+			u"deviceId"_q,
+			u"tdesktop-"_q + QString::fromLatin1(machineId.toHex()));
+	}
 	const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
 
 	_reply = _nam->post(request, payload);

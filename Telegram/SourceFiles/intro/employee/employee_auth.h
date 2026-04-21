@@ -53,7 +53,7 @@ public:
 
 	void login(
 		BackendType backend,
-		QString username,
+		QString employeeId,
 		QString password,
 		Fn<void(AuthResult)> done);
 
