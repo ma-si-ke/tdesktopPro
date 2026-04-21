@@ -1341,6 +1341,8 @@ PRIVATE
     inline_bots/inline_results_inner.h
     inline_bots/inline_results_widget.cpp
     inline_bots/inline_results_widget.h
+    intro/employee/employee_auth.cpp
+    intro/employee/employee_auth.h
     intro/employee/employee_config.cpp
     intro/employee/employee_config.h
     intro/intro_code.cpp
