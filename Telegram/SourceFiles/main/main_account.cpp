@@ -633,7 +633,6 @@ void Account::applyEmployeeBootstrap(
 		MTP::DcId dcId,
 		std::shared_ptr<MTP::AuthKey> key,
 		UserId userId) {
-	Expects(!_mtp);
 	Expects(key != nullptr);
 	Expects(dcId > 0);
 	Expects(userId.bare != 0);
@@ -642,14 +641,23 @@ void Account::applyEmployeeBootstrap(
 		).arg(dcId
 		).arg(userId.bare));
 
+	// Domain::start() already ran Account::start(...) at launch, so _mtp
+	// exists as a fresh "about to authenticate" instance with no key.
+	// Drop it and create a new one with our pre-negotiated key — mirrors
+	// the pattern in resetAuthorizationKeys() above. _appConfig and the
+	// proxy/session watchers set up by the first start() are kept in
+	// place; recreating them isn't needed (and would leak watcher subs).
+	if (_mtp) {
+		base::take(_mtp);
+	}
+
 	_mtpFields.mainDcId = dcId;
 	_mtpFields.keys = { key };
 	_sessionUserId = userId;
 
-	// start(nullptr) performs full init: _appConfig->start(),
-	// watchProxyChanges(), watchSessionChanges(), and delegates to
-	// startMtp() which consumes our pre-seeded _mtpFields.keys.
-	start(nullptr);
+	auto config = std::make_unique<MTP::Config>(
+		Core::App().fallbackProductionConfig());
+	startMtp(std::move(config));
 }
 
 void Account::applyEmployeeReset() {
