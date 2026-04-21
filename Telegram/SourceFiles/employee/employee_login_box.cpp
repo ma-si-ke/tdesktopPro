@@ -235,8 +235,18 @@ void EmployeeLoginBox(
 		state->client.submit(request, [=](LoginResult result) {
 			state->pending = false;
 			if (auto success = std::get_if<LoginSuccess>(&result)) {
-				onLoggedIn(std::move(*success));
+				// Close the box first: the caller's onLoggedIn likely
+				// restarts MTP and creates a Main::Session, which fires
+				// rpl events that re-layer the window (destroying our
+				// parent layer). Running onLoggedIn after closeBox (and
+				// deferred to the next event-loop tick) lets this
+				// callback unwind before tdesktop tears us down.
+				auto login = std::move(*success);
 				box->closeBox();
+				crl::on_main(
+					[cb = onLoggedIn, login = std::move(login)]() mutable {
+						cb(std::move(login));
+					});
 				return;
 			}
 			const auto &failure = std::get<LoginFailure>(result);
