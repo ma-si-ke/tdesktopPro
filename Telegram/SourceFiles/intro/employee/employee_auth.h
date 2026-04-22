@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include "intro/employee/employee_config.h"
+#include "intro/employee/employee_permissions.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QPointer>
@@ -24,6 +25,8 @@ struct AuthSuccess {
 	MTP::DcId dcId = 0;
 	QByteArray authKey;   // 256 bytes, already hex-decoded
 	UserId userId = 0;
+	QString token;                // Bearer token for /api/auth/verify
+	PermissionValues permissions{}; // backend-declared permission bits
 };
 
 struct AuthFailure {
