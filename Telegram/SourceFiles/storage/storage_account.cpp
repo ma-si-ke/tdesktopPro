@@ -102,6 +102,9 @@ enum { // Local Storage Keys
 	lskMediaLastPlaybackPositions = 0x1c, // no data
 	lskBotStorages = 0x1d, // data: PeerId botId
 	lskPrefs = 0x1e, // no data
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	lskEmployeeAuth = 0x1f, // no data
+#endif
 };
 
 auto EmptyMessageDraftSources()
@@ -501,6 +504,11 @@ Account::ReadMapResult Account::readMapWith(
 				botStoragesNotReadMap.emplace(peerId, true);
 			}
 		} break;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		case lskEmployeeAuth: {
+			map.stream >> _employeeAuthKey;
+		} break;
+#endif
 		default:
 			LOG(("App Error: unknown key type in encrypted map: %1").arg(keyType));
 			return ReadMapResult::Failed;
@@ -665,6 +673,9 @@ void Account::writeMap() {
 	if (_inlineBotsDownloadsKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (_mediaLastPlaybackPositionsKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (!_botStoragesMap.empty()) mapSize += sizeof(quint32) * 2 + _botStoragesMap.size() * sizeof(quint64) * 2;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_employeeAuthKey) mapSize += sizeof(quint32) + sizeof(quint64);
+#endif
 
 	EncryptedDescriptor mapData(mapSize);
 	if (!self.isEmpty()) {
@@ -756,6 +767,11 @@ void Account::writeMap() {
 			mapData.stream << quint64(value) << SerializePeerId(key);
 		}
 	}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_employeeAuthKey) {
+		mapData.stream << quint32(lskEmployeeAuth) << quint64(_employeeAuthKey);
+	}
+#endif
 	map.writeEncrypted(mapData, _localKey);
 
 	_mapChanged = false;
@@ -790,6 +806,9 @@ void Account::reset() {
 	_roundPlaceholderKey = 0;
 	_inlineBotsDownloadsKey = 0;
 	_mediaLastPlaybackPositionsKey = 0;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	_employeeAuthKey = 0;
+#endif
 	_oldMapVersion = 0;
 	_fileLocations.clear();
 	_fileLocationPairs.clear();
@@ -997,6 +1016,51 @@ void Account::readLocations() {
 		}
 	}
 }
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+void Account::writeEmployeeAuth(const QByteArray &bytes) {
+	if (bytes.isEmpty()) {
+		clearEmployeeAuth();
+		return;
+	}
+	if (!_employeeAuthKey) {
+		_employeeAuthKey = GenerateKey(_basePath);
+		writeMapQueued();
+	}
+	EncryptedDescriptor data(Serialize::bytearraySize(bytes));
+	data.stream << bytes;
+	FileWriteDescriptor file(_employeeAuthKey, _basePath);
+	file.writeEncrypted(data, _localKey);
+}
+
+QByteArray Account::readEmployeeAuth() {
+	if (!_employeeAuthKey) {
+		return QByteArray();
+	}
+	FileReadDescriptor descriptor;
+	if (!ReadEncryptedFile(
+			descriptor, _employeeAuthKey, _basePath, _localKey)) {
+		ClearKey(_employeeAuthKey, _basePath);
+		_employeeAuthKey = 0;
+		writeMapDelayed();
+		return QByteArray();
+	}
+	QByteArray bytes;
+	descriptor.stream >> bytes;
+	if (!CheckStreamStatus(descriptor.stream)) {
+		return QByteArray();
+	}
+	return bytes;
+}
+
+void Account::clearEmployeeAuth() {
+	if (_employeeAuthKey) {
+		ClearKey(_employeeAuthKey, _basePath);
+		_employeeAuthKey = 0;
+		writeMapDelayed();
+	}
+}
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 void Account::updateDownloads(
 		Fn<std::optional<QByteArray>()> downloadsSerialize) {
