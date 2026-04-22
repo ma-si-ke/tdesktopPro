@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_config.h"
 #include "intro/employee/employee_permissions.h"
+#include "intro/employee/employee_verify.h"
 #endif
 
 namespace Storage {
@@ -185,7 +186,12 @@ private:
 	bool _loggingOut = false;
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
+	void kickOffEmployeeVerifyIfAuthorized();
+	void onEmployeeVerifyInvalidToken();
+	void handleEmployeeAuthMissingOrCorrupt();
+
 	std::unique_ptr<Intro::Employee::Permissions> _employeePermissions;
+	std::unique_ptr<Intro::Employee::VerifyClient> _employeeVerify;
 	Intro::Employee::BackendType _employeeBackend =
 		Intro::Employee::BackendType::Customer;
 #endif

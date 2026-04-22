@@ -30,6 +30,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_auth_storage.h"
+#include "intro/employee/employee_verify.h"
 #endif
 
 namespace Main {
@@ -56,6 +57,7 @@ Account::Account(not_null<Domain*> domain, const QString &dataName, int index)
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	_employeePermissions =
 		std::make_unique<Intro::Employee::Permissions>();
+	_employeeVerify = std::make_unique<Intro::Employee::VerifyClient>();
 #endif
 }
 
@@ -87,18 +89,16 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	{
 		const auto bytes = local().readEmployeeAuth();
-		if (!bytes.isEmpty()) {
-			if (auto snap = Intro::Employee::DeserializeAuthSnapshot(bytes)) {
-				LOG(("Employee: cold start loaded snapshot tokenLen=%1 backend=%2"
-					).arg(snap->token.size()
-					).arg(static_cast<uchar>(snap->backend)));
-				_employeePermissions->apply(snap->permissions, snap->token);
-				_employeeBackend = snap->backend;
-			} else {
-				LOG(("Employee: cold start snapshot corrupted; will force logout"));
-				// Defer: Task 8's kickOff logic detects "MTP present but not
-				// authorized" and triggers hard logout on the event loop.
-			}
+		if (bytes.isEmpty()) {
+			LOG(("Employee: cold start no snapshot (first install or cleared)"));
+		} else if (auto snap = Intro::Employee::DeserializeAuthSnapshot(bytes)) {
+			LOG(("Employee: cold start snapshot tokenLen=%1 backend=%2"
+				).arg(snap->token.size()
+				).arg(static_cast<uchar>(snap->backend)));
+			_employeePermissions->apply(snap->permissions, snap->token);
+			_employeeBackend = snap->backend;
+		} else {
+			LOG(("Employee: cold start snapshot corrupted"));
 		}
 	}
 #endif
@@ -110,6 +110,9 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 	_appConfig->start();
 	watchProxyChanges();
 	watchSessionChanges();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	kickOffEmployeeVerifyIfAuthorized();
+#endif
 }
 
 void Account::prepareToStartAdded(
@@ -689,6 +692,8 @@ void Account::applyEmployeeBootstrap(
 	Expects(dcId > 0);
 	Expects(userId.bare != 0);
 
+	_employeeVerify->cancel();
+
 	LOG(("Employee: bootstrap dcId=%1 userId=%2 tokenLen=%3 backend=%4"
 		).arg(dcId
 		).arg(userId.bare
@@ -721,6 +726,9 @@ void Account::applyEmployeeBootstrap(
 }
 
 void Account::applyEmployeeReset() {
+	if (_employeeVerify) {
+		_employeeVerify->cancel();
+	}
 	if (_mtp) {
 		base::take(_mtp);
 	}
@@ -732,6 +740,75 @@ void Account::applyEmployeeReset() {
 	local().clearEmployeeAuth();
 
 	LOG(("Employee: reset"));
+}
+
+void Account::kickOffEmployeeVerifyIfAuthorized() {
+	// Fresh install / no saved account: Intro will handle login, nothing to do.
+	if (!maybeSession()) {
+		return;
+	}
+
+	// Saved account but no token => snapshot missing or corrupted.
+	// Force re-login on the next event loop tick (cannot call forcedLogOut
+	// directly while start() is still unwinding).
+	if (!_employeePermissions->authorized()) {
+		LOG(("Employee: session present but no token; scheduling forced logout"));
+		crl::on_main(this, [this] {
+			handleEmployeeAuthMissingOrCorrupt();
+		});
+		return;
+	}
+
+	LOG(("Employee: kicking off verify"));
+	const auto token = _employeePermissions->token();
+	_employeeVerify->verify(
+		_employeeBackend,
+		token,
+		crl::guard(this, [this](Intro::Employee::VerifyResult result) {
+			if (const auto s = std::get_if<
+					Intro::Employee::VerifySuccess>(&result)) {
+				LOG(("Employee: verify ok"));
+				const auto token = _employeePermissions->token();
+				_employeePermissions->apply(s->permissions, token);
+				local().writeEmployeeAuth(
+					Intro::Employee::SerializeAuthSnapshot(
+						Intro::Employee::AuthSnapshot{
+							.token = token,
+							.permissions = s->permissions,
+							.backend = _employeeBackend,
+						}));
+				return;
+			}
+			const auto f = std::get_if<
+				Intro::Employee::VerifyFailure>(&result);
+			Assert(f != nullptr);
+			switch (f->kind) {
+			case Intro::Employee::VerifyFailure::Kind::InvalidToken:
+				onEmployeeVerifyInvalidToken();
+				return;
+			case Intro::Employee::VerifyFailure::Kind::Network:
+			case Intro::Employee::VerifyFailure::Kind::Server:
+			case Intro::Employee::VerifyFailure::Kind::BadJson:
+				LOG(("Employee: verify failed kind=%1; keeping disk state"
+					).arg(int(f->kind)));
+				return;
+			}
+		}));
+}
+
+void Account::onEmployeeVerifyInvalidToken() {
+	LOG(("Employee: verify 401 -> forced logout"));
+	handleEmployeeAuthMissingOrCorrupt();
+}
+
+void Account::handleEmployeeAuthMissingOrCorrupt() {
+	// Clear local employee state first so re-login starts from a clean slate,
+	// then use the existing forcedLogOut path which tears down the session
+	// and triggers the Main::Domain transition back to Intro.
+	_employeePermissions->clear();
+	local().clearEmployeeAuth();
+	_employeeBackend = Intro::Employee::BackendType::Customer;
+	forcedLogOut();
 }
 #endif // TDESKTOP_EMPLOYEE_MODE
 
