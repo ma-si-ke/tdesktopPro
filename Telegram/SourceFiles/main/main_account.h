@@ -11,6 +11,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mtproto/mtp_instance.h"
 #include "base/weak_ptr.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_config.h"
+#include "intro/employee/employee_permissions.h"
+#endif
+
 namespace Storage {
 class Account;
 class Domain;
@@ -52,8 +57,14 @@ public:
 	void applyEmployeeBootstrap(
 		MTP::DcId dcId,
 		std::shared_ptr<MTP::AuthKey> key,
-		UserId userId);
+		UserId userId,
+		QString token,
+		Intro::Employee::PermissionValues permissions,
+		Intro::Employee::BackendType backend);
 	void applyEmployeeReset();
+
+	[[nodiscard]] const Intro::Employee::Permissions &
+		employeePermissions() const;
 #endif
 
 	[[nodiscard]] uint64 willHaveSessionUniqueId(MTP::Config *config) const;
@@ -172,6 +183,12 @@ private:
 	MTP::Instance::Fields _mtpFields;
 	MTP::AuthKeysList _mtpKeysToDestroy;
 	bool _loggingOut = false;
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	std::unique_ptr<Intro::Employee::Permissions> _employeePermissions;
+	Intro::Employee::BackendType _employeeBackend =
+		Intro::Employee::BackendType::Customer;
+#endif
 
 	rpl::lifetime _lifetime;
 

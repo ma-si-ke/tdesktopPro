@@ -237,7 +237,10 @@ void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
 	account().applyEmployeeBootstrap(
 		result.dcId,
 		std::move(key),
-		result.userId);
+		result.userId,
+		result.token,
+		result.permissions,
+		_chosenBackend);
 	LOG(("Employee: step=after_applyBootstrap"));
 
 	// Watch for the first main-session emission: signals that MTP is up
