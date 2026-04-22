@@ -86,6 +86,11 @@ public:
 	void writeSessionSettings();
 	void writeMtpData();
 	void writeMtpConfig();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	void writeEmployeeAuth(const QByteArray &bytes);
+	[[nodiscard]] QByteArray readEmployeeAuth();
+	void clearEmployeeAuth();
+#endif
 
 	void registerDraftSource(
 		not_null<History*> history,
@@ -359,6 +364,9 @@ private:
 	FileKey _roundPlaceholderKey = 0;
 	FileKey _inlineBotsDownloadsKey = 0;
 	FileKey _mediaLastPlaybackPositionsKey = 0;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	FileKey _employeeAuthKey = 0;
+#endif
 
 	qint64 _cacheTotalSizeLimit = 0;
 	qint64 _cacheBigFileTotalSizeLimit = 0;
