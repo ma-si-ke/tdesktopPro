@@ -84,6 +84,24 @@ std::unique_ptr<MTP::Config> Account::prepareToStart(
 }
 
 void Account::start(std::unique_ptr<MTP::Config> config) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	{
+		const auto bytes = local().readEmployeeAuth();
+		if (!bytes.isEmpty()) {
+			if (auto snap = Intro::Employee::DeserializeAuthSnapshot(bytes)) {
+				LOG(("Employee: cold start loaded snapshot tokenLen=%1 backend=%2"
+					).arg(snap->token.size()
+					).arg(static_cast<uchar>(snap->backend)));
+				_employeePermissions->apply(snap->permissions, snap->token);
+				_employeeBackend = snap->backend;
+			} else {
+				LOG(("Employee: cold start snapshot corrupted; will force logout"));
+				// Defer: Task 8's kickOff logic detects "MTP present but not
+				// authorized" and triggers hard logout on the event loop.
+			}
+		}
+	}
+#endif
 	_appConfig = std::make_unique<AppConfig>(this);
 	startMtp(config
 		? std::move(config)
