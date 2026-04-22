@@ -28,6 +28,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_domain.h"
 #include "main/main_session_settings.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_auth_storage.h"
+#endif
+
 namespace Main {
 namespace {
 
@@ -49,6 +53,10 @@ Account::Account(not_null<Domain*> domain, const QString &dataName, int index)
 , _local(std::make_unique<Storage::Account>(
 	this,
 	ComposeDataString(dataName, index))) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	_employeePermissions =
+		std::make_unique<Intro::Employee::Permissions>();
+#endif
 }
 
 Account::~Account() {
@@ -648,36 +656,40 @@ void Account::resetAuthorizationKeys() {
 }
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
+const Intro::Employee::Permissions &Account::employeePermissions() const {
+	return *_employeePermissions;
+}
+
 void Account::applyEmployeeBootstrap(
 		MTP::DcId dcId,
 		std::shared_ptr<MTP::AuthKey> key,
-		UserId userId) {
+		UserId userId,
+		QString token,
+		Intro::Employee::PermissionValues permissions,
+		Intro::Employee::BackendType backend) {
 	Expects(key != nullptr);
 	Expects(dcId > 0);
 	Expects(userId.bare != 0);
 
-	LOG(("Employee: bootstrap dcId=%1 userId=%2"
+	LOG(("Employee: bootstrap dcId=%1 userId=%2 tokenLen=%3 backend=%4"
 		).arg(dcId
-		).arg(userId.bare));
+		).arg(userId.bare
+		).arg(token.size()
+		).arg(static_cast<uchar>(backend)));
 
-	// Do NOT assign _sessionUserId here: startMtp() below checks that
-	// field and, if non-empty, auto-calls createSession(UserId, serialized,
-	// ...) with stub serialized data — exactly the broken path that
-	// crashed the previous implementation. The real MTPUser comes later
-	// via users.GetUsers → inherited Step::finish(MTPUser) →
-	// createSession(MTPUser, settings).
+	_employeeBackend = backend;
+	_employeePermissions->apply(permissions, token);
+	local().writeEmployeeAuth(Intro::Employee::SerializeAuthSnapshot(
+		Intro::Employee::AuthSnapshot{
+			.token = token,
+			.permissions = permissions,
+			.backend = backend,
+		}));
+
 	_mtpFields.mainDcId = dcId;
 	_mtpFields.keys = { key };
-	(void)userId;  // consumed by the caller's UI feedback only
+	(void)userId;
 
-	// Domain::start() already ran Account::start(...) at launch, so _mtp
-	// exists as a fresh "about to authenticate" instance with no key.
-	// Replace it with one that holds our pre-negotiated key — use the
-	// same scoped-local pattern as resetAuthorizationKeys() so the OLD
-	// _mtp outlives startMtp(): when startMtp fires _mtpValue at its
-	// tail, existing rpl subscribers (e.g. Intro::Widget's MTP::Sender)
-	// tear down their old Sender-over-old-Instance; that teardown path
-	// still dereferences the old Instance, so it must not be freed yet.
 	{
 		const auto old = _mtp ? base::take(_mtp) : nullptr;
 		LOG(("Employee: bootstrap step=drop_old_mtp"));
@@ -686,7 +698,7 @@ void Account::applyEmployeeBootstrap(
 		LOG(("Employee: bootstrap step=config_ready"));
 		startMtp(std::move(config));
 		LOG(("Employee: bootstrap step=startMtp_returned"));
-	}  // old _mtp destroyed here, after all subscribers have rebound
+	}
 	LOG(("Employee: bootstrap step=old_mtp_destroyed"));
 }
 
@@ -697,6 +709,9 @@ void Account::applyEmployeeReset() {
 	_mtpFields.keys.clear();
 	_mtpFields.mainDcId = MTP::Instance::Fields::kNoneMainDc;
 	_sessionUserId = {};
+	_employeePermissions->clear();
+	_employeeBackend = Intro::Employee::BackendType::Customer;
+	local().clearEmployeeAuth();
 
 	LOG(("Employee: reset"));
 }
