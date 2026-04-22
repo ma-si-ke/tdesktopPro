@@ -121,6 +121,41 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 			tr::lng_employee_err_bad_json(tr::now));
 	}
 
+	// token is required; without it we can't verify later.
+	const auto token = root.value(u"token"_q).toString();
+	if (token.isEmpty()) {
+		LOG(("Employee: login response missing token"));
+		return MakeFailure(
+			AuthFailure::Kind::BadJson,
+			tr::lng_employee_err_bad_json(tr::now));
+	}
+
+	// permissions is optional; missing/wrong type → all false (with log).
+	auto permissions = PermissionValues{};
+	const auto permsValue = root.value(u"permissions"_q);
+	if (permsValue.isObject()) {
+		const auto permsObj = permsValue.toObject();
+		const auto &mapping = JsonKeyToPermission();
+		for (auto it = permsObj.begin(); it != permsObj.end(); ++it) {
+			const auto known = mapping.find(it.key());
+			if (known == mapping.end()) {
+				LOG(("Employee: unknown permission key: %1").arg(it.key()));
+				continue;
+			}
+			const auto rawValue = it.value();
+			if (!rawValue.isBool()) {
+				LOG(("Employee: permission %1 is not a bool").arg(it.key()));
+				permissions[static_cast<int>(known->second)] = false;
+				continue;
+			}
+			permissions[static_cast<int>(known->second)] = rawValue.toBool();
+		}
+	} else if (permsValue.isUndefined() || permsValue.isNull()) {
+		LOG(("Employee: login response has no permissions field"));
+	} else {
+		LOG(("Employee: login response permissions field is not an object"));
+	}
+
 	const auto userId = UserId(userIdRaw.toVariant().toLongLong());
 	if (!userId.bare) {
 		return MakeBadJson();
@@ -130,6 +165,8 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 		MTP::DcId(dcId),
 		keyBytes,
 		userId,
+		token,
+		permissions,
 	};
 }
 
