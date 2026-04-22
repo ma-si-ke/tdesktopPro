@@ -1343,6 +1343,8 @@ PRIVATE
     inline_bots/inline_results_widget.h
     intro/employee/employee_auth.cpp
     intro/employee/employee_auth.h
+    intro/employee/employee_auth_storage.cpp
+    intro/employee/employee_auth_storage.h
     intro/employee/employee_config.cpp
     intro/employee/employee_config.h
     intro/employee/employee_login_step.cpp
