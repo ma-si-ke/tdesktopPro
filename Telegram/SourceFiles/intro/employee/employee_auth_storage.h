@@ -1,0 +1,38 @@
+/*
+This file is part of Telegram Desktop,
+the official desktop application for the Telegram messaging service.
+
+For license and copyright information please follow this link:
+https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+*/
+#pragma once
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+
+#include "intro/employee/employee_config.h"
+#include "intro/employee/employee_permissions.h"
+
+#include <optional>
+
+namespace Intro::Employee {
+
+struct AuthSnapshot {
+	QString token;
+	PermissionValues permissions{};
+	BackendType backend = BackendType::Customer;
+};
+
+// Binary format (version 1):
+//   u32 magic   = 'EMPA'    ('E'<<24|'M'<<16|'P'<<8|'A')
+//   u32 version = 1
+//   u32 tokenLen
+//   u8[tokenLen] tokenUtf8
+//   u16 permissionBits      (bit N = permissions[N])
+//   u32 backend             (BackendType enum value, clamped on read)
+[[nodiscard]] QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap);
+[[nodiscard]] std::optional<AuthSnapshot> DeserializeAuthSnapshot(
+	const QByteArray &bytes);
+
+} // namespace Intro::Employee
+
+#endif // TDESKTOP_EMPLOYEE_MODE
