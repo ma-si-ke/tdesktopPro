@@ -822,7 +822,7 @@ void SendFilesBox::prepare() {
 	setCloseByOutsideClick(false);
 
 	boxClosing() | rpl::on_next([=] {
-		if (!_confirmed && _cancelledCallback) {
+		if (!_confirmed && !_textTaken && _cancelledCallback) {
 			_cancelledCallback();
 		}
 	}, lifetime());
@@ -2254,10 +2254,16 @@ rpl::producer<TextWithTags> SendFilesBox::takeTextWithTagsRequests() const {
 	return _textWithTagsRequests.events();
 }
 
-void SendFilesBox::requestToTakeTextWithTags() const {
-	if (!_caption->isHidden()) {
-		_textWithTagsRequests.fire_copy(_caption->getTextWithTags());
+void SendFilesBox::requestToTakeTextWithTags() {
+	if (_caption->isHidden()) {
+		return;
 	}
+	const auto text = _caption->getTextWithTags();
+	if (!_prefilledCaptionText.text.isEmpty() && text.text.isEmpty()) {
+		return;
+	}
+	_textTaken = true;
+	_textWithTagsRequests.fire_copy(text);
 }
 
 void SendFilesBox::setInnerFocus() {
