@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "intro/employee/employee_config.h"
 #include "intro/employee/employee_permissions.h"
 #include "intro/employee/employee_verify.h"
+#include "base/timer.h"
 #endif
 
 namespace Storage {
@@ -189,11 +190,16 @@ private:
 	void kickOffEmployeeVerifyIfAuthorized();
 	void onEmployeeVerifyInvalidToken();
 	void handleEmployeeAuthMissingOrCorrupt();
+	void startEmployeeVerifyTimer();
+	void stopEmployeeVerifyTimer();
+	void onEmployeeVerifyTimerTick();
 
 	std::unique_ptr<Intro::Employee::Permissions> _employeePermissions;
 	std::unique_ptr<Intro::Employee::VerifyClient> _employeeVerify;
 	Intro::Employee::BackendType _employeeBackend =
 		Intro::Employee::BackendType::Customer;
+	base::Timer _employeeVerifyTimer;
+	int _employeeVerifyConsecutiveFailures = 0;
 #endif
 
 	rpl::lifetime _lifetime;
