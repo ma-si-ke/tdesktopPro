@@ -113,6 +113,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_credits.h"
 #include "styles/style_menu_icons.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 namespace HistoryView {
 namespace {
 
@@ -2320,6 +2324,13 @@ void ComposeControls::initKeyHandler() {
 		}
 		if (key == Qt::Key_Up && !hasModifiers) {
 			if (!isEditingMessage() && _field->empty()) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				if (!Intro::Employee::Allowed(
+						_session,
+						Intro::Employee::PermissionKey::MsgEdit)) {
+					return;
+				}
+#endif
 				_editLastMessageRequests.fire(std::move(keyEvent));
 				return;
 			}

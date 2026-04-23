@@ -121,6 +121,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat_helpers.h"
 #include "styles/style_menu_icons.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 #include <QtGui/QClipboard>
 #include <QtWidgets/QApplication>
 #include <QtCore/QCoreApplication>
@@ -2661,7 +2665,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			: nullptr;
 		if (editItem) {
 			const auto editItemId = editItem->fullId();
-			_menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
+			const auto action = _menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
 				if (const auto item = session->data().message(editItemId)) {
 					auto it = _selected.find(item);
 					const auto selection = ((it != _selected.end())
@@ -2674,6 +2678,12 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 					_widget->editMessage(item, selection);
 				}
 			}, &st::menuIconEdit);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			Intro::Employee::GuardAction(
+				session,
+				Intro::Employee::PermissionKey::MsgEdit,
+				action);
+#endif
 		}
 		if (session->factchecks().canEdit(item)) {
 			const auto text = item->factcheckText();
@@ -3052,9 +3062,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		}
 		if (isUponSelected > 1) {
 			if (selectedState.count > 0 && selectedState.canForwardCount == selectedState.count) {
-				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
+				const auto action = _menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 					_widget->forwardSelected();
 				}, &st::menuIconForward);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgForward,
+					action);
+#endif
 			}
 			if (selectedState.count > 0 && selectedState.canDeleteCount == selectedState.count) {
 				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
@@ -3072,9 +3088,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			const auto blockSender = item->history()->peer->isRepliesChat();
 			if (isUponSelected != -2) {
 				if (item->allowsForward()) {
-					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
+					const auto action = _menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
 						forwardItem(itemId);
 					}, &st::menuIconForward);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+					Intro::Employee::GuardAction(
+						session,
+						Intro::Employee::PermissionKey::MsgForward,
+						action);
+#endif
 				}
 				if (HistoryView::CanAddOfferToMessage(item)) {
 					_menu->addAction(tr::lng_context_add_offer(tr::now), [=] {
@@ -3323,9 +3345,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		}
 		if (isUponSelected > 1) {
 			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount) {
-				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
+				const auto action = _menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 					_widget->forwardSelected();
 				}, &st::menuIconForward);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgForward,
+					action);
+#endif
 			}
 			if (selectedState.count > 0 && selectedState.count == selectedState.canDeleteCount) {
 				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
@@ -3341,9 +3369,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		} else if (item && ((isUponSelected != -2 && (canForward || canDelete)) || item->isRegular())) {
 			if (isUponSelected != -2) {
 				if (canForward) {
-					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
+					const auto action = _menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
 						forwardAsGroup(itemId);
 					}, &st::menuIconForward);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+					Intro::Employee::GuardAction(
+						session,
+						Intro::Employee::PermissionKey::MsgForward,
+						action);
+#endif
 				}
 				if (HistoryView::CanAddOfferToMessage(item)) {
 					_menu->addAction(tr::lng_context_add_offer(tr::now), [=] {

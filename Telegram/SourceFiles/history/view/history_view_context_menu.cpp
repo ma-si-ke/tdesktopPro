@@ -107,6 +107,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat_helpers.h"
 #include "styles/style_menu_icons.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
 
@@ -391,7 +395,7 @@ bool AddForwardSelectedAction(
 		return false;
 	}
 
-	menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
+	const auto action = menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 		const auto weak = base::make_weak(list);
 		const auto callback = [=] {
 			if (const auto strong = weak.get()) {
@@ -403,6 +407,12 @@ bool AddForwardSelectedAction(
 			ExtractIdsList(request.selectedItems),
 			callback);
 	}, &st::menuIconForward);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&request.navigation->session(),
+		Intro::Employee::PermissionKey::MsgForward,
+		action);
+#endif
 	return true;
 }
 
@@ -426,7 +436,7 @@ bool AddForwardMessageAction(
 		}
 	}
 	const auto itemId = item->fullId();
-	menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
+	const auto action = menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
 		if (const auto item = owner->message(itemId)) {
 			Window::ShowForwardMessagesBox(
 				request.navigation,
@@ -435,6 +445,12 @@ bool AddForwardMessageAction(
 					: MessageIdsList{ 1, itemId }));
 		}
 	}, &st::menuIconForward);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&item->history()->session(),
+		Intro::Employee::PermissionKey::MsgForward,
+		action);
+#endif
 	return true;
 }
 
@@ -747,13 +763,19 @@ bool AddEditMessageAction(
 	}
 	const auto owner = &item->history()->owner();
 	const auto itemId = item->fullId();
-	menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
+	const auto action = menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
 		const auto item = owner->message(itemId);
 		if (!item) {
 			return;
 		}
 		list->editMessageRequestNotify(item->fullId());
 	}, &st::menuIconEdit);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&item->history()->session(),
+		Intro::Employee::PermissionKey::MsgEdit,
+		action);
+#endif
 	return true;
 }
 
