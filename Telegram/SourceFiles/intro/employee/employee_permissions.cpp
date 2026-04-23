@@ -9,6 +9,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
+#include "base/debug_log.h"
+
 namespace Intro::Employee {
 
 Permissions::Permissions() : _values(PermissionValues{}) {
@@ -43,6 +45,12 @@ bool Permissions::authorized() const {
 }
 
 void Permissions::apply(PermissionValues values, QString token) {
+	LOG(("Employee: Permissions::apply tokenLen=%1 edit=%2 forward=%3 delete=%4 send=%5"
+		).arg(token.size()
+		).arg(values[int(PermissionKey::MsgEdit)]
+		).arg(values[int(PermissionKey::MsgForward)]
+		).arg(values[int(PermissionKey::MsgDelete)]
+		).arg(values[int(PermissionKey::MsgSend)]));
 	_token = std::move(token);
 	_values = values;
 }

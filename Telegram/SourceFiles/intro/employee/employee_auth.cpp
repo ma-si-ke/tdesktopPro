@@ -156,6 +156,26 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 		LOG(("Employee: login response permissions field is not an object"));
 	}
 
+	LOG(("Employee: login perms parsed: "
+		"send=%1 edit=%2 delete=%3 forward=%4 "
+		"gCreate=%5 gDelete=%6 gAdd=%7 gRemove=%8 "
+		"cAdd=%9 cBlock=%10 cNote=%11 "
+		"fEdit=%12 fAdd=%13 noMention=%14"
+		).arg(permissions[int(PermissionKey::MsgSend)]
+		).arg(permissions[int(PermissionKey::MsgEdit)]
+		).arg(permissions[int(PermissionKey::MsgDelete)]
+		).arg(permissions[int(PermissionKey::MsgForward)]
+		).arg(permissions[int(PermissionKey::GroupCreate)]
+		).arg(permissions[int(PermissionKey::GroupDelete)]
+		).arg(permissions[int(PermissionKey::GroupAddMember)]
+		).arg(permissions[int(PermissionKey::GroupRemoveMember)]
+		).arg(permissions[int(PermissionKey::ContactAdd)]
+		).arg(permissions[int(PermissionKey::ContactBlock)]
+		).arg(permissions[int(PermissionKey::ContactEditNote)]
+		).arg(permissions[int(PermissionKey::FolderEdit)]
+		).arg(permissions[int(PermissionKey::FolderAddChat)]
+		).arg(permissions[int(PermissionKey::UiDisableMentionTooltip)]));
+
 	const auto userId = UserId(userIdRaw.toVariant().toLongLong());
 	if (!userId.bare) {
 		return MakeBadJson();
