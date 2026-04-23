@@ -210,6 +210,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_info.h"
 #include "styles/style_iv.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 #include <QtGui/QWindow>
 #include <QtCore/QMimeData>
 
@@ -8759,6 +8763,13 @@ void HistoryWidget::keyPressEvent(QKeyEvent *e) {
 			|| _replyTo) {
 			_scroll->keyPressEvent(e);
 		} else {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					&session(),
+					Intro::Employee::PermissionKey::MsgEdit)) {
+				return;
+			}
+#endif
 			const auto last = _history->lastMessage();
 			if (last && last->isLocal()) {
 				if (last->media() && last->media()->allowsEdit()) {
