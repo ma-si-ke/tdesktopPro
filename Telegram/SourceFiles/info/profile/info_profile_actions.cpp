@@ -114,6 +114,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 namespace Info {
 namespace Profile {
 namespace {
@@ -3080,7 +3084,7 @@ void ActionsFiller::addBlockAction(not_null<UserData*> user) {
 void ActionsFiller::addLeaveChannelAction(not_null<ChannelData*> channel) {
 	Expects(_controller->parentController());
 
-	AddActionButton(
+	const auto leaveWrap = AddActionButton(
 		_wrap,
 		tr::lng_profile_leave_channel(),
 		AmInChannelValue(channel),
@@ -3088,6 +3092,12 @@ void ActionsFiller::addLeaveChannelAction(not_null<ChannelData*> channel) {
 			_controller->parentController(),
 			channel),
 		&st::infoIconLeave);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&channel->session(),
+		Intro::Employee::PermissionKey::GroupDelete,
+		leaveWrap->entity());
+#endif
 }
 
 void ActionsFiller::addJoinChannelAction(
@@ -3192,6 +3202,12 @@ void SetupAddChannelMember(
 	add->addClickHandler([=] {
 		Window::PeerMenuAddChannelMembers(navigation, channel);
 	});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&channel->session(),
+		Intro::Employee::PermissionKey::GroupAddMember,
+		add);
+#endif
 	parent->widthValue(
 	) | rpl::on_next([add](int newWidth) {
 		auto availableWidth = newWidth

@@ -131,6 +131,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 #include "styles/style_layers.h" // st::boxLabel
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 namespace Window {
 namespace {
 
@@ -3308,10 +3312,24 @@ void SessionController::showAddContact() {
 }
 
 void SessionController::showNewGroup() {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::GroupCreate)) {
+		return;
+	}
+#endif
 	_window->show(Box<GroupInfoBox>(this, GroupInfoBox::Type::Group));
 }
 
 void SessionController::showNewChannel() {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::GroupCreate)) {
+		return;
+	}
+#endif
 	_window->show(Box<GroupInfoBox>(this, GroupInfoBox::Type::Channel));
 }
 

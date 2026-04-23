@@ -132,6 +132,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_premium.h"
 #include "styles/style_settings.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 #include <QAction>
 #include <QtWidgets/QApplication>
 
@@ -892,7 +896,7 @@ void Filler::addDeleteChat() {
 	if (_topic || (!_sublist && _peer->isChannel())) {
 		return;
 	}
-	_addAction({
+	const auto deleteAction = _addAction({
 		.text = ((_peer->isUser() || _sublist)
 			? tr::lng_profile_delete_conversation(tr::now)
 			: tr::lng_profile_clear_and_exit(tr::now)),
@@ -902,6 +906,12 @@ void Filler::addDeleteChat() {
 		.icon = &st::menuIconDeleteAttention,
 		.isAttention = true,
 	});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&_controller->session(),
+		Intro::Employee::PermissionKey::GroupDelete,
+		deleteAction);
+#endif
 }
 
 void Filler::addLeaveChat() {
@@ -909,7 +919,7 @@ void Filler::addLeaveChat() {
 	if (_topic || _sublist || !channel || !channel->amIn()) {
 		return;
 	}
-	_addAction({
+	const auto leaveAction = _addAction({
 		.text = (_peer->isMegagroup()
 			? tr::lng_profile_leave_group(tr::now)
 			: tr::lng_profile_leave_channel(tr::now)),
@@ -917,6 +927,12 @@ void Filler::addLeaveChat() {
 		.icon = &st::menuIconLeaveAttention,
 		.isAttention = true,
 	});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&_controller->session(),
+		Intro::Employee::PermissionKey::GroupDelete,
+		leaveAction);
+#endif
 }
 
 void Filler::addJoinChat() {
@@ -1155,12 +1171,18 @@ void Filler::addNewMembers() {
 	const auto callback = chat
 		? Fn<void()>([=] { AddChatMembers(navigation, chat); })
 		: [=] { PeerMenuAddChannelMembers(navigation, channel); };
-	_addAction(
+	const auto addMembersAction = _addAction(
 		((chat || channel->isMegagroup())
 			? tr::lng_channel_add_members(tr::now)
 			: tr::lng_channel_add_users(tr::now)),
 		callback,
 		&st::menuIconInvite);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&_controller->session(),
+		Intro::Employee::PermissionKey::GroupAddMember,
+		addMembersAction);
+#endif
 }
 
 void Filler::addDeleteContact() {
