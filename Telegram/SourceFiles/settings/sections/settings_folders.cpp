@@ -50,6 +50,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 namespace Settings {
 namespace {
@@ -468,6 +471,13 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 			object_ptr<FilterRowButton>(wrap, session, filter));
 		button->removeRequests(
 		) | rpl::on_next([=] {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					session,
+					Intro::Employee::PermissionKey::FolderEdit)) {
+				return;
+			}
+#endif // TDESKTOP_EMPLOYEE_MODE
 			remove(button);
 		}, button->lifetime());
 		button->restoreRequests(
@@ -483,6 +493,13 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 			if (found->removed) {
 				return;
 			}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					session,
+					Intro::Employee::PermissionKey::FolderEdit)) {
+				return;
+			}
+#endif // TDESKTOP_EMPLOYEE_MODE
 			const auto doneCallback = [=](const Data::ChatFilter &result) {
 				find(button)->filter = result;
 				button->updateData(result);
@@ -566,6 +583,12 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 		tr::lng_filters_create(),
 		st::settingsButtonActive,
 		{ &st::settingsIconAdd, IconType::Round, &st::windowBgActive });
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		session,
+		Intro::Employee::PermissionKey::FolderEdit,
+		createButton.get());
+#endif // TDESKTOP_EMPLOYEE_MODE
 	if (highlights) {
 		highlights->push_back({ u"folders/create"_q, { createButton.get() } });
 	}
@@ -806,6 +829,13 @@ void SetupRecommendedSection(
 			object_ptr<FilterRowButton>(filtersWrap, session, filter));
 		button->removeRequests(
 		) | rpl::on_next([=] {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					session,
+					Intro::Employee::PermissionKey::FolderEdit)) {
+				return;
+			}
+#endif // TDESKTOP_EMPLOYEE_MODE
 			const auto row = find(button);
 			row->removed = true;
 			button->setRemoved(true);
@@ -823,6 +853,13 @@ void SetupRecommendedSection(
 			if (found->removed) {
 				return;
 			}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					session,
+					Intro::Employee::PermissionKey::FolderEdit)) {
+				return;
+			}
+#endif // TDESKTOP_EMPLOYEE_MODE
 			const auto doneCallback = [=](const Data::ChatFilter &result) {
 				find(button)->filter = result;
 				button->updateData(result);
