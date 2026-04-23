@@ -51,6 +51,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_widgets.h"
 #include "styles/style_chat_helpers.h"
 #include "styles/style_menu_icons.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#include "main/main_account.h"
+#include "main/main_session.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 #include <QtWidgets/QApplication>
 
@@ -1751,6 +1756,16 @@ void InitFieldAutocomplete(
 				|| peer->starsPerMessageChecked() != 0)) {
 			parsed = {};
 		}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		// UiDisableMentionTooltip：has(true) 表示"禁止"@补全弹窗，反向语义，
+		// 故直接使用 .has() 而非 Allowed()（后者为"允许"语义，会读反）。
+		if (!parsed.query.isEmpty()
+			&& parsed.query[0] == '@'
+			&& peer->session().account().employeePermissions().has(
+				Intro::Employee::PermissionKey::UiDisableMentionTooltip)) {
+			parsed.query.clear();
+		}
+#endif // TDESKTOP_EMPLOYEE_MODE
 		raw->showFiltered(peer, parsed.query, parsed.fromStart);
 	};
 

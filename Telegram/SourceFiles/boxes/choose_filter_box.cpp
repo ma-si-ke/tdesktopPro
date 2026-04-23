@@ -36,6 +36,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_media_player.h" // mediaPlayerMenuCheck
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 namespace {
 
@@ -278,6 +281,13 @@ void FillChooseFilterMenu(
 		}
 
 		auto callback = [=] {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					&controller->session(),
+					Intro::Employee::PermissionKey::FolderAddChat)) {
+				return;
+			}
+#endif // TDESKTOP_EMPLOYEE_MODE
 			const auto toAdd = !filter.contains(history);
 			const auto r = validator.limitReached(id, toAdd);
 			if (r.reached) {
@@ -315,6 +325,12 @@ void FillChooseFilterMenu(
 
 		item->setIcon(Icon(showColors ? filter : filter.withColorIndex({})));
 		const auto action = menu->addAction(std::move(item));
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::GuardAction(
+			&controller->session(),
+			Intro::Employee::PermissionKey::FolderAddChat,
+			action);
+#endif // TDESKTOP_EMPLOYEE_MODE
 		action->setEnabled(contains
 			? validator.canRemove(id)
 			: validator.canAdd());

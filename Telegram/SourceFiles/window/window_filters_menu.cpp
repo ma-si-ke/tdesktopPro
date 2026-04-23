@@ -38,6 +38,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "styles/style_widgets.h"
 #include "styles/style_window.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 #include "styles/style_layers.h" // attentionBoxButton
 #include "styles/style_menu_icons.h"
 
@@ -412,10 +415,16 @@ void FiltersMenu::showMenu(QPoint position, FilterId id) {
 		st::popupMenuWithIcons);
 	const auto addAction = Ui::Menu::CreateAddActionCallback(_popupMenu);
 	if (id) {
-		addAction(
+		const auto editAction = addAction(
 			tr::lng_filters_context_edit(tr::now),
 			crl::guard(&_outer, [=] { EditExistingFilter(_session, id); }),
 			&st::menuIconEdit);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::GuardAction(
+			&_session->session(),
+			Intro::Employee::PermissionKey::FolderEdit,
+			editAction);
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 		auto filteredChats = [=] {
 			return _session->session().data().chatsFilters().chatsList(id);
@@ -425,7 +434,7 @@ void FiltersMenu::showMenu(QPoint position, FilterId id) {
 			std::move(filteredChats),
 			addAction);
 
-		addAction({
+		const auto removeAction = addAction({
 			.text = tr::lng_filters_context_remove(tr::now),
 			.handler = crl::guard(&_outer, [=, this] {
 				_removeApi.request(base::make_weak(&_outer), _session, id);
@@ -433,6 +442,12 @@ void FiltersMenu::showMenu(QPoint position, FilterId id) {
 			.icon = &st::menuIconDeleteAttention,
 			.isAttention = true,
 		});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::GuardAction(
+			&_session->session(),
+			Intro::Employee::PermissionKey::FolderEdit,
+			removeAction);
+#endif // TDESKTOP_EMPLOYEE_MODE
 	} else {
 		auto customUnreadState = [=] {
 			const auto session = &_session->session();

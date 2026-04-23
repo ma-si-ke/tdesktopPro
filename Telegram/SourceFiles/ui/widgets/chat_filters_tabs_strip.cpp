@@ -36,6 +36,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h" // dialogsSearchTabs
 #include "styles/style_media_player.h" // mediaPlayerMenuCheck
 #include "styles/style_menu_icons.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 #include <QScrollBar>
 
@@ -78,10 +81,16 @@ void ShowMenu(
 		state->menu.get());
 
 	if (id) {
-		addAction(
+		const auto editAction = addAction(
 			tr::lng_filters_context_edit(tr::now),
 			[=] { EditExistingFilter(controller, id); },
 			&st::menuIconEdit);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::GuardAction(
+			session,
+			Intro::Employee::PermissionKey::FolderEdit,
+			editAction);
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 		Window::MenuAddMarkAsReadChatListAction(
 			controller,
@@ -91,12 +100,18 @@ void ShowMenu(
 		auto showRemoveBox = [=] {
 			state->removeApi.request(base::make_weak(parent), controller, id);
 		};
-		addAction({
+		const auto removeAction = addAction({
 			.text = tr::lng_filters_context_remove(tr::now),
 			.handler = std::move(showRemoveBox),
 			.icon = &st::menuIconDeleteAttention,
 			.isAttention = true,
 		});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::GuardAction(
+			session,
+			Intro::Employee::PermissionKey::FolderEdit,
+			removeAction);
+#endif // TDESKTOP_EMPLOYEE_MODE
 	} else {
 		auto customUnreadState = [=] {
 			return Data::MainListMapUnreadState(
