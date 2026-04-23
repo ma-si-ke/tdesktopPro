@@ -1258,6 +1258,8 @@ PRIVATE
     intro/employee/employee_permissions.h
     intro/employee/employee_prefs.cpp
     intro/employee/employee_prefs.h
+    intro/employee/employee_ui_guard.cpp
+    intro/employee/employee_ui_guard.h
     intro/employee/employee_verify.cpp
     intro/employee/employee_verify.h
     intro/intro_code.cpp
