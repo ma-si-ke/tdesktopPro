@@ -2367,16 +2367,24 @@ object_ptr<Ui::RpWidget> DetailsFiller::fill() {
 					_wrap.data(),
 					object_ptr<Ui::VerticalLayout>(_wrap.data())));
 			Ui::AddSkip(wrap->entity());
-			AddMainButton(
+			const auto addContactWrap = AddActionButton(
 				wrap->entity(),
-				tr::lng_info_add_as_contact(),
+				tr::lng_info_add_as_contact() | rpl::map(tr::upper),
 				CanAddContactValue(user),
 				[=, controller = _controller->parentController()] {
 					controller->uiShow()->show(
 						Box(EditContactBox, controller, user));
 				},
-				_mainTracker,
-				&lastButtonTracker);
+				nullptr,
+				st::infoMainButton);
+			_mainTracker.track(addContactWrap);
+			lastButtonTracker.track(addContactWrap);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			Intro::Employee::BindDisabled(
+				&user->session(),
+				Intro::Employee::PermissionKey::ContactAdd,
+				addContactWrap->entity());
+#endif
 			wrap->toggleOn(CanAddContactValue(user));
 		}
 		if (const auto info = user->botInfo.get()) {
@@ -2593,12 +2601,18 @@ void ActionsFiller::addEditContactAction(not_null<UserData*> user) {
 		}
 		controller->window().show(Box(EditContactBox, controller, user));
 	};
-	AddActionButton(
+	const auto editContactWrap = AddActionButton(
 		_wrap,
 		tr::lng_info_edit_contact(),
 		IsContactValue(user),
 		edit,
 		&st::infoIconEdit);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&user->session(),
+		Intro::Employee::PermissionKey::ContactEditNote,
+		editContactWrap->entity());
+#endif
 }
 
 void ActionsFiller::addDeleteContactAction(not_null<UserData*> user) {
@@ -2786,13 +2800,19 @@ void ActionsFiller::addBlockAction(not_null<UserData*> user) {
 				v::null));
 		}
 	};
-	AddActionButton(
+	const auto blockUserWrap = AddActionButton(
 		_wrap,
 		rpl::duplicate(text),
 		std::move(toggleOn),
 		std::move(callback),
 		&st::infoIconBlock,
 		st::infoBlockButton);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&user->session(),
+		Intro::Employee::PermissionKey::ContactBlock,
+		blockUserWrap->entity());
+#endif
 }
 
 void ActionsFiller::addLeaveChannelAction(not_null<ChannelData*> channel) {

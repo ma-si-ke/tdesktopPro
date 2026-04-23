@@ -3130,9 +3130,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}
 			addSelectMessageAction(item);
 			if (isUponSelected != -2 && blockSender) {
-				_menu->addAction(tr::lng_profile_block_user(tr::now), [=] {
+				const auto blockSenderAction = _menu->addAction(tr::lng_profile_block_user(tr::now), [=] {
 					blockSenderItem(itemId);
 				}, &st::menuIconBlock);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::ContactBlock,
+					blockSenderAction);
+#endif
 			}
 		}
 	} else { // maybe cursor on some text history item?
@@ -3413,9 +3419,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}
 			addSelectMessageAction(partItemOrLeader);
 			if (isUponSelected != -2 && canBlockSender) {
-				_menu->addAction(tr::lng_profile_block_user(tr::now), [=] {
+				const auto blockSenderGroupAction = _menu->addAction(tr::lng_profile_block_user(tr::now), [=] {
 					blockSenderAsGroup(itemId);
 				}, &st::menuIconBlock);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::ContactBlock,
+					blockSenderGroupAction);
+#endif
 			}
 		} else if (Element::Moused()) {
 			addSelectMessageAction(Element::Moused()->data());

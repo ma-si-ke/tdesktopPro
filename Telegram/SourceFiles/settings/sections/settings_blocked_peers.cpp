@@ -30,6 +30,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_boxes.h"
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 
 namespace Settings {
 namespace {
@@ -135,6 +138,12 @@ base::weak_qptr<Ui::RpWidget> Blocked::createPinnedToTop(
 	blockButton->addClickHandler([=] {
 		BlockedBoxController::BlockNewPeer(controller());
 	});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&controller()->session(),
+		Intro::Employee::PermissionKey::ContactBlock,
+		blockButton);
+#endif
 
 	Ui::AddSkip(content);
 	Ui::AddDividerText(content, tr::lng_blocked_list_about());

@@ -26,6 +26,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_calls.h"
 #include "styles/style_chat.h" // popupMenuExpandedSeparator.
 #include "styles/style_menu_icons.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 
 namespace {
 
@@ -338,7 +341,7 @@ void PhoneClickHandler::onClick(ClickContext context) const {
 		controller);
 
 	if (Trim(phone) != Trim(controller->session().user()->phone())) {
-		menu->addAction(
+		const auto addContactAction = menu->addAction(
 			tr::lng_info_add_as_contact(tr::now),
 			[=, raw = base::make_weak(resolvePhoneAction.get())] {
 				controller->show(
@@ -349,6 +352,12 @@ void PhoneClickHandler::onClick(ClickContext context) const {
 						Trim(phone)));
 			},
 			&st::menuIconInvite);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::GuardAction(
+			&controller->session(),
+			Intro::Employee::PermissionKey::ContactAdd,
+			addContactAction);
+#endif
 	}
 
 	menu->addSeparator(&st::popupMenuExpandedSeparator.menu.separator);

@@ -52,6 +52,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_layers.h"
 #include "styles/style_info.h"
 #include "styles/style_menu_icons.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 
 namespace HistoryView {
 namespace {
@@ -786,6 +789,13 @@ void ContactStatus::setupHandlers(not_null<PeerData*> peer) {
 void ContactStatus::setupAddHandler(not_null<UserData*> user) {
 	_inner->addClicks(
 	) | rpl::on_next([=] {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				&_controller->session(),
+				Intro::Employee::PermissionKey::ContactAdd)) {
+			return;
+		}
+#endif
 		_controller->window().show(Box(EditContactBox, _controller, user));
 	}, _bar.lifetime());
 }
@@ -793,6 +803,13 @@ void ContactStatus::setupAddHandler(not_null<UserData*> user) {
 void ContactStatus::setupBlockHandler(not_null<UserData*> user) {
 	_inner->blockClicks(
 	) | rpl::on_next([=] {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				&_controller->session(),
+				Intro::Employee::PermissionKey::ContactBlock)) {
+			return;
+		}
+#endif
 		_controller->window().show(Box(
 			Window::PeerMenuBlockUserBox,
 			&_controller->window(),

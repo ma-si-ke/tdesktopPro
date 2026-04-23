@@ -732,12 +732,20 @@ void MainMenu::setupMenu() {
 			controller->showPeerHistory(controller->session().user());
 		});
 	} else {
-		addAction(
-			tr::lng_profile_add_contact(),
-			{ &st::menuIconProfile }
-		)->setClickedCallback([=] {
-			controller->showAddContact();
-		});
+		{
+			const auto addContactBtn = addAction(
+				tr::lng_profile_add_contact(),
+				{ &st::menuIconProfile });
+			addContactBtn->setClickedCallback([=] {
+				controller->showAddContact();
+			});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			Intro::Employee::BindDisabled(
+				&controller->session(),
+				Intro::Employee::PermissionKey::ContactAdd,
+				addContactBtn);
+#endif
+		}
 		addAction(
 			rpl::single(u"Fix chats order"_q),
 			{ &st::menuIconPin }

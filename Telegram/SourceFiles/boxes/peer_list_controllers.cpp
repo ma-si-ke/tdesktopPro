@@ -55,6 +55,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 #include "styles/style_chat_helpers.h"
 #include "styles/style_menu_icons.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 
 namespace {
 
@@ -105,9 +108,17 @@ object_ptr<Ui::BoxContent> PrepareContactsBox(
 
 		const auto state = box->lifetime().make_state<State>();
 		box->addButton(tr::lng_close(), [=] { box->closeBox(); });
-		box->addLeftButton(
-			tr::lng_profile_add_contact(),
-			[=] { window->showAddContact(); });
+		{
+			const auto addContactBtn = box->addLeftButton(
+				tr::lng_profile_add_contact(),
+				[=] { window->showAddContact(); });
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			Intro::Employee::BindDisabled(
+				&window->session(),
+				Intro::Employee::PermissionKey::ContactAdd,
+				addContactBtn.data());
+#endif
+		}
 		state->toggleSort = box->addTopButton(st::contactsSortButton, [=] {
 			const auto online = (state->mode.current() == Mode::Online);
 			const auto mode = online ? Mode::Alphabet : Mode::Online;

@@ -907,6 +907,12 @@ void Filler::addBlockUser() {
 		Data::PeerUpdate::Flag::IsBlocked
 	) | rpl::map([=] { return blockText(user); });
 	SetActionText(blockAction, std::move(actionText));
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&_controller->session(),
+		Intro::Employee::PermissionKey::ContactBlock,
+		blockAction);
+#endif
 
 	if (user->blockStatus() == UserData::BlockStatus::Unknown) {
 		user->session().api().requestFullPeer(user);
@@ -1019,10 +1025,16 @@ void Filler::addNewContact() {
 		}
 		controller->show(Box(EditContactBox, controller, user));
 	};
-	_addAction(
+	const auto newContactAction = _addAction(
 		tr::lng_info_add_as_contact(tr::now),
 		edit,
 		&st::menuIconInvite);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&_controller->session(),
+		Intro::Employee::PermissionKey::ContactAdd,
+		newContactAction);
+#endif
 }
 
 void Filler::addShareContact() {
@@ -1049,10 +1061,16 @@ void Filler::addEditContact() {
 		}
 		controller->show(Box(EditContactBox, controller, user));
 	};
-	_addAction(
+	const auto editContactAction = _addAction(
 		tr::lng_info_edit_contact(tr::now),
 		edit,
 		&st::menuIconEdit);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&_controller->session(),
+		Intro::Employee::PermissionKey::ContactEditNote,
+		editContactAction);
+#endif
 }
 
 void Filler::addBotToGroup() {
