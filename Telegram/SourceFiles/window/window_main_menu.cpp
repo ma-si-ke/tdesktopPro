@@ -74,6 +74,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_settings.h"
 #include "styles/style_window.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 #include <QtGui/QWindow>
 #include <QtGui/QScreen>
 
@@ -677,23 +681,37 @@ void MainMenu::setupMenu() {
 			object_ptr<Ui::PlainShadow>(_menu),
 			{ 0, st::mainMenuSkip, 0, st::mainMenuSkip });
 
-		AddMyChannelsBox(addAction(
+		const auto newGroupBtn = AddMyChannelsBox(addAction(
 			tr::lng_create_group_title(),
 			{ &st::menuIconGroups }
-		), controller, true)->addClickHandler([=](Qt::MouseButton which) {
+		), controller, true);
+		newGroupBtn->addClickHandler([=](Qt::MouseButton which) {
 			if (which == Qt::LeftButton) {
 				controller->showNewGroup();
 			}
 		});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::BindDisabled(
+			&controller->session(),
+			Intro::Employee::PermissionKey::GroupCreate,
+			newGroupBtn);
+#endif
 
-		AddMyChannelsBox(addAction(
+		const auto newChannelBtn = AddMyChannelsBox(addAction(
 			tr::lng_create_channel_title(),
 			{ &st::menuIconChannel }
-		), controller, false)->addClickHandler([=](Qt::MouseButton which) {
+		), controller, false);
+		newChannelBtn->addClickHandler([=](Qt::MouseButton which) {
 			if (which == Qt::LeftButton) {
 				controller->showNewChannel();
 			}
 		});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::BindDisabled(
+			&controller->session(),
+			Intro::Employee::PermissionKey::GroupCreate,
+			newChannelBtn);
+#endif
 
 		addAction(
 			tr::lng_menu_contacts(),

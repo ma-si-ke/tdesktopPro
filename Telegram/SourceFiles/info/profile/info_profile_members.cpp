@@ -33,6 +33,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_boxes.h"
 #include "styles/style_info.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 namespace Info {
 namespace Profile {
 namespace {
@@ -214,6 +218,12 @@ void Members::setupButtons() {
 	_addMember->addClickHandler([this] { // TODO throttle(ripple duration)
 		this->addMember();
 	});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&_peer->session(),
+		Intro::Employee::PermissionKey::GroupAddMember,
+		_addMember);
+#endif
 
 	auto searchShown = MembersCountValue(_peer)
 		| rpl::map(_1 >= kEnableSearchMembersAfterCount)

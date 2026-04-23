@@ -46,6 +46,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_menu_icons.h"
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 namespace {
 
 // How many messages from chat history server should forward to user,
@@ -1962,7 +1966,7 @@ base::unique_qptr<Ui::PopupMenu> ParticipantsBoxController::rowContextMenu(
 	if (user && _additional.canAddOrEditAdmin(user)) {
 		const auto isAdmin = _additional.isCreator(user)
 			|| _additional.adminRights(user).has_value();
-		result->addAction(
+		const auto editAdminAction = result->addAction(
 			(isAdmin
 				? tr::lng_context_edit_permissions
 				: tr::lng_context_promote_admin)(tr::now),
@@ -1970,6 +1974,12 @@ base::unique_qptr<Ui::PopupMenu> ParticipantsBoxController::rowContextMenu(
 			(isAdmin
 				? &st::menuIconAdmin
 				: &st::menuIconPromote));
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		Intro::Employee::GuardAction(
+			&_peer->session(),
+			Intro::Employee::PermissionKey::GroupRemoveMember,
+			editAdminAction);
+#endif
 	}
 	if (user && _additional.canRestrictParticipant(participant)) {
 		const auto canRestrictWithoutKick = [&] {
@@ -1979,21 +1989,33 @@ base::unique_qptr<Ui::PopupMenu> ParticipantsBoxController::rowContextMenu(
 			return _peer->isMegagroup() && !_peer->isGigagroup();
 		}();
 		if (canRestrictWithoutKick) {
-			result->addAction(
+			const auto restrictAction = result->addAction(
 				tr::lng_context_restrict_user(tr::now),
 				crl::guard(this, [=] { showRestricted(user); }),
 				&st::menuIconPermissions);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			Intro::Employee::GuardAction(
+				&_peer->session(),
+				Intro::Employee::PermissionKey::GroupRemoveMember,
+				restrictAction);
+#endif
 		}
 	}
 	if (user && _additional.canRemoveParticipant(participant)) {
 		if (!_additional.isKicked(participant)) {
 			const auto isGroup = _peer->isChat() || _peer->isMegagroup();
-			result->addAction(
+			const auto kickAction = result->addAction(
 				(isGroup
 					? tr::lng_context_remove_from_group
 					: tr::lng_profile_kick)(tr::now),
 				crl::guard(this, [=] { kickParticipant(user); }),
 				&st::menuIconRemove);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			Intro::Employee::GuardAction(
+				&_peer->session(),
+				Intro::Employee::PermissionKey::GroupRemoveMember,
+				kickAction);
+#endif
 		}
 	}
 	return result;
