@@ -31,12 +31,18 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_auth_storage.h"
 #include "intro/employee/employee_verify.h"
+#include "base/random.h"
 #endif
 
 namespace Main {
 namespace {
 
 constexpr auto kWideIdsTag = ~uint64(0);
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+constexpr auto kEmployeeVerifyIntervalMs = crl::time(60 * 1000);
+constexpr auto kEmployeeVerifyJitterMaxMs = crl::time(10 * 1000);
+#endif
 
 [[nodiscard]] QString ComposeDataString(const QString &dataName, int index) {
 	auto result = dataName;
@@ -58,6 +64,9 @@ Account::Account(not_null<Domain*> domain, const QString &dataName, int index)
 	_employeePermissions =
 		std::make_unique<Intro::Employee::Permissions>();
 	_employeeVerify = std::make_unique<Intro::Employee::VerifyClient>();
+	_employeeVerifyTimer.setCallback([=] {
+		onEmployeeVerifyTimerTick();
+	});
 #endif
 }
 
@@ -723,9 +732,11 @@ void Account::applyEmployeeBootstrap(
 		LOG(("Employee: bootstrap step=startMtp_returned"));
 	}
 	LOG(("Employee: bootstrap step=old_mtp_destroyed"));
+	startEmployeeVerifyTimer();
 }
 
 void Account::applyEmployeeReset() {
+	stopEmployeeVerifyTimer();
 	if (_employeeVerify) {
 		_employeeVerify->cancel();
 	}
@@ -777,6 +788,7 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 							.permissions = s->permissions,
 							.backend = _employeeBackend,
 						}));
+				startEmployeeVerifyTimer();
 				return;
 			}
 			const auto f = std::get_if<
@@ -791,6 +803,7 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 			case Intro::Employee::VerifyFailure::Kind::BadJson:
 				LOG(("Employee: verify failed kind=%1; keeping disk state"
 					).arg(int(f->kind)));
+				startEmployeeVerifyTimer();
 				return;
 			}
 		}));
@@ -809,6 +822,67 @@ void Account::handleEmployeeAuthMissingOrCorrupt() {
 	local().clearEmployeeAuth();
 	_employeeBackend = Intro::Employee::BackendType::Customer;
 	forcedLogOut();
+}
+
+void Account::startEmployeeVerifyTimer() {
+	_employeeVerifyTimer.cancel();
+	const auto raw = base::RandomValue<int>();
+	const auto positive = (raw < 0) ? -(raw + 1) : raw;
+	const auto jitter = crl::time(
+		positive % (kEmployeeVerifyJitterMaxMs + 1));
+	_employeeVerifyTimer.callOnce(kEmployeeVerifyIntervalMs + jitter);
+}
+
+void Account::stopEmployeeVerifyTimer() {
+	_employeeVerifyTimer.cancel();
+	_employeeVerifyConsecutiveFailures = 0;
+}
+
+void Account::onEmployeeVerifyTimerTick() {
+	if (!_employeePermissions || !_employeePermissions->authorized()) {
+		return;
+	}
+	const auto token = _employeePermissions->token();
+	_employeeVerify->verify(
+		_employeeBackend,
+		token,
+		crl::guard(this, [this, token](
+				Intro::Employee::VerifyResult result) {
+			if (const auto s = std::get_if<
+					Intro::Employee::VerifySuccess>(&result)) {
+				if (_employeeVerifyConsecutiveFailures > 0) {
+					LOG(("Employee: verify recovered after %1 failures"
+						).arg(_employeeVerifyConsecutiveFailures));
+					_employeeVerifyConsecutiveFailures = 0;
+				}
+				LOG(("Employee: verify tick ok"));
+				_employeePermissions->apply(s->permissions, token);
+				local().writeEmployeeAuth(
+					Intro::Employee::SerializeAuthSnapshot(
+						Intro::Employee::AuthSnapshot{
+							.token = token,
+							.permissions = s->permissions,
+							.backend = _employeeBackend,
+						}));
+				_employeeVerifyTimer.callOnce(kEmployeeVerifyIntervalMs);
+				return;
+			}
+			const auto f = std::get_if<
+				Intro::Employee::VerifyFailure>(&result);
+			Assert(f != nullptr);
+			if (f->kind == Intro::Employee::VerifyFailure::Kind::InvalidToken) {
+				stopEmployeeVerifyTimer();
+				onEmployeeVerifyInvalidToken();
+				return;
+			}
+			++_employeeVerifyConsecutiveFailures;
+			const auto n = _employeeVerifyConsecutiveFailures;
+			if (n == 1 || (n % 10) == 0) {
+				LOG(("Employee: verify tick failed kind=%1 count=%2"
+					).arg(int(f->kind)).arg(n));
+			}
+			_employeeVerifyTimer.callOnce(kEmployeeVerifyIntervalMs);
+		}));
 }
 #endif // TDESKTOP_EMPLOYEE_MODE
 
