@@ -2309,7 +2309,7 @@ Section DetailsFiller::makeAddAsContact(not_null<UserData*> user) {
 		parent,
 		object_ptr<Ui::VerticalLayout>(parent));
 	const auto raw = wrap.data();
-	AddMainButton(
+	const auto button = AddMainButton(
 		raw->entity(),
 		tr::lng_info_add_as_contact(),
 		CanAddContactValue(user),
@@ -2319,6 +2319,12 @@ Section DetailsFiller::makeAddAsContact(not_null<UserData*> user) {
 		},
 		nullptr,
 		nullptr);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&user->session(),
+		Intro::Employee::PermissionKey::ContactAdd,
+		button);
+#endif
 	raw->toggleOn(CanAddContactValue(user));
 	return Section{
 		.widget = std::move(wrap),
@@ -2879,12 +2885,18 @@ void ActionsFiller::addEditContactAction(not_null<UserData*> user) {
 		}
 		controller->window().show(Box(EditContactBox, controller, user));
 	};
-	AddActionButton(
+	const auto editContactWrap = AddActionButton(
 		_wrap,
 		tr::lng_info_edit_contact(),
 		IsContactValue(user),
 		edit,
 		&st::infoIconEdit);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&user->session(),
+		Intro::Employee::PermissionKey::ContactEditNote,
+		editContactWrap->entity());
+#endif
 }
 
 void ActionsFiller::addDeleteContactAction(not_null<UserData*> user) {
@@ -3072,13 +3084,19 @@ void ActionsFiller::addBlockAction(not_null<UserData*> user) {
 				v::null));
 		}
 	};
-	AddActionButton(
+	const auto blockUserWrap = AddActionButton(
 		_wrap,
 		rpl::duplicate(text),
 		std::move(toggleOn),
 		std::move(callback),
 		&st::infoIconBlock,
 		st::infoBlockButton);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&user->session(),
+		Intro::Employee::PermissionKey::ContactBlock,
+		blockUserWrap->entity());
+#endif
 }
 
 void ActionsFiller::addLeaveChannelAction(not_null<ChannelData*> channel) {

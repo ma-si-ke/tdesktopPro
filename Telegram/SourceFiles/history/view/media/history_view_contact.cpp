@@ -33,6 +33,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_boxes.h"
 #include "styles/style_chat.h"
 #include "styles/style_layers.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 
 namespace HistoryView {
 namespace {
@@ -93,6 +96,13 @@ ClickHandlerPtr AddContactClickHandler(not_null<HistoryItem*> item) {
 			if (controller->session().uniqueId() != session->uniqueId()) {
 				return;
 			}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					session,
+					Intro::Employee::PermissionKey::ContactAdd)) {
+				return;
+			}
+#endif
 			if (const auto contact = sharedContact()) {
 				controller->show(Box<AddContactBox>(
 					session,
