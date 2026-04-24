@@ -2670,6 +2670,13 @@ void ComposeControls::initFieldAutocomplete() {
 			});
 		},
 		.stickerChosen = [=](ChatHelpers::FileChosen &&data) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					_session,
+					Intro::Employee::PermissionKey::MsgSend)) {
+				return;
+			}
+#endif
 			if (!_showSlowmodeError || !_showSlowmodeError()) {
 				setText({});
 			}
@@ -3255,6 +3262,13 @@ void ComposeControls::initTabbedSelector() {
 					});
 				}));
 		} else {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					_session,
+					Intro::Employee::PermissionKey::MsgSend)) {
+				return;
+			}
+#endif
 			_fileChosen.fire(std::move(data));
 		}
 	}, wrap->lifetime());

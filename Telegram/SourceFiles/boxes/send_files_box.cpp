@@ -66,6 +66,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_session_controller.h"
 #include "window/window_controller.h"
 #include "core/application.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 #include "core/core_settings.h"
 #include "styles/style_boxes.h"
 #include "styles/style_chat_helpers.h"
@@ -2420,6 +2423,13 @@ bool SendFilesBox::validateLength(const QString &text) const {
 void SendFilesBox::send(
 		Api::SendOptions options,
 		bool ctrlShiftEnter) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&_show->session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if ((_sendType == Api::SendType::Scheduled
 		|| _sendType == Api::SendType::ScheduledToUser)
 		&& !options.scheduled) {

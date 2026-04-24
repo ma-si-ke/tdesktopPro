@@ -671,10 +671,24 @@ HistoryWidget::HistoryWidget(
 		crl::guard(this, [=](bool f) { _field->setAcceptDrops(f); }),
 		crl::guard(this, [=] { updateControlsGeometry(); }));
 	_attachDragAreas.document->setDroppedCallback([=](const QMimeData *data) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				&session(),
+				Intro::Employee::PermissionKey::MsgSend)) {
+			return;
+		}
+#endif
 		confirmSendingFiles(data, false);
 		Window::ActivateWindow(controller);
 	});
 	_attachDragAreas.photo->setDroppedCallback([=](const QMimeData *data) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				&session(),
+				Intro::Employee::PermissionKey::MsgSend)) {
+			return;
+		}
+#endif
 		confirmSendingFiles(data, true);
 		Window::ActivateWindow(controller);
 	});
@@ -5440,6 +5454,13 @@ Api::SendAction HistoryWidget::prepareSendAction(
 }
 
 void HistoryWidget::sendVoice(const VoiceToSend &data) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if (!canWriteMessage() || data.bytes.isEmpty() || !_history) {
 		return;
 	}
@@ -5468,6 +5489,13 @@ void HistoryWidget::sendVoice(const VoiceToSend &data) {
 }
 
 void HistoryWidget::send(Api::SendOptions options) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if (!_history) {
 		return;
 	} else if (_editMsgId) {
@@ -5712,6 +5740,13 @@ void HistoryWidget::sendWithModifiers(Qt::KeyboardModifiers modifiers) {
 }
 
 void HistoryWidget::sendScheduled(Api::SendOptions initialOptions) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if (!_list) {
 		return;
 	}
@@ -5810,6 +5845,13 @@ void HistoryWidget::unblockUser() {
 }
 
 void HistoryWidget::sendBotStartCommand() {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if (!_peer
 		|| !_peer->isUser()
 		|| !_peer->asUser()->isBot()
@@ -6235,6 +6277,13 @@ void HistoryWidget::mouseReleaseEvent(QMouseEvent *e) {
 }
 
 void HistoryWidget::sendBotCommand(const Bot::SendCommandRequest &request) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	sendBotCommand(request, {});
 }
 
@@ -7576,6 +7625,13 @@ bool HistoryWidget::confirmSendingFiles(
 void HistoryWidget::sendingFilesConfirmed(
 		std::shared_ptr<Ui::PreparedBundle> bundle,
 		Api::SendOptions options) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if (!_peer || showSendingFilesError(*bundle)) {
 		return;
 	}
@@ -8974,6 +9030,13 @@ bool HistoryWidget::showSlowmodeError() {
 }
 
 void HistoryWidget::sendInlineResult(InlineBots::ResultSelected result) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if (!_peer || !_canSendMessages) {
 		return;
 	} else if (showSlowmodeError()) {
@@ -9633,6 +9696,13 @@ bool HistoryWidget::sendExistingDocument(
 		not_null<DocumentData*> document,
 		Api::MessageToSend messageToSend,
 		std::optional<MsgId> localId) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return false;
+	}
+#endif
 	const auto ephemeralReply = session().ephemeralMessages()
 		.isEphemeralBotReply(messageToSend.action.replyTo.messageId);
 	const auto error = (_peer && !ephemeralReply)
@@ -9684,6 +9754,13 @@ bool HistoryWidget::sendExistingDocument(
 bool HistoryWidget::sendExistingPhoto(
 		not_null<PhotoData*> photo,
 		Api::SendOptions options) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return false;
+	}
+#endif
 	const auto ephemeralReply = session().ephemeralMessages()
 		.isEphemeralBotReply(replyTo().messageId);
 	const auto error = (_peer && !ephemeralReply)

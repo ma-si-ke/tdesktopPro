@@ -66,6 +66,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/mime_type.h"
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 #include "menu/menu_timecode_action.h"
 #include "data/components/ephemeral_messages.h"
 #include "data/components/recent_inline_bots.h"
@@ -919,11 +922,25 @@ void ChatWidget::setupComposeControls() {
 
 	_composeControls->photoChosen(
 	) | rpl::on_next([=](ChatHelpers::PhotoChosen chosen) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				&session(),
+				Intro::Employee::PermissionKey::MsgSend)) {
+			return;
+		}
+#endif
 		sendExistingPhoto(chosen.photo, chosen.options);
 	}, lifetime());
 
 	_composeControls->inlineResultChosen(
 	) | rpl::on_next([=](ChatHelpers::InlineChosen chosen) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				&session(),
+				Intro::Employee::PermissionKey::MsgSend)) {
+			return;
+		}
+#endif
 		controller()->sendingAnimation().appendSending(
 			chosen.messageSendingFrom);
 		const auto localId = chosen.messageSendingFrom.localId;
@@ -1220,6 +1237,13 @@ bool ChatWidget::confirmSendingFiles(
 bool ChatWidget::confirmSendingFiles(
 		Ui::PreparedList &&list,
 		const QString &insertTextOnCancel) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return false;
+	}
+#endif
 	if (_composeControls->confirmMediaEdit(list)) {
 		return true;
 	} else if (showSendingFilesError(list)) {
@@ -1463,6 +1487,13 @@ void ChatWidget::sendVoice(const ComposeControls::VoiceToSend &data) {
 }
 
 void ChatWidget::send(Api::SendOptions options) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if (const auto page = _composeControls->shownRichMessage()) {
 		sendRichDraft(page, options);
 		return;
@@ -2801,6 +2832,13 @@ bool ChatWidget::showMessage(
 
 Window::SectionActionResult ChatWidget::sendBotCommand(
 		Bot::SendCommandRequest request) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return Window::SectionActionResult::Ignore;
+	}
+#endif
 	if (!_repliesRootId) {
 		return Window::SectionActionResult::Fallback;
 	} else if (request.peer != _peer) {
@@ -3297,6 +3335,13 @@ void ChatWidget::listCancelRequest() {
 }
 
 void ChatWidget::listDeleteRequest() {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgDelete)) {
+		return;
+	}
+#endif
 	confirmDeleteSelected();
 }
 
@@ -3743,6 +3788,13 @@ void ChatWidget::confirmDeleteSelected() {
 }
 
 void ChatWidget::confirmForwardSelected() {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	ConfirmForwardSelectedItems(_inner);
 }
 

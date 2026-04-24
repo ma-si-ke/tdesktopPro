@@ -19,6 +19,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_document_media.h"
 #include "data/data_session.h"
 #include "history/history_item_components.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 #include "history/view/controls/history_view_voice_record_button.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
@@ -3000,6 +3003,13 @@ void VoiceRecordBar::stopRecording(StopType type, bool ttlBeforeHide) {
 					if (weak) {
 						window()->raise();
 						window()->activateWindow();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+						if (!Intro::Employee::Allowed(
+								&_show->session(),
+								Intro::Employee::PermissionKey::MsgSend)) {
+							return;
+						}
+#endif
 						const auto options = Api::SendOptions{
 							.ttlSeconds = (ttlBeforeHide
 								? std::numeric_limits<int>::max()
@@ -3030,6 +3040,13 @@ void VoiceRecordBar::stopRecording(StopType type, bool ttlBeforeHide) {
 
 			window()->raise();
 			window()->activateWindow();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (!Intro::Employee::Allowed(
+					&_show->session(),
+					Intro::Employee::PermissionKey::MsgSend)) {
+				return;
+			}
+#endif
 			const auto options = Api::SendOptions{
 				.ttlSeconds = (ttlBeforeHide
 					? std::numeric_limits<int>::max()
@@ -3098,6 +3115,13 @@ void VoiceRecordBar::drawMessage(QPainter &p, float64 recordActive) {
 }
 
 void VoiceRecordBar::requestToSendWithOptions(Api::SendOptions options) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&_show->session(),
+			Intro::Employee::PermissionKey::MsgSend)) {
+		return;
+	}
+#endif
 	if (isListenState()) {
 		if (takeTTLState()) {
 			options.ttlSeconds = std::numeric_limits<int>::max();
