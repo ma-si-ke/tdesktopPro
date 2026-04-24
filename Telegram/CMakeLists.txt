@@ -665,6 +665,8 @@ PRIVATE
     data/data_group_call.h
     data/data_groups.cpp
     data/data_groups.h
+    data/data_hidden_peers.cpp
+    data/data_hidden_peers.h
     data/data_histories.cpp
     data/data_histories.h
     data/data_history_messages.cpp
