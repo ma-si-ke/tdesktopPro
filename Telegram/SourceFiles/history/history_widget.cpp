@@ -212,6 +212,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
+#include "main/main_account.h"
 #endif
 
 #include <QtGui/QWindow>
@@ -1059,6 +1060,14 @@ HistoryWidget::HistoryWidget(
 	) | rpl::on_next([=] {
 		updateNotifyControls();
 	}, lifetime());
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	session().account().employeePermissions().value(
+		Intro::Employee::PermissionKey::MsgSend
+	) | rpl::on_next([=](bool) {
+		updateSendButtonType();
+	}, lifetime());
+#endif
 
 	session().data().itemVisibilityQueries(
 	) | rpl::filter([=](
@@ -6567,6 +6576,13 @@ void HistoryWidget::updateSendButtonType() {
 
 	const auto type = computeSendButtonType();
 	const auto forbidden = [&] {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				&session(),
+				Intro::Employee::PermissionKey::MsgSend)) {
+			return true;
+		}
+#endif
 		if (type != Type::Record && type != Type::Round) {
 			return false;
 		}
