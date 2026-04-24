@@ -1233,7 +1233,8 @@ void EditTagBox(
 			controller,
 			item->history()->peer,
 			itemId.msg,
-			participant);
+			participant,
+			who.reaction);
 	};
 }
 
