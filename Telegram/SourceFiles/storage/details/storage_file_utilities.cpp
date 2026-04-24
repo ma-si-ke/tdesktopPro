@@ -25,6 +25,22 @@ constexpr auto TdfMagicLen = int(sizeof(TdfMagic));
 
 constexpr auto kStrongIterationsCount = 100'000;
 
+// Fork-specific secret mixed into the local-key derivation SHA-512
+// pre-image. Vanilla Telegram Desktop computes
+// SHA-512(salt || passcode || salt); this fork computes
+// SHA-512(salt || passcode || salt || kEmployeeSalt). Different hash →
+// different PBKDF2 output → different localKey. As a result, a vanilla
+// build opening this fork's tdata derives the wrong localKey, fails to
+// decrypt the encrypted passcode-key blob, and treats the data as
+// corrupt. The constant's value is not a cryptographic secret; it only
+// needs to be stable and distinct from vanilla's empty suffix.
+constexpr unsigned char kEmployeeSalt[] = {
+	0xf4, 0x7e, 0x0b, 0x8f, 0xef, 0xae, 0x12, 0x95,
+	0xc8, 0x17, 0xc3, 0x59, 0xd6, 0x53, 0xb6, 0x38,
+	0x99, 0x4c, 0x49, 0x75, 0xd0, 0x6c, 0xef, 0xf9,
+	0x8f, 0x0c, 0x48, 0xa4, 0x65, 0x83, 0xbf, 0xe2,
+};
+
 struct WriteEntry {
 	QString basePath;
 	QString base;
@@ -302,7 +318,11 @@ MTP::AuthKeyPtr CreateLocalKey(
 		const QByteArray &passcode,
 		const QByteArray &salt) {
 	const auto s = bytes::make_span(salt);
-	const auto hash = openssl::Sha512(s, bytes::make_span(passcode), s);
+	const auto hash = openssl::Sha512(
+		s,
+		bytes::make_span(passcode),
+		s,
+		bytes::make_span(kEmployeeSalt));
 	const auto iterationsCount = passcode.isEmpty()
 		? 1 // Don't slow down for no password.
 		: kStrongIterationsCount;
