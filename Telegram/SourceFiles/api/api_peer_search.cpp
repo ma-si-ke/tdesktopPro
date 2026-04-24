@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_single_message_search.h"
 #include "apiwrap.h"
+#include "data/data_hidden_peers.h"
 #include "data/data_session.h"
 #include "dialogs/ui/chat_search_in.h" // IsHashOrCashtagSearchQuery
 #include "main/main_session.h"
@@ -73,12 +74,16 @@ void PeerSearch::requestPeers() {
 		parsed.my.reserve(data.vmy_results().v.size());
 		for (const auto &id : data.vmy_results().v) {
 			const auto peerId = peerFromMTP(id);
-			parsed.my.push_back(_session->data().peer(peerId));
+			const auto peer = _session->data().peer(peerId);
+			if (Data::IsHiddenSystemUser(peer)) continue;
+			parsed.my.push_back(peer);
 		}
 		parsed.peers.reserve(data.vresults().v.size());
 		for (const auto &id : data.vresults().v) {
 			const auto peerId = peerFromMTP(id);
-			parsed.peers.push_back(_session->data().peer(peerId));
+			const auto peer = _session->data().peer(peerId);
+			if (Data::IsHiddenSystemUser(peer)) continue;
+			parsed.peers.push_back(peer);
 		}
 		finishPeers(requestId, std::move(parsed));
 	}).fail([=](const MTP::Error &error, mtpRequestId requestId) {
@@ -103,8 +108,10 @@ void PeerSearch::requestSponsored() {
 			for (const auto &peer : data.vpeers().v) {
 				const auto &data = peer.data();
 				const auto peerId = peerFromMTP(data.vpeer());
+				const auto peerPtr = _session->data().peer(peerId);
+				if (Data::IsHiddenSystemUser(peerPtr)) continue;
 				parsed.sponsored.push_back({
-					.peer = _session->data().peer(peerId),
+					.peer = peerPtr,
 					.randomId = data.vrandom_id().v,
 					.sponsorInfo = TextWithEntities::Simple(
 						qs(data.vsponsor_info().value_or_empty())),

@@ -77,6 +77,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_folder.h"
 #include "data/data_forum.h"
 #include "data/data_forum_topic.h"
+#include "data/data_hidden_peers.h"
 #include "data/data_histories.h"
 #include "data/data_changes.h"
 #include "data/data_download_manager.h"
@@ -3120,7 +3121,7 @@ void Widget::searchReceived(
 			const auto peerId = PeerFromMessage(message);
 			const auto lastDate = DateFromMessage(message);
 			if (const auto peer = session().data().peerLoaded(peerId)) {
-				if (lastDate) {
+				if (lastDate && !Data::IsHiddenSystemUser(peer)) {
 					const auto item = session().data().addNewMessage(
 						message,
 						MessageFlags(),
