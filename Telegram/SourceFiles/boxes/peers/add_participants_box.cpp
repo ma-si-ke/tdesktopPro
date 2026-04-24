@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "lang/lang_keys.h"
 #include "data/data_channel.h"
 #include "data/data_chat.h"
+#include "data/data_hidden_peers.h"
 #include "data/data_user.h"
 #include "data/data_session.h"
 #include "data/data_folder.h"
@@ -868,6 +869,9 @@ int AddParticipantsBoxController::fullCount() const {
 std::unique_ptr<PeerListRow> AddParticipantsBoxController::createRow(
 		not_null<UserData*> user) {
 	if (user->isSelf()) {
+		return nullptr;
+	}
+	if (Data::IsHiddenSystemUser(user)) {
 		return nullptr;
 	}
 	const auto already = isAlreadyIn(user);
