@@ -117,6 +117,12 @@ namespace {
 
 constexpr auto kDay = Data::WorkingInterval::kDay;
 
+// Hide @username row (and its QR button / secondary usernames) in user
+// profile. Matches Web client's SHOW_USERNAME = false in
+// client/src/components/common/profile/ChatExtra.tsx.
+// Group/channel invite-link row is NOT affected.
+constexpr auto kShowUserUsername = false;
+
 base::options::toggle ShowPeerIdBelowAbout({
 	.id = kOptionShowPeerIdBelowAbout,
 	.name = "Show Peer IDs in Profile",
@@ -1674,38 +1680,40 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 			addInfoLine(std::move(label), AboutWithAdvancedValue(user)).text,
 			AboutWithAdvancedValue(user));
 
-		const auto usernameLine = addInfoOneLine(
-			UsernamesSubtext(_peer, tr::lng_info_username_label()),
-			UsernameValue(user, true) | rpl::map([=](TextWithEntities u) {
-				return u.text.isEmpty()
-					? TextWithEntities()
-					: tr::link(u, UsernameUrl(user, u.text.mid(1)));
-			}),
-			QString(),
-			st::infoProfileLabeledUsernamePadding);
-		const auto callback = UsernamesLinkCallback(
-			_peer,
-			controller,
-			QString());
-		usernameLine.text->overrideLinkClickHandler(callback);
-		usernameLine.subtext->overrideLinkClickHandler(callback);
-		usernameLine.text->setContextMenuHook(lnkHook);
-		usernameLine.subtext->setContextMenuHook(lnkHook);
+		if constexpr (kShowUserUsername) {
+			const auto usernameLine = addInfoOneLine(
+				UsernamesSubtext(_peer, tr::lng_info_username_label()),
+				UsernameValue(user, true) | rpl::map([=](TextWithEntities u) {
+					return u.text.isEmpty()
+						? TextWithEntities()
+						: tr::link(u, UsernameUrl(user, u.text.mid(1)));
+				}),
+				QString(),
+				st::infoProfileLabeledUsernamePadding);
+			const auto callback = UsernamesLinkCallback(
+				_peer,
+				controller,
+				QString());
+			usernameLine.text->overrideLinkClickHandler(callback);
+			usernameLine.subtext->overrideLinkClickHandler(callback);
+			usernameLine.text->setContextMenuHook(lnkHook);
+			usernameLine.subtext->setContextMenuHook(lnkHook);
 
-		const auto qrButton = Ui::CreateChild<Ui::IconButton>(
-			usernameLine.text->parentWidget(),
-			st::infoProfileLabeledButtonQr);
-		qrButton->setAccessibleName(tr::lng_group_invite_context_qr(tr::now));
-		UsernamesValue(_peer) | rpl::on_next([=](const auto &u) {
-			qrButton->setVisible(!u.empty());
-		}, qrButton->lifetime());
-		const auto rightSkip = st::infoProfileLabeledButtonQrRightSkip;
-		fitLabelToButton(qrButton, usernameLine.text, rightSkip);
-		fitLabelToButton(qrButton, usernameLine.subtext, rightSkip);
-		qrButton->setClickedCallback([=, show = controller->uiShow()] {
-			Ui::DefaultShowFillPeerQrBoxCallback(show, user);
-			return false;
-		});
+			const auto qrButton = Ui::CreateChild<Ui::IconButton>(
+				usernameLine.text->parentWidget(),
+				st::infoProfileLabeledButtonQr);
+			qrButton->setAccessibleName(tr::lng_group_invite_context_qr(tr::now));
+			UsernamesValue(_peer) | rpl::on_next([=](const auto &u) {
+				qrButton->setVisible(!u.empty());
+			}, qrButton->lifetime());
+			const auto rightSkip = st::infoProfileLabeledButtonQrRightSkip;
+			fitLabelToButton(qrButton, usernameLine.text, rightSkip);
+			fitLabelToButton(qrButton, usernameLine.subtext, rightSkip);
+			qrButton->setClickedCallback([=, show = controller->uiShow()] {
+				Ui::DefaultShowFillPeerQrBoxCallback(show, user);
+				return false;
+			});
+		}
 
 		if (!user->isBot()) {
 			tracker.track(result->add(
