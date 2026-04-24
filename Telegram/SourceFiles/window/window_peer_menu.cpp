@@ -1128,12 +1128,18 @@ void Filler::addDeleteContact() {
 		return;
 	}
 	const auto controller = _controller;
-	_addAction({
+	const auto deleteAction = _addAction({
 		.text = tr::lng_info_delete_contact(tr::now),
 		.handler = [=] { PeerMenuDeleteContact(controller, user); },
 		.icon = &st::menuIconDeleteAttention,
 		.isAttention = true,
 	});
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&_controller->session(),
+		Intro::Employee::PermissionKey::ContactBlock,
+		deleteAction);
+#endif
 }
 
 void Filler::addDeleteTopic() {

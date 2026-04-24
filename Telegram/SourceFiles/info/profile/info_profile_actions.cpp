@@ -2617,12 +2617,18 @@ void ActionsFiller::addEditContactAction(not_null<UserData*> user) {
 
 void ActionsFiller::addDeleteContactAction(not_null<UserData*> user) {
 	const auto controller = _controller->parentController();
-	AddActionButton(
+	const auto deleteContactWrap = AddActionButton(
 		_wrap,
 		tr::lng_info_delete_contact(),
 		IsContactValue(user),
 		[=] { Window::PeerMenuDeleteContact(controller, user); },
 		&st::infoIconDelete);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&user->session(),
+		Intro::Employee::PermissionKey::ContactBlock,
+		deleteContactWrap->entity());
+#endif
 }
 
 void ActionsFiller::addFastButtonsMode(not_null<UserData*> user) {

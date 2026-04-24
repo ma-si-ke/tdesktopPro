@@ -115,6 +115,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
+#include "main/main_account.h"
 #endif
 
 namespace HistoryView {
@@ -2947,6 +2948,14 @@ void ComposeControls::initSendButton() {
 		updateSendButtonType();
 	}, _send->lifetime());
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	_session->account().employeePermissions().value(
+		Intro::Employee::PermissionKey::MsgSend
+	) | rpl::on_next([=](bool) {
+		updateSendButtonType();
+	}, _send->lifetime());
+#endif
+
 	_send->finishAnimating();
 
 	_send->clicks(
@@ -3508,6 +3517,13 @@ void ComposeControls::updateSendButtonType() {
 	using Type = Ui::SendButton::Type;
 	const auto type = computeSendButtonType();
 	const auto forbidden = [&] {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				_session,
+				Intro::Employee::PermissionKey::MsgSend)) {
+			return true;
+		}
+#endif
 		if (type != Type::Record && type != Type::Round) {
 			return false;
 		}
