@@ -564,3 +564,83 @@ Suggested task decomposition (final ordering decided in plan):
 4. Final smoke-test pass across all 14 permissions + refresh behavior
 
 Each UI task begins with a **context analysis step**: grep the upstream file for existing patterns (how does this widget currently handle other restriction types?), then insert the guard following that pattern.
+
+---
+
+## 12. Post-Implementation Notes (2026-04-23, shipped as `employee-permissions-v2` @ 8de2f54)
+
+Retrospective annotations from actual execution. The spec above is what was designed; this section captures what actually shipped and why.
+
+### 12.1 Audit gaps discovered mid-execution
+
+The initial UI audit found sites in the `HistoryView` section-path files (`history_view_context_menu.cpp`, `history_view_chat_section.cpp`, `history_view_compose_controls.cpp`, etc.) but systematically missed the **classic** main chat path rooted in `history_widget.cpp` and `history_inner_widget.cpp`. Section-path files only serve secondary views (reply threads, scheduled list, pinned list, topic views). The main chat — what users see 99% of the time — runs through the older `HistoryWidget` / `HistoryInner` classes with their own parallel implementation of context menus and send/delete paths.
+
+Every UI task in Tasks 3, 7, 8 required a second pass to add guards in the main-chat twin files:
+
+| Task | Missing main-chat coverage added |
+|---|---|
+| Task 3 (msg.edit + msg.forward) | `history_inner_widget.cpp` — 5 sites: Edit + Forward Selected × 2 + Forward Msg × 2 |
+| Task 7 (msg.delete) | `history_inner_widget.cpp` — 4 sites: Delete Selected × 2 + single-msg Delete × 2; plus Del/Backspace key handler. `info/info_top_bar.cpp` + `info/media/info_media_list_widget.cpp` batch-delete also added |
+| Task 8 (msg.send) | `history_widget.cpp` — 9 sites in the `HistoryWidget::send*` family: `send`, `sendScheduled`, `sendVoice`, `sendBotStartCommand`, `sendBotCommand`, `sendInlineResult`, `sendExistingDocument`, `sendExistingPhoto`, `sendingFilesConfirmed` |
+
+**Lesson for future audits:** when auditing a "user clicks X" path, always check both the `HistoryView::*` (section) and `History*` (classic) implementations; they share surface vocabulary but not code.
+
+### 12.2 Permission-enum extension: Delete Contact → ContactBlock
+
+The original 14-permission enum (Phase 1) does not have a `ContactDelete` key. During Task 9 smoke, the user noticed the "Delete Contact" button in the info sidebar was still clickable when all contact.* permissions were revoked. Resolution: we mapped Delete Contact to `ContactBlock`, reframing the permission's semantic as "destructive action on a contact relationship" — covering both block and delete. Two guards added:
+- `window_peer_menu.cpp::Filler::addDeleteContact` — GuardAction(ContactBlock)
+- `info/profile/info_profile_actions.cpp::ActionsFiller::addDeleteContactAction` — BindDisabled(ContactBlock)
+
+No enum change. If future requirements need finer-grained control, split into a dedicated `ContactDelete` key in Phase 3+.
+
+### 12.3 rpl API drift: `rpl::on_next` vs `rpl::start_with_next`
+
+This fork's `Telegram/lib_rpl` only exposes `rpl::on_next` (and variants: `on_error`, `on_done`, `on_next_error`, etc.). Upstream tdesktop uses `rpl::start_with_next`; this fork hasn't synced. The original spec drafts used `start_with_next` — a compile error was caught during Task 1's first build attempt. All helpers in `intro/employee/employee_ui_guard.cpp` and subsequent subscriptions use `rpl::on_next`.
+
+### 12.4 Visual nits accepted as known issues
+
+Some long-lived custom-drawn buttons do not visually reflect `setDisabled(true)` because their `paintEvent` implementations don't query the Qt `QPalette::Disabled` role. They remain visually normal but are non-clickable (mouse events transparent via `WA_TransparentForMouseEvents`):
+
+- `Ui::SettingsButton` entries in `window/window_main_menu.cpp` (New Group, New Channel, New Contact)
+- Inner-class `Ui::FlatButton` instances in `history/view/history_view_contact_status.cpp` (top-bar Add/Block — widgets are private members of an inner class, so we switched to `Allowed` early-return in the click handler instead of `BindDisabled`)
+- `Ui::SendButton` visual fallback: we piggy-back on its built-in `State.forbidden` flag and paint response, but some rendering paths may not repaint in all scenarios. Actual send is blocked via the `Allowed` early-return in Task 8.
+
+The spec's success criterion §2 says "Disabled UI is visually distinguishable." For these specific widgets, the functional outcome is honored (non-clickable) while the visual cue is weaker than a standard grey-out. The user accepted these as known issues; a fix (either a custom-drawn disabled palette overlay or an opacity/color-override technique) is deferred.
+
+### 12.5 Diagnostic logs kept in production
+
+Two diagnostic LOG lines survive in the production code as durable observability:
+- `employee_auth.cpp::ParseAuthResponse` — "Employee: login perms parsed: send=%1 edit=%2 ..." dumps the 14 parsed permission bits on every login response
+- `employee_permissions.cpp::Permissions::apply` — "Employee: Permissions::apply tokenLen=%1 edit=%2 forward=%3 delete=%4 send=%5" on every apply call (login + every 60s tick)
+
+Plus the Task 2 periodic tick log `Employee: verify tick ok` (every 60s on success), the log-throttled failure count (`Employee: verify tick failed kind=K count=N` at 1, 10, 20, ...), and the recovery line (`Employee: verify recovered after N failures`). These are low-volume and useful for debugging future permission issues.
+
+Temporary in-flight diagnostic LOGs (GuardAction, BindDisabled, Add*Action entry traces, FillContextMenu entry trace) were removed before Task 3 commit once the audit gap was identified.
+
+### 12.6 Final site count (actual shipped)
+
+| Guard type | Shipped count |
+|---|---|
+| BindDisabled | ~20 |
+| GuardAction | ~35 |
+| Allowed early-return | ~25 |
+| SendButton forbidden-flag integration | 2 sites (HistoryWidget + ComposeControls) |
+| **Total** | **~80 sites across ~25 files** |
+
+Slightly higher than the spec's original ~60 estimate, primarily due to the main-chat double-coverage documented in §12.1.
+
+### 12.7 Implementation commits (reference)
+
+| Phase | Commit | Subject |
+|---|---|---|
+| Helper layer | `3c65a8b` | feat(employee): add UI guard helpers |
+| Periodic timer | `2aa870a` | feat(employee): periodic verify timer with jitter + log throttling |
+| Diagnostic logs | `d5ecd1f` | diag(employee): log permission payload on login and on apply |
+| msg.edit + msg.forward | `15522d3` | feat(employee): disable msg.edit and msg.forward entry points |
+| group.* | `2ac84d4` | feat(employee): disable group.* entry points |
+| contact.* | `88c3bef` | feat(employee): disable contact.* entry points |
+| folder.* + mention tooltip | `d0bd342` | feat(employee): disable folder.* + mention tooltip |
+| msg.delete | `db15a2c` | feat(employee): disable msg.delete entry points |
+| msg.send (non-SendButton) | `58cb8e4` | feat(employee): disable msg.send non-SendButton entry points |
+| SendButton + Delete Contact | `8de2f54` | feat(employee): SendButton forbidden visual + delete-contact gate |
+| **Tag** | `employee-permissions-v2` | → `8de2f54` |

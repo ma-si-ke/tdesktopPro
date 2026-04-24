@@ -1485,3 +1485,37 @@ Do NOT execute without explicit user confirmation (per global "risky action" rul
 | §7 Smoke testing | Every UI task's Step 5; Task 10 aggregates |
 | §8 Risk: click-race, SendButton conflict, log throttling | Task 9 Step 3 (fallback), Task 2 log throttling |
 | §11 Implementation ordering | Tasks 1→2→3→...→10 matches spec's suggested order |
+
+---
+
+## Post-Execution Addendum (2026-04-23, shipped as `employee-permissions-v2` @ 8de2f54)
+
+See the companion spec's §12 for the full retrospective. Summary of where the plan diverged from what actually shipped:
+
+### Extra sites not in the plan's original site tables
+
+| Task | File(s) | Added sites | Reason |
+|---|---|---|---|
+| 3 | `history/history_inner_widget.cpp` | Edit (1) + Forward Selected × 2 + Forward Msg × 2 | Main-chat menu path, missed by initial audit |
+| 7 | `history/history_inner_widget.cpp` | Delete Selected × 2 + single-msg Delete × 2 + Del/Backspace | Same reason |
+| 8 | `history/history_widget.cpp` | send / sendScheduled / sendVoice / sendBotStartCommand / sendBotCommand / sendInlineResult / sendExistingDocument / sendExistingPhoto / sendingFilesConfirmed (9) | Classic HistoryWidget send family — not covered by ChatSection |
+| 8 | `history/view/history_view_compose_controls.cpp` | Various rpl subscriber lambdas for photoChosen/inlineResultChosen etc. | Implementer reorganised guards based on actual rpl flow patterns |
+| 9 | `window/window_peer_menu.cpp` + `info/profile/info_profile_actions.cpp` | Delete Contact × 2 | Missed by audit; mapped to `ContactBlock` per user direction |
+| 6 | `settings/sections/settings_folders.cpp` | Recommended Section edit/remove × 2 | Implementer found extra filter-management rows beyond the plan's 3 |
+
+### Task-level degradations accepted
+
+- Task 4 / 5: `Ui::SettingsButton` in main menu uses `BindDisabled` but does not visually grey out (paintEvent doesn't honor Qt disabled palette). Non-clickable but visually unchanged — accepted as known-issue.
+- Task 5: `history_view_contact_status.cpp` top-bar Add/Block use `Allowed` early-return (widgets are private inner-class members, inaccessible for `BindDisabled`). Same nit.
+- Task 8: `history_drag_area.cpp` was not modified (no session access); drag-drop coverage achieved via `history_widget.cpp` drop callbacks instead.
+- Task 9: SendButton visual uses built-in `State.forbidden` flag; may not repaint in all state-machine transitions.
+
+### API correction applied throughout
+
+Plan initially used `rpl::start_with_next` (upstream tdesktop idiom). This fork's `lib_rpl` only has `rpl::on_next`. All rpl subscriptions shipped use `on_next`. Memory reference added for future work: `reference_tdesktop_rpl_api.md`.
+
+### Task 10 outcome
+
+Full smoke matrix not re-run as a single batch — each task's step-5 smoke was validated individually by the user during execution. No regression smoke with `TDESKTOP_EMPLOYEE_MODE` off was performed (user accepted risk; all new code is `#ifdef`-gated so regression probability is low).
+
+Tag `employee-permissions-v2` created at `8de2f54` and pushed to origin.
