@@ -62,6 +62,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtWidgets/QApplication>
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
+
 namespace SendMenu {
 namespace {
 
@@ -742,12 +746,36 @@ FillMenuResult FillSendMenu(
 		: st::defaultComposeIcons;
 
 	if (sending && type != Type::Reminder) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (maybeShow) {
+			Intro::Employee::GuardAction(
+				&maybeShow->session(),
+				Intro::Employee::PermissionKey::MsgSend,
+				menu->addAction(
+					tr::lng_send_silent_message(tr::now),
+					[=] { action({ Api::SendOptions{ .silent = true } }, details); },
+					&icons.menuMute));
+		} else
+#endif
 		menu->addAction(
 			tr::lng_send_silent_message(tr::now),
 			[=] { action({ Api::SendOptions{ .silent = true } }, details); },
 			&icons.menuMute);
 	}
 	if (sending && type != Type::SilentOnly) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (maybeShow) {
+			Intro::Employee::GuardAction(
+				&maybeShow->session(),
+				Intro::Employee::PermissionKey::MsgSend,
+				menu->addAction(
+					((type == Type::Reminder)
+						? tr::lng_reminder_message(tr::now)
+						: tr::lng_schedule_message(tr::now)),
+					[=] { action({ .type = ActionType::Schedule }, details); },
+					&icons.menuSchedule));
+		} else
+#endif
 		menu->addAction(
 			((type == Type::Reminder)
 				? tr::lng_reminder_message(tr::now)
@@ -756,6 +784,19 @@ FillMenuResult FillSendMenu(
 			&icons.menuSchedule);
 	}
 	if (sending && type == Type::ScheduledToUser) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (maybeShow) {
+			Intro::Employee::GuardAction(
+				&maybeShow->session(),
+				Intro::Employee::PermissionKey::MsgSend,
+				menu->addAction(
+					tr::lng_scheduled_send_until_online(tr::now),
+					[=] { action(
+						{ Api::DefaultSendWhenOnlineOptions() },
+						details); },
+					&icons.menuWhenOnline));
+		} else
+#endif
 		menu->addAction(
 			tr::lng_scheduled_send_until_online(tr::now),
 			[=] { action(
@@ -870,6 +911,14 @@ void SetupMenuAndShortcuts(
 		if (now == Type::Disabled) {
 			return;
 		}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (maybeShow
+			&& !Intro::Employee::Allowed(
+				&maybeShow->session(),
+				Intro::Employee::PermissionKey::MsgSend)) {
+			return;
+		}
+#endif
 		((now != Type::Reminder)
 			&& request->check(Command::SendSilentMessage)
 			&& request->handle([=] {
