@@ -42,6 +42,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_star_gift.h"
 #include "data/data_emoji_statuses.h"
 #include "data/data_folder.h"
+#include "data/data_hidden_peers.h"
 #include "data/data_forum.h"
 #include "data/data_forum_topic.h"
 #include "data/data_photo.h"
@@ -3375,6 +3376,9 @@ bool History::trackUnreadMessages() const {
 }
 
 bool History::shouldBeInChatList() const {
+	if (Data::IsHiddenSystemUser(peer)) {
+		return false;
+	}
 	if (peer->migrateTo() || !folderKnown()) {
 		return false;
 	} else if (const auto community = peer->asChannel()
