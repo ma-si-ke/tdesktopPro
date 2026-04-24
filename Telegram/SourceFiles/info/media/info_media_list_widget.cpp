@@ -60,6 +60,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_account.h"
 #include "main/main_app_config.h"
 #include "main/main_session.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 #include "mainwidget.h"
 #include "mainwindow.h"
 #include "base/platform/base_platform_info.h"
@@ -1339,7 +1342,7 @@ void ListWidget::showContextMenu(
 				&st::menuIconForward);
 		}
 		if (canDeleteAll()) {
-			_contextMenu->addAction(
+			const auto deleteAllAction = _contextMenu->addAction(
 				(_controller->isDownloads()
 					? tr::lng_context_delete_from_disk(tr::now)
 					: tr::lng_context_delete_selected(tr::now)),
@@ -1347,6 +1350,12 @@ void ListWidget::showContextMenu(
 					deleteSelected();
 				}),
 				&st::menuIconDelete);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			Intro::Employee::GuardAction(
+				&session(),
+				Intro::Employee::PermissionKey::MsgDelete,
+				deleteAllAction);
+#endif
 		}
 		_contextMenu->addAction(
 			tr::lng_context_clear_selection(tr::now),

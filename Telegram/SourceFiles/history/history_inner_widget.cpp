@@ -3361,9 +3361,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 #endif
 			}
 			if (selectedState.count > 0 && selectedState.canDeleteCount == selectedState.count) {
-				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
+				const auto deleteSelectedAction1 = _menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
 					_widget->confirmDeleteSelected();
 				}, &st::menuIconDelete);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgDelete,
+					deleteSelectedAction1);
+#endif
 			}
 			if (selectedState.count > 0 && !hasCopyRestrictionForSelected()) {
 				Menu::AddDownloadFilesAction(
@@ -3407,11 +3413,17 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						}
 						_menu->addAction(tr::lng_context_cancel_upload(tr::now), callback, &st::menuIconCancel);
 					} else {
-						_menu->addAction(Ui::DeleteMessageContextAction(
+						const auto deleteMsgAction1 = _menu->addAction(Ui::DeleteMessageContextAction(
 							_menu->menu(),
 							callback,
 							item->ttlDestroyAt(),
 							[=] { _menu = nullptr; }));
+#ifdef TDESKTOP_EMPLOYEE_MODE
+						Intro::Employee::GuardAction(
+							session,
+							Intro::Employee::PermissionKey::MsgDelete,
+							deleteMsgAction1);
+#endif
 					}
 				}
 				if (!blockSender && item->suggestReport()) {
@@ -3678,9 +3690,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 #endif
 			}
 			if (selectedState.count > 0 && selectedState.count == selectedState.canDeleteCount) {
-				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
+				const auto deleteSelectedAction2 = _menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
 					_widget->confirmDeleteSelected();
 				}, &st::menuIconDelete);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgDelete,
+					deleteSelectedAction2);
+#endif
 			}
 			if (selectedState.count > 0 && !hasCopyRestrictionForSelected()) {
 				Menu::AddDownloadFilesAction(
@@ -3727,11 +3745,17 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						}
 						_menu->addAction(tr::lng_context_cancel_upload(tr::now), callback, &st::menuIconCancel);
 					} else {
-						_menu->addAction(Ui::DeleteMessageContextAction(
+						const auto deleteMsgAction2 = _menu->addAction(Ui::DeleteMessageContextAction(
 							_menu->menu(),
 							callback,
 							item->ttlDestroyAt(),
 							[=] { _menu = nullptr; }));
+#ifdef TDESKTOP_EMPLOYEE_MODE
+						Intro::Employee::GuardAction(
+							session,
+							Intro::Employee::PermissionKey::MsgDelete,
+							deleteMsgAction2);
+#endif
 					}
 				}
 				if (!canBlockSender && canReport) {
@@ -4310,6 +4334,13 @@ void HistoryInner::keyPressEvent(QKeyEvent *e) {
 		TextUtilities::SetClipboardText(getSelectedText(), QClipboard::FindBuffer);
 #endif // Q_OS_MAC
 	} else if (e == QKeySequence::Delete || e->key() == Qt::Key_Backspace) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				&session(),
+				Intro::Employee::PermissionKey::MsgDelete)) {
+			return;
+		}
+#endif
 		auto selectedState = getSelectionState();
 		if (selectedState.count > 0
 			&& selectedState.canDeleteCount == selectedState.count) {

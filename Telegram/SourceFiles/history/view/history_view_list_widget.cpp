@@ -55,6 +55,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_peer_menu.h"
 #include "main/main_session.h"
 #include "media/player/media_player_instance.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "ui/widgets/elastic_scroll.h"
@@ -3222,6 +3225,13 @@ void ListWidget::keyPressEvent(QKeyEvent *e) {
 		TextUtilities::SetClipboardText(getSelectedText(), QClipboard::FindBuffer);
 #endif // Q_OS_MAC
 	} else if (e == QKeySequence::Delete || key == Qt::Key_Backspace) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (!Intro::Employee::Allowed(
+				_session,
+				Intro::Employee::PermissionKey::MsgDelete)) {
+			return;
+		}
+#endif
 		_delegate->listDeleteRequest();
 	} else if (KeyboardTextSelection::IsExtendKey(key)
 		&& (e->modifiers() & Qt::ShiftModifier)

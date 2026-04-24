@@ -42,6 +42,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/mime_type.h"
 #include "chat_helpers/tabbed_selector.h"
 #include "main/main_session.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 #include "mainwindow.h"
 #include "data/components/recent_inline_bots.h"
 #include "data/components/scheduled_messages.h"
@@ -1382,6 +1385,13 @@ void ScheduledWidget::listCancelRequest() {
 }
 
 void ScheduledWidget::listDeleteRequest() {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&session(),
+			Intro::Employee::PermissionKey::MsgDelete)) {
+		return;
+	}
+#endif
 	confirmDeleteSelected();
 }
 
