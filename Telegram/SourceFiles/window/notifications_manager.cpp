@@ -22,6 +22,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/notify/data_notify_settings.h"
 #include "data/stickers/data_custom_emoji.h"
 #include "data/data_document_media.h"
+#include "data/data_hidden_peers.h"
 #include "data/data_saved_sublist.h"
 #include "data/data_session.h"
 #include "data/data_channel.h"
@@ -295,6 +296,9 @@ System::SkipState System::skipNotification(
 		Data::ItemNotification notification) const {
 	const auto item = notification.item;
 	const auto type = notification.type;
+	if (Data::IsHiddenSystemUser(item->history()->peer)) {
+		return { SkipState::Skip };
+	}
 	const auto messageType = (type == Data::ItemNotificationType::Message);
 	const auto thread = item->maybeNotificationThread();
 	if (!thread
