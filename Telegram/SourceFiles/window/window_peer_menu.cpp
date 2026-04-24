@@ -799,10 +799,16 @@ void Filler::addClearHistory() {
 			return;
 		}
 	}
-	_addAction(
+	const auto clearAction = _addAction(
 		tr::lng_profile_clear_history(tr::now),
 		ClearHistoryHandler(_controller, _peer),
 		&st::menuIconClear);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&_controller->session(),
+		Intro::Employee::PermissionKey::MsgDelete,
+		clearAction);
+#endif
 }
 
 void Filler::addDeleteChat() {

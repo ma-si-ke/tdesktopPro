@@ -881,7 +881,7 @@ bool AddDeleteSelectedAction(
 		return false;
 	}
 
-	menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
+	const auto deleteSelectedAction = menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
 		auto items = ExtractIdsList(request.selectedItems);
 		auto box = Box<DeleteMessagesBox>(
 			&request.navigation->session(),
@@ -891,6 +891,12 @@ bool AddDeleteSelectedAction(
 		}));
 		request.navigation->parentController()->show(std::move(box));
 	}, &st::menuIconDelete);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&request.navigation->session(),
+		Intro::Employee::PermissionKey::MsgDelete,
+		deleteSelectedAction);
+#endif
 	return true;
 }
 
@@ -950,11 +956,17 @@ bool AddDeleteMessageAction(
 			&st::menuIconCancel);
 		return true;
 	}
-	menu->addAction(Ui::DeleteMessageContextAction(
+	const auto deleteMsgAction = menu->addAction(Ui::DeleteMessageContextAction(
 		menu->menu(),
 		callback,
 		item->ttlDestroyAt(),
 		[=] { delete menu; }));
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&request.navigation->session(),
+		Intro::Employee::PermissionKey::MsgDelete,
+		deleteMsgAction);
+#endif
 	return true;
 }
 

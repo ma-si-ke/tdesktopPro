@@ -41,6 +41,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/file_utilities.h"
 #include "core/shortcuts.h"
 #include "main/main_session.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "data/data_chat.h"
@@ -612,6 +615,13 @@ void PinnedWidget::listCancelRequest() {
 }
 
 void PinnedWidget::listDeleteRequest() {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!Intro::Employee::Allowed(
+			&_thread->session(),
+			Intro::Employee::PermissionKey::MsgDelete)) {
+		return;
+	}
+#endif
 	confirmDeleteSelected();
 }
 

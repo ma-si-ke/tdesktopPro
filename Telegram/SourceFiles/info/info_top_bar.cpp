@@ -16,6 +16,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/delete_messages_box.h"
 #include "boxes/peer_list_controllers.h"
 #include "main/main_session.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_ui_guard.h"
+#endif
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/fields/input_field.h"
@@ -741,6 +744,12 @@ void TopBar::createSelectionControls() {
 		_selectionActionRequests,
 		_cancelSelection->lifetime());
 	_delete->entity()->setVisible(_canDelete);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::BindDisabled(
+		&_navigation->session(),
+		Intro::Employee::PermissionKey::MsgDelete,
+		_delete->entity());
+#endif
 
 	_toggleStoryInProfile = wrap(
 		Ui::CreateChild<Ui::FadeWrap<Ui::IconButton>>(
