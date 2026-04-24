@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/painter.h"
 #include "ui/ui_utility.h"
 #include "main/main_session.h"
+#include "data/data_hidden_peers.h"
 #include "data/data_peer_values.h"
 #include "data/data_saved_messages.h"
 #include "data/data_saved_sublist.h"
@@ -972,6 +973,9 @@ QString ChooseRecipientBoxController::savedMessagesChatStatus() const {
 auto ChooseRecipientBoxController::createRow(
 		not_null<History*> history) -> std::unique_ptr<Row> {
 	const auto peer = history->peer;
+	if (Data::IsHiddenSystemUser(peer)) {
+		return nullptr;
+	}
 	const auto skip = _filter
 		? !_filter(history)
 		: ((peer->isBroadcast() && !Data::CanSendAnything(peer))
