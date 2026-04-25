@@ -49,17 +49,17 @@ inline const char *cGUIDStr() {
 
 static const char *UpdatesPublicKey = "\
 -----BEGIN RSA PUBLIC KEY-----\n\
-MIGJAoGBAMA4ViQrjkPZ9xj0lrer3r23JvxOnrtE8nI69XLGSr+sRERz9YnUptnU\n\
-BZpkIfKaRcl6XzNJiN28cVwO1Ui5JSa814UAiDHzWUqCaXUiUEQ6NmNTneiGx2sQ\n\
-+9PKKlb8mmr3BB9A45ZNwLT6G9AK3+qkZLHojeSA+m84/a6GP4svAgMBAAE=\n\
+MIGJAoGBAKsaums6nuUqpI+AGs6GPMM5S+On0oY1vF3knAL+fY3EuMOcwKFCB/DY\n\
+2gLP/v6M4ngsHBG8YzzfNEKJ6brnYkTNLjsjgMSe0UNAeTyKUJHttPn68AQMd9+k\n\
+AcT+pFFYbvnta9P9ZS2puBR9fDLIwFdbJRv4IYSPlSiRMrDxxY51AgMBAAE=\n\
 -----END RSA PUBLIC KEY-----\
 ";
 
 static const char *UpdatesPublicBetaKey = "\
 -----BEGIN RSA PUBLIC KEY-----\n\
-MIGJAoGBALWu9GGs0HED7KG7BM73CFZ6o0xufKBRQsdnq3lwA8nFQEvmdu+g/I1j\n\
-0LQ+0IQO7GW4jAgzF/4+soPDb6uHQeNFrlVx1JS9DZGhhjZ5rf65yg11nTCIHZCG\n\
-w/CVnbwQOw0g5GBwwFV3r0uTTvy44xx8XXxk+Qknu4eBCsmrAFNnAgMBAAE=\n\
+MIGJAoGBAOaXY7X4E7XLy5tmc7fUpl7lSK/QU34BbYkgayEmZxCRQHD/QMVmr+g5\n\
+nDLyv1FmdFV04/ObkF9Zufiun5TVB96GtUyMn95B4EyRtyPNTlj/63mz0n0DgDmF\n\
+B3/VAL89Y1aEdee1bGJLEkz7leqA7zWhI83pxxKpS9myKF+PgGELAgMBAAE=\n\
 -----END RSA PUBLIC KEY-----\
 ";
 

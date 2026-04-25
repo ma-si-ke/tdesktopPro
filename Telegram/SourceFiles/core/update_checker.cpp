@@ -766,10 +766,12 @@ std::optional<QString> HttpChecker::parseResponse(
 	if (!result) {
 		return std::nullopt;
 	}
+	const auto isAbsolute = bestLink.startsWith(u"http://"_q)
+		|| bestLink.startsWith(u"https://"_q);
 	return validateLatestUrl(
 		bestAvailableVersion,
 		bestIsAvailableAlpha,
-		Local::readAutoupdatePrefix() + bestLink);
+		isAbsolute ? bestLink : (Local::readAutoupdatePrefix() + bestLink));
 }
 
 QString HttpChecker::validateLatestUrl(
@@ -1273,7 +1275,7 @@ void Updater::start(bool forceWait) {
 			std::make_unique<HttpChecker>(_testing));
 		startImplementation(
 			&_mtpImplementation,
-			std::make_unique<MtpChecker>(_session, _testing));
+			nullptr);
 
 		_checking.fire({});
 	} else {
