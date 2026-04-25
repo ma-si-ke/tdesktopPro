@@ -146,6 +146,13 @@ private:
 // Group/channel invite-link row is NOT affected.
 constexpr auto kShowUserUsername = false;
 
+// Hide phone-number row (and its copy / add-contact context-menu hooks)
+// in user profile. Matches Web client's SHOW_PHONE_NUMBER = false in
+// client/src/components/common/profile/ChatExtra.tsx.
+// Self phone in Settings, shared-contact message bubble, short-info popup,
+// and edit-contact dialog are NOT affected.
+constexpr auto kShowUserPhone = false;
+
 base::options::toggle ShowPeerIdBelowAbout({
 	.id = kOptionShowPeerIdBelowAbout,
 	.name = "Show Peer IDs in Profile",
@@ -1658,7 +1665,7 @@ Section DetailsFiller::makeInfo() {
 				user->session().supportHelper().infoTextValue(user));
 		}
 
-		{
+		if constexpr (kShowUserPhone) {
 			const auto phoneLabel = addInfoOneLine(
 				tr::lng_info_mobile_label(),
 				PhoneWithSpoilerValue(user, PhoneOrHiddenValue(user)),
