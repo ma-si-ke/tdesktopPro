@@ -2259,7 +2259,7 @@ void SendFilesBox::requestToTakeTextWithTags() {
 		return;
 	}
 	const auto text = _caption->getTextWithTags();
-	if (!_prefilledCaptionText.text.isEmpty() && text.text.isEmpty()) {
+	if (text.text.isEmpty()) {
 		return;
 	}
 	_textTaken = true;
