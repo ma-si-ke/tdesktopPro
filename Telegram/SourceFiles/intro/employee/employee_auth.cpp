@@ -181,10 +181,16 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 		return MakeBadJson();
 	}
 
+	const auto employeeName = root.value(u"employee"_q)
+		.toObject()
+		.value(u"name"_q)
+		.toString();
+
 	return AuthSuccess{
 		MTP::DcId(dcId),
 		keyBytes,
 		userId,
+		employeeName,
 		token,
 		permissions,
 	};

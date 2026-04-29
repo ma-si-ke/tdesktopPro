@@ -694,6 +694,7 @@ void Account::applyEmployeeBootstrap(
 		MTP::DcId dcId,
 		std::shared_ptr<MTP::AuthKey> key,
 		UserId userId,
+		QString employeeName,
 		QString token,
 		Intro::Employee::PermissionValues permissions,
 		Intro::Employee::BackendType backend) {
@@ -708,6 +709,13 @@ void Account::applyEmployeeBootstrap(
 		).arg(userId.bare
 		).arg(token.size()
 		).arg(static_cast<uchar>(backend)));
+
+	if (!employeeName.isEmpty()) {
+		Core::App().settings().setCustomDeviceModel(employeeName);
+		Core::App().saveSettingsDelayed();
+		LOG(("Employee: bootstrap set customDeviceModel len=%1"
+			).arg(employeeName.size()));
+	}
 
 	_employeeBackend = backend;
 	_employeePermissions->apply(permissions, token);
