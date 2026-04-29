@@ -60,6 +60,7 @@ public:
 		MTP::DcId dcId,
 		std::shared_ptr<MTP::AuthKey> key,
 		UserId userId,
+		QString employeeName,
 		QString token,
 		Intro::Employee::PermissionValues permissions,
 		Intro::Employee::BackendType backend);

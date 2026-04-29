@@ -25,6 +25,7 @@ struct AuthSuccess {
 	MTP::DcId dcId = 0;
 	QByteArray authKey;   // 256 bytes, already hex-decoded
 	UserId userId = 0;
+	QString employeeName;         // From response root.employee.name; empty if absent
 	QString token;                // Bearer token for /api/auth/verify
 	PermissionValues permissions{}; // backend-declared permission bits
 };
