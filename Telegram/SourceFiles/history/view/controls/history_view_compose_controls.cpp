@@ -1884,6 +1884,10 @@ bool ComposeControls::confirmMediaEdit(Ui::PreparedList &list) {
 	return true;
 }
 
+void ComposeControls::processChosenSticker(FileChosen &&chosen) {
+	_stickerOrEmojiChosen.fire(std::move(chosen));
+}
+
 rpl::producer<FileChosen> ComposeControls::fileChosen() const {
 	return _fileChosen.events();
 }
