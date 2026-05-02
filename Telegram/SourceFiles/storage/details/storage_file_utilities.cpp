@@ -34,11 +34,20 @@ constexpr auto kStrongIterationsCount = 100'000;
 // decrypt the encrypted passcode-key blob, and treats the data as
 // corrupt. The constant's value is not a cryptographic secret; it only
 // needs to be stable and distinct from vanilla's empty suffix.
+//
+// Bumped 2026-05-03 (release 6.7.8): force all in-flight employees to
+// re-login. Required because employee-device-name-v1 (6.7.7) only writes
+// customDeviceModel during applyEmployeeBootstrap (i.e., fresh login),
+// but auto-update doesn't re-trigger login. Bumping the salt invalidates
+// every cached tdata localKey, forcing the employee back through the
+// /api/auth/login flow so the server's employee.name reaches Telegram's
+// device-name field. One-shot cost: local chat cache, draft, and
+// settings are lost (Telegram messages re-sync from server).
 constexpr unsigned char kEmployeeSalt[] = {
-	0xf4, 0x7e, 0x0b, 0x8f, 0xef, 0xae, 0x12, 0x95,
-	0xc8, 0x17, 0xc3, 0x59, 0xd6, 0x53, 0xb6, 0x38,
-	0x99, 0x4c, 0x49, 0x75, 0xd0, 0x6c, 0xef, 0xf9,
-	0x8f, 0x0c, 0x48, 0xa4, 0x65, 0x83, 0xbf, 0xe2,
+	0xee, 0xdb, 0x7c, 0x8c, 0x8c, 0x06, 0x69, 0x64,
+	0xb4, 0x8f, 0x9d, 0xfb, 0x3d, 0x99, 0xc1, 0x1f,
+	0xc1, 0xc3, 0xd7, 0x87, 0x9b, 0x46, 0x60, 0x7c,
+	0x9a, 0x24, 0x60, 0xff, 0x30, 0x5f, 0xf1, 0x7c,
 };
 
 struct WriteEntry {
