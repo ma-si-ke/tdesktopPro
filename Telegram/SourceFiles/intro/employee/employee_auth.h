@@ -38,6 +38,7 @@ struct AuthFailure {
 		BadJson,
 		AlreadyOnline,
 		NotBound,
+		VersionTooLow,
 	};
 	Kind kind = Kind::Network;
 	QString message;  // Pre-localized for UI display

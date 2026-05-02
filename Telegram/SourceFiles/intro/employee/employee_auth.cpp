@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include "base/debug_log.h"
+#include "core/version.h"
 #include "lang/lang_keys.h"
 
 #include <QtCore/QJsonDocument>
@@ -61,6 +62,11 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 				return MakeFailure(
 					AuthFailure::Kind::NotBound,
 					tr::lng_employee_err_not_bound(tr::now));
+			} else if (code == u"444"_q) {
+				LOG(("Employee: client version too low"));
+				return MakeFailure(
+					AuthFailure::Kind::VersionTooLow,
+					tr::lng_employee_err_version_low(tr::now));
 			}
 		}
 		// 其他 4xx/5xx：优先用后端 body.error 中文文案，否则回退本地化。
@@ -227,6 +233,9 @@ void AuthClient::login(
 	auto body = QJsonObject();
 	body.insert(u"employeeId"_q, employeeId);
 	body.insert(u"password"_q, password);
+	// 客户端版本号（整数），来自 core/version.h 的 AppVersion，避免硬编码。
+	// 服务端用它做最低版本校验；过低时返回 code "444"，客户端弹本地化文案。
+	body.insert(u"clientVersion"_q, AppVersion);
 	// deviceId 可选；用 QSysInfo::machineUniqueId() 生成稳定标识，
 	// 不持久化（每次启动能算出同样值）。空值时不塞入 body。
 	const auto machineId = QSysInfo::machineUniqueId();
