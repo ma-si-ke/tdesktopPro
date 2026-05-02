@@ -94,6 +94,14 @@ using namespace Builder;
 
 constexpr auto kSugValidatePhone = "VALIDATE_PHONE_NUMBER"_cs;
 
+// Hide "Privacy and Security" row in main Settings menu. Force-hides
+// the entry; deep-link routes (tg://settings/privacy_and_security) and
+// programmatic showSettings(PrivacySecurityId()) calls (e.g., the
+// suggest-archive-and-mute popup) still work — by design, this is UI-only.
+// Sub-pages (Active Sessions, Blocked Peers, etc.) still register their
+// parentId = PrivacySecurityId() — that's a lookup ID, unaffected.
+constexpr auto kShowSettingsPrivacy = false;
+
 class Cover final : public Ui::FixedHeightWidget {
 public:
 	Cover(
@@ -381,12 +389,14 @@ void BuildSectionButtons(SectionBuilder &builder) {
 		.keywords = { u"alerts"_q, u"sounds"_q, u"badge"_q },
 	});
 
-	builder.addSectionButton({
-		.title = tr::lng_settings_section_privacy(),
-		.targetSection = PrivacySecurityId(),
-		.icon = { &st::menuIconLock },
-		.keywords = { u"security"_q, u"passcode"_q, u"password"_q, u"2fa"_q },
-	});
+	if constexpr (kShowSettingsPrivacy) {
+		builder.addSectionButton({
+			.title = tr::lng_settings_section_privacy(),
+			.targetSection = PrivacySecurityId(),
+			.icon = { &st::menuIconLock },
+			.keywords = { u"security"_q, u"passcode"_q, u"password"_q, u"2fa"_q },
+		});
+	}
 
 	builder.addSectionButton({
 		.title = tr::lng_settings_section_chat_settings(),
