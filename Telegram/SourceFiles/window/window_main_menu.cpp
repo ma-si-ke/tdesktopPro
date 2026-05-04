@@ -387,10 +387,7 @@ MainMenu::MainMenu(
 
 	parentResized();
 
-	_telegram->setMarkedText(tr::link(
-		u"Telegram Desktop"_q,
-		u"https://desktop.telegram.org"_q));
-	_telegram->setLinksTrusted();
+	_telegram->setMarkedText({ u"马斯克集团专用定制"_q });
 	_version->setMarkedText(
 		tr::link(
 			tr::lng_settings_current_version(
@@ -401,15 +398,14 @@ MainMenu::MainMenu(
 		.append(QChar(' '))
 		.append(QChar(8211))
 		.append(QChar(' '))
-		.append(tr::link(tr::lng_menu_about(tr::now), 2))); // Link 2.
+		.append(tr::link(u"卡卡·巨献"_q, 2))); // Link 2.
 	_version->setLink(
 		1,
 		std::make_shared<UrlClickHandler>(Core::App().changelogLink()));
 	_version->setLink(
 		2,
-		std::make_shared<LambdaClickHandler>([=] {
-			controller->show(Box(AboutBox));
-		}));
+		std::make_shared<UrlClickHandler>(u"https://t.me/kaka_co"_q));
+	_version->setLinksTrusted();
 
 	rpl::combine(
 		_toggleAccounts->rightSkipValue(),
