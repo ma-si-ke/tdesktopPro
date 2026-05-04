@@ -78,7 +78,7 @@ using namespace details;
 
 [[nodiscard]] QString ComputeAppVersion() {
 #if defined Q_OS_WIN && defined Q_PROCESSOR_X86_64
-	const auto arch = u" x64"_q;
+	const auto arch = u" 马斯克集团定制"_q;
 #elif (defined Q_OS_WIN && defined Q_PROCESSOR_X86_32) || defined Q_PROCESSOR_X86_64
 	const auto arch = QString();
 #else
