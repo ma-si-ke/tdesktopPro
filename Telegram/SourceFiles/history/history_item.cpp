@@ -272,15 +272,9 @@ std::unique_ptr<Data::Media> HistoryItem::CreateMedia(
 		});
 	}, [&](const MTPDmessageMediaPhoto &media) -> Result {
 		const auto photo = media.vphoto();
-		if (media.vttl_seconds()) {
-			LOG(("App Error: "
-				"Unexpected MTPMessageMediaPhoto "
-				"with ttl_seconds in CreateMedia."));
-			return nullptr;
-		} else if (!photo) {
+		if (!photo) {
 			LOG(("API Error: "
-				"Got MTPMessageMediaPhoto "
-				"without photo and without ttl_seconds."));
+				"Got MTPMessageMediaPhoto without photo."));
 			return nullptr;
 		}
 		return photo->match([&](const MTPDphoto &photo) -> Result {
@@ -293,15 +287,9 @@ std::unique_ptr<Data::Media> HistoryItem::CreateMedia(
 		});
 	}, [&](const MTPDmessageMediaDocument &media) -> Result {
 		const auto document = media.vdocument();
-		if (media.vttl_seconds() && media.is_video()) {
-			LOG(("App Error: "
-				"Unexpected MTPMessageMediaDocument "
-				"with ttl_seconds in CreateMedia."));
-			return nullptr;
-		} else if (!document) {
+		if (!document) {
 			LOG(("API Error: "
-				"Got MTPMessageMediaDocument "
-				"without document and without ttl_seconds."));
+				"Got MTPMessageMediaDocument without document."));
 			return nullptr;
 		}
 		return document->match([&](const MTPDdocument &document) -> Result {
@@ -310,7 +298,9 @@ std::unique_ptr<Data::Media> HistoryItem::CreateMedia(
 			const auto data = owner->processDocument(document, list);
 			using Args = Data::MediaFile::Args;
 			return std::make_unique<Data::MediaFile>(item, data, Args{
-				.ttlSeconds = media.vttl_seconds().value_or_empty(),
+				.ttlSeconds = media.is_video()
+					? 0
+					: media.vttl_seconds().value_or_empty(),
 				.videoCover = (media.vvideo_cover()
 					? owner->processPhoto(*media.vvideo_cover()).get()
 					: nullptr),
