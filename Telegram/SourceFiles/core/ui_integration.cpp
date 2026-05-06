@@ -43,12 +43,20 @@ namespace {
 const auto kGoodPrefix = u"https://"_q;
 const auto kBadPrefix = u"http://"_q;
 
-// Employee fork: gate the autologin_token query-param injection.
-// When false, UrlWithAutoLoginToken returns URLs untouched, so the
-// destination site (web.telegram.org / my.telegram.org / fragment.com
-// etc.) doesn't get a one-click sign-in handle for the current
-// account. Flip to true to restore upstream behavior. UI-only —
-// the rest of the click chain is unchanged.
+// Employee fork: gate every "log the user into the destination web
+// site" path that fires from a URL click. Two upstream mechanisms
+// hand identity to the browser, both gated by this flag:
+//   1) UrlWithAutoLoginToken — appends ?autologin_token=... to URLs
+//      whose host is in app_config.autologin_domains.
+//   2) BotAutoLogin — for hosts in app_config.url_auth_domains, fires
+//      messages.requestUrlAuth and the server returns a URL with
+//      #tgWebAuthToken=...&tgWebAuthUserId=...&tgWebAuthDcId=... in
+//      the fragment, which the web client uses to bootstrap a session
+//      without re-prompting credentials.
+// When false, both paths short-circuit to a no-op so clicks open the
+// plain URL with no embedded auth handle. Flip to true to restore
+// upstream behavior. UI-only — the rest of the click chain is
+// unchanged, and tg://oauth deeplinks are not affected.
 constexpr auto kAllowAutologinToken = false;
 
 [[nodiscard]] QUrl UrlForAutoLogin(const QString &url) {
@@ -98,6 +106,9 @@ constexpr auto kAllowAutologinToken = false;
 		const QString &url,
 		const QString &domain,
 		QVariant context) {
+	if constexpr (!kAllowAutologinToken) {
+		return false;
+	}
 	auto &account = Core::App().activeAccount();
 	const auto &config = account.appConfig();
 	const auto my = context.value<ClickHandlerContext>();
