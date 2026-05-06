@@ -535,6 +535,16 @@ namespace {
 
 using namespace Builder;
 
+// Hide sensitive account-security items from the Privacy & Security page
+// for employee builds. UI-only: server-side features still work, deep
+// links (tg://settings/passcode, tg://settings/sessions, etc.) still
+// route, sub-page registrations are unaffected.
+constexpr auto kShowSecurityCloudPassword = false; // 两步验证
+constexpr auto kShowSecurityTTL = false;           // 自动删除消息
+constexpr auto kShowSecurityPasskeys = false;      // 通行密钥
+constexpr auto kShowSecurityLoginEmail = false;    // 邮箱登录
+constexpr auto kShowSecuritySessions = false;      // 活跃会话
+
 void BuildSecuritySection(
 		SectionBuilder &builder,
 		rpl::producer<> updateTrigger) {
@@ -577,6 +587,7 @@ void BuildSecuritySection(
 			: tr::lng_settings_cloud_password_off(tr::now);
 	});
 
+	if constexpr (kShowSecurityCloudPassword)
 	builder.addButton({
 		.id = u"security/cloud_password"_q,
 		.title = tr::lng_settings_cloud_password_start_title(),
@@ -607,6 +618,7 @@ void BuildSecuritySection(
 		return ttl ? Ui::FormatTTL(ttl) : none;
 	});
 
+	if constexpr (kShowSecurityTTL)
 	builder.addButton({
 		.id = u"security/ttl"_q,
 		.title = tr::lng_settings_ttl_title(),
@@ -676,6 +688,7 @@ void BuildSecuritySection(
 				|| !session->passkeys().list().empty();
 		});
 
+		if constexpr (kShowSecurityPasskeys)
 		builder.addButton({
 			.id = u"security/passkeys"_q,
 			.title = tr::lng_settings_passkeys_title(),
@@ -720,6 +733,7 @@ void BuildSecuritySection(
 				email.replace(QRegularExpression("\\*{4,}"), "****")).text;
 		});
 
+		if constexpr (kShowSecurityLoginEmail)
 		builder.addButton({
 			.id = u"security/login_email"_q,
 			.title = tr::lng_settings_cloud_login_email_section_title(),
@@ -795,6 +809,7 @@ void BuildSecuritySection(
 		return count ? QString::number(count) : QString();
 	});
 
+	if constexpr (kShowSecuritySessions)
 	builder.addButton({
 		.id = u"security/sessions"_q,
 		.title = tr::lng_settings_show_sessions(),

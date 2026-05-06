@@ -94,13 +94,11 @@ using namespace Builder;
 
 constexpr auto kSugValidatePhone = "VALIDATE_PHONE_NUMBER"_cs;
 
-// Hide "Privacy and Security" row in main Settings menu. Force-hides
-// the entry; deep-link routes (tg://settings/privacy_and_security) and
-// programmatic showSettings(PrivacySecurityId()) calls (e.g., the
-// suggest-archive-and-mute popup) still work — by design, this is UI-only.
-// Sub-pages (Active Sessions, Blocked Peers, etc.) still register their
-// parentId = PrivacySecurityId() — that's a lookup ID, unaffected.
-constexpr auto kShowSettingsPrivacy = false;
+// Show "Privacy and Security" row in main Settings menu. Sensitive
+// sub-items (cloud password, TTL, passkeys, login email, sessions)
+// are individually gated inside the privacy page itself — see
+// settings_privacy_security.cpp's kShowSecurity* constants.
+constexpr auto kShowSettingsPrivacy = true;
 
 class Cover final : public Ui::FixedHeightWidget {
 public:
