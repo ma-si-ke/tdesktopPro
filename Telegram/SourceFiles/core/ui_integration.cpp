@@ -43,6 +43,14 @@ namespace {
 const auto kGoodPrefix = u"https://"_q;
 const auto kBadPrefix = u"http://"_q;
 
+// Employee fork: gate the autologin_token query-param injection.
+// When false, UrlWithAutoLoginToken returns URLs untouched, so the
+// destination site (web.telegram.org / my.telegram.org / fragment.com
+// etc.) doesn't get a one-click sign-in handle for the current
+// account. Flip to true to restore upstream behavior. UI-only —
+// the rest of the click chain is unchanged.
+constexpr auto kAllowAutologinToken = false;
+
 [[nodiscard]] QUrl UrlForAutoLogin(const QString &url) {
 	return (url.startsWith(kGoodPrefix, Qt::CaseInsensitive)
 		|| url.startsWith(kBadPrefix, Qt::CaseInsensitive))
@@ -59,6 +67,9 @@ const auto kBadPrefix = u"http://"_q;
 		QUrl parsed,
 		const QString &domain,
 		QVariant context) {
+	if constexpr (!kAllowAutologinToken) {
+		return url;
+	}
 	const auto my = context.value<ClickHandlerContext>();
 	const auto window = my.sessionWindow.get();
 	const auto &active = window
