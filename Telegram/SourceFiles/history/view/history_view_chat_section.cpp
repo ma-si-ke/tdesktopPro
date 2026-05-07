@@ -67,6 +67,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "intro/employee/employee_ui_guard.h"
 #endif
 #include "menu/menu_timecode_action.h"
+#include "data/components/recent_inline_bots.h"
 #include "data/components/scheduled_messages.h"
 #include "data/data_histories.h"
 #include "data/data_saved_messages.h"
@@ -1863,17 +1864,7 @@ void ChatWidget::sendInlineResult(
 	//_saveDraftStart = crl::now();
 	//onDraftSave();
 
-	auto &bots = cRefRecentInlineBots();
-	const auto index = bots.indexOf(bot);
-	if (index) {
-		if (index > 0) {
-			bots.removeAt(index);
-		} else if (bots.size() >= RecentInlineBotsLimit) {
-			bots.resize(RecentInlineBotsLimit - 1);
-		}
-		bots.push_front(bot);
-		bot->session().local().writeRecentHashtagsAndBots();
-	}
+	bot->session().recentInlineBots().bump(bot);
 	finishSending();
 }
 
