@@ -18,7 +18,9 @@ namespace Data {
 // its messages, and internal uses (changelog, background preview, etc.)
 // are not affected.
 //
-// Currently hardcoded: only PeerData::kServiceNotificationsId (777000).
+// Hardcoded: PeerData::kServiceNotificationsId (777000).
+// Employee fork: also any peer that belongs to a chat-filter (folder) whose
+// title is listed in the server-supplied EmployeeHiddenFolders names.
 [[nodiscard]] bool IsHiddenSystemUser(not_null<PeerData*> peer);
 
 } // namespace Data

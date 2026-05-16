@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_chat_filters.h"
 #include "data/data_download_manager.h"
 #include "data/data_folder.h"
+#include "data/data_hidden_peers.h"
 #include "data/data_peer_values.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
@@ -824,11 +825,16 @@ RecentsController::RecentsController(
 void RecentsController::prepare() {
 	setupDivider();
 
+	auto shown = 0;
 	for (const auto &peer : _recent.list) {
+		if (Data::IsHiddenSystemUser(peer)) {
+			continue;
+		}
 		delegate()->peerListAppendRow(std::make_unique<RecentRow>(peer));
+		++shown;
 	}
 	delegate()->peerListRefreshRows();
-	setCount(_recent.list.size());
+	setCount(shown);
 
 	subscribeToEvents();
 }
@@ -1071,6 +1077,9 @@ void MyChannelsController::fill(bool force) {
 }
 
 void MyChannelsController::appendRow(not_null<ChannelData*> channel) {
+	if (Data::IsHiddenSystemUser(channel)) {
+		return;
+	}
 	auto row = std::make_unique<PeerListRow>(channel);
 	if (channel->membersCountKnown()) {
 		row->setCustomStatus((channel->isBroadcast()
@@ -1161,6 +1170,9 @@ void RecommendationsController::fill() {
 }
 
 void RecommendationsController::appendRow(not_null<ChannelData*> channel) {
+	if (Data::IsHiddenSystemUser(channel)) {
+		return;
+	}
 	auto row = std::make_unique<ChannelRow>(channel);
 	if (channel->membersCountKnown()) {
 		row->setCustomStatus((channel->isBroadcast()
@@ -1275,6 +1287,9 @@ void RecentAppsController::fill() {
 }
 
 void RecentAppsController::appendRow(not_null<UserData*> bot) {
+	if (Data::IsHiddenSystemUser(bot)) {
+		return;
+	}
 	auto row = std::make_unique<PeerListRow>(bot);
 	if (const auto count = bot->botInfo->activeUsers) {
 		row->setCustomStatus(
@@ -1344,6 +1359,9 @@ void PopularAppsController::fill() {
 }
 
 void PopularAppsController::appendRow(not_null<UserData*> bot) {
+	if (Data::IsHiddenSystemUser(bot)) {
+		return;
+	}
 	auto row = std::make_unique<PeerListRow>(bot);
 	if (bot->isBot()) {
 		if (!bot->botInfo->activeUsers && !bot->username().isEmpty()) {
@@ -2792,6 +2810,9 @@ rpl::producer<TopPeersList> TopPeersContent(
 		for (const auto &peer : top) {
 			const auto user = peer->asUser();
 			if (user->isInaccessible()) {
+				continue;
+			}
+			if (Data::IsHiddenSystemUser(peer)) {
 				continue;
 			}
 			const auto self = user && user->isSelf();

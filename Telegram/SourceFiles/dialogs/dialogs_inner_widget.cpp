@@ -39,6 +39,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_drafts.h"
 #include "data/data_folder.h"
 #include "data/data_forum.h"
+#include "data/data_hidden_peers.h"
 #include "data/data_forum_icons.h"
 #include "data/data_session.h"
 #include "data/data_channel.h"
@@ -3635,14 +3636,17 @@ void InnerWidget::applySearchState(SearchState state) {
 			const auto append = [&](not_null<IndexedList*> list) {
 				const auto results = list->filtered(words);
 				auto top = filteredHeight();
-				auto i = _filterResults.insert(
-					end(_filterResults),
-					begin(results),
-					end(results));
-				for (const auto e = end(_filterResults); i != e; ++i) {
-					i->top = top;
-					i->row->recountHeight(_narrowRatio, _filterId);
-					top += i->row->height();
+				for (const auto &row : results) {
+					if (const auto peer = row->key().peer()) {
+						if (Data::IsHiddenSystemUser(peer)) {
+							continue;
+						}
+					}
+					_filterResults.emplace_back(row);
+					auto &back = _filterResults.back();
+					back.top = top;
+					back.row->recountHeight(_narrowRatio, _filterId);
+					top += back.row->height();
 				}
 			};
 			if (_searchState.filterChatsList() && !words.isEmpty()) {

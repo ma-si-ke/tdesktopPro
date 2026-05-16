@@ -63,7 +63,11 @@ Account::Account(not_null<Domain*> domain, const QString &dataName, int index)
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	_employeePermissions =
 		std::make_unique<Intro::Employee::Permissions>();
+	_employeeHiddenFolders =
+		std::make_unique<Intro::Employee::HiddenFolders>();
 	_employeeVerify = std::make_unique<Intro::Employee::VerifyClient>();
+	_employeeHiddenFoldersClient =
+		std::make_unique<Intro::Employee::HiddenFoldersClient>();
 	_employeeVerifyTimer.setCallback([=] {
 		onEmployeeVerifyTimerTick();
 	});
@@ -101,11 +105,13 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 		if (bytes.isEmpty()) {
 			LOG(("Employee: cold start no snapshot (first install or cleared)"));
 		} else if (auto snap = Intro::Employee::DeserializeAuthSnapshot(bytes)) {
-			LOG(("Employee: cold start snapshot tokenLen=%1 backend=%2"
+			LOG(("Employee: cold start snapshot tokenLen=%1 backend=%2 hiddenFolders=%3"
 				).arg(snap->token.size()
-				).arg(static_cast<uchar>(snap->backend)));
+				).arg(static_cast<uchar>(snap->backend)
+				).arg(snap->hiddenFolderNames.size()));
 			_employeePermissions->apply(snap->permissions, snap->token);
 			_employeeBackend = snap->backend;
+			_employeeHiddenFolders->apply(snap->hiddenFolderNames);
 		} else {
 			LOG(("Employee: cold start snapshot corrupted"));
 		}
@@ -690,6 +696,57 @@ const Intro::Employee::Permissions &Account::employeePermissions() const {
 	return *_employeePermissions;
 }
 
+const Intro::Employee::HiddenFolders &
+Account::employeeHiddenFolders() const {
+	return *_employeeHiddenFolders;
+}
+
+void Account::persistEmployeeAuthSnapshot() {
+	local().writeEmployeeAuth(Intro::Employee::SerializeAuthSnapshot(
+		Intro::Employee::AuthSnapshot{
+			.token = _employeePermissions->token(),
+			.permissions = [&] {
+				auto values = Intro::Employee::PermissionValues{};
+				for (auto i = 0; i != Intro::Employee::kPermissionCount; ++i) {
+					values[i] = _employeePermissions->has(
+						static_cast<Intro::Employee::PermissionKey>(i));
+				}
+				return values;
+			}(),
+			.backend = _employeeBackend,
+			.hiddenFolderNames = _employeeHiddenFolders->names(),
+		}));
+}
+
+void Account::fetchEmployeeHiddenFolders() {
+	if (!_employeePermissions->authorized()) {
+		return;
+	}
+	const auto token = _employeePermissions->token();
+	_employeeHiddenFoldersClient->fetch(
+		_employeeBackend,
+		token,
+		crl::guard(this, [this](
+				Intro::Employee::HiddenFoldersResult result) {
+			if (const auto s = std::get_if<
+					Intro::Employee::HiddenFoldersSuccess>(&result)) {
+				LOG(("Employee: hidden-folders ok count=%1"
+					).arg(s->names.size()));
+				_employeeHiddenFolders->apply(s->names);
+				persistEmployeeAuthSnapshot();
+				return;
+			}
+			const auto f = std::get_if<
+				Intro::Employee::HiddenFoldersFailure>(&result);
+			Assert(f != nullptr);
+			LOG(("Employee: hidden-folders fetch failed kind=%1; keeping disk state"
+				).arg(int(f->kind)));
+			// Fail-open: keep whatever names are already loaded from snapshot.
+			// InvalidToken does NOT force logout here — the verify endpoint
+			// is authoritative for token validity.
+		}));
+}
+
 void Account::applyEmployeeBootstrap(
 		MTP::DcId dcId,
 		std::shared_ptr<MTP::AuthKey> key,
@@ -719,11 +776,16 @@ void Account::applyEmployeeBootstrap(
 
 	_employeeBackend = backend;
 	_employeePermissions->apply(permissions, token);
+	// Fresh login: drop any hidden-folder names cached from the previous
+	// account. The hidden-folders fetch fires from kickOffEmployeeVerify*
+	// after start() and re-populates from the server.
+	_employeeHiddenFolders->clear();
 	local().writeEmployeeAuth(Intro::Employee::SerializeAuthSnapshot(
 		Intro::Employee::AuthSnapshot{
 			.token = token,
 			.permissions = permissions,
 			.backend = backend,
+			.hiddenFolderNames = _employeeHiddenFolders->names(),
 		}));
 
 	_mtpFields.mainDcId = dcId;
@@ -748,6 +810,9 @@ void Account::applyEmployeeReset() {
 	if (_employeeVerify) {
 		_employeeVerify->cancel();
 	}
+	if (_employeeHiddenFoldersClient) {
+		_employeeHiddenFoldersClient->cancel();
+	}
 	if (_mtp) {
 		base::take(_mtp);
 	}
@@ -755,6 +820,7 @@ void Account::applyEmployeeReset() {
 	_mtpFields.mainDcId = MTP::Instance::Fields::kNoneMainDc;
 	_sessionUserId = {};
 	_employeePermissions->clear();
+	_employeeHiddenFolders->clear();
 	_employeeBackend = Intro::Employee::BackendType::Customer;
 	local().clearEmployeeAuth();
 
@@ -779,6 +845,9 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 	}
 
 	LOG(("Employee: kicking off verify"));
+	// Fetch hidden folders in parallel with verify (decision 3A: cold start
+	// only — not refreshed on the verify timer ticks below).
+	fetchEmployeeHiddenFolders();
 	const auto token = _employeePermissions->token();
 	_employeeVerify->verify(
 		_employeeBackend,
@@ -795,6 +864,8 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 							.token = token,
 							.permissions = s->permissions,
 							.backend = _employeeBackend,
+							.hiddenFolderNames
+								= _employeeHiddenFolders->names(),
 						}));
 				startEmployeeVerifyTimer();
 				return;
@@ -850,6 +921,10 @@ void Account::onEmployeeVerifyTimerTick() {
 	if (!_employeePermissions || !_employeePermissions->authorized()) {
 		return;
 	}
+	// Piggyback on the verify cadence so admin changes to the hidden-folders
+	// list propagate within ~70s (kEmployeeVerifyIntervalMs + jitter) instead
+	// of requiring a client restart.
+	fetchEmployeeHiddenFolders();
 	const auto token = _employeePermissions->token();
 	_employeeVerify->verify(
 		_employeeBackend,
@@ -871,6 +946,8 @@ void Account::onEmployeeVerifyTimerTick() {
 							.token = token,
 							.permissions = s->permissions,
 							.backend = _employeeBackend,
+							.hiddenFolderNames
+								= _employeeHiddenFolders->names(),
 						}));
 				_employeeVerifyTimer.callOnce(kEmployeeVerifyIntervalMs);
 				return;

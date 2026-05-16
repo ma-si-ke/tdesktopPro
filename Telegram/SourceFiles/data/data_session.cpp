@@ -64,6 +64,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_poll.h"
 #include "data/data_replies_list.h"
 #include "data/data_chat_filters.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "data/data_employee_hidden_folders.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 #include "data/data_send_action.h"
 #include "data/data_message_reactions.h"
 #include "data/data_emoji_statuses.h"
@@ -245,6 +248,9 @@ Session::Session(not_null<Main::Session*> session)
 , _groups(this)
 , _aiComposeTones(std::make_unique<AiComposeTones>(session))
 , _chatsFilters(std::make_unique<ChatFilters>(this))
+#ifdef TDESKTOP_EMPLOYEE_MODE
+, _employeeHiddenFolders(std::make_unique<EmployeeHiddenFolders>(this))
+#endif // TDESKTOP_EMPLOYEE_MODE
 , _cloudThemes(std::make_unique<CloudThemes>(session))
 , _sendActionManager(std::make_unique<SendActionManager>())
 , _streaming(std::make_unique<Streaming>(this))

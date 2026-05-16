@@ -61,6 +61,9 @@ class EmojiStatuses;
 class ForumIcons;
 class AiComposeTones;
 class ChatFilters;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+class EmployeeHiddenFolders;
+#endif // TDESKTOP_EMPLOYEE_MODE
 class CloudThemes;
 class Streaming;
 class MediaRotation;
@@ -187,6 +190,11 @@ public:
 	[[nodiscard]] ChatFilters &chatsFilters() const {
 		return *_chatsFilters;
 	}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	[[nodiscard]] EmployeeHiddenFolders &employeeHiddenFolders() const {
+		return *_employeeHiddenFolders;
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 	[[nodiscard]] ShortcutMessages &shortcutMessages() const {
 		return *_shortcutMessages;
 	}
@@ -1348,6 +1356,9 @@ private:
 	Groups _groups;
 	const std::unique_ptr<AiComposeTones> _aiComposeTones;
 	const std::unique_ptr<ChatFilters> _chatsFilters;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	const std::unique_ptr<EmployeeHiddenFolders> _employeeHiddenFolders;
+#endif // TDESKTOP_EMPLOYEE_MODE
 	const std::unique_ptr<CloudThemes> _cloudThemes;
 	const std::unique_ptr<SendActionManager> _sendActionManager;
 	const std::unique_ptr<Streaming> _streaming;

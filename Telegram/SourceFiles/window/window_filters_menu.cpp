@@ -38,6 +38,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "styles/style_widgets.h"
 #include "styles/style_window.h"
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "intro/employee/employee_hidden_folders.h"
+#include "main/main_account.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
 #endif // TDESKTOP_EMPLOYEE_MODE
@@ -105,6 +110,17 @@ void FiltersMenu::setup() {
 	) | rpl::on_next([=] {
 		refresh();
 	}, _outer.lifetime());
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	// Employee fork: re-render the sidebar when the server-pushed hidden
+	// folder name list changes (admin add/remove). Without this, removing
+	// a folder from the hidden list leaves the tab invisible until next
+	// chatsFilters change or restart.
+	_session->session().account().employeeHiddenFolders().changes(
+	) | rpl::on_next([=] {
+		refresh();
+	}, _outer.lifetime());
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 	_activeFilterId = _session->activeChatsFilterCurrent();
 	_session->activeChatsFilter(
@@ -221,7 +237,23 @@ void FiltersMenu::refresh() {
 
 	auto now = base::flat_map<int, base::unique_qptr<Ui::SideBarButton>>();
 	const auto &currentFilter = _session->activeChatsFilterCurrent();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	const auto &hiddenFolders
+		= _session->session().account().employeeHiddenFolders();
+#endif // TDESKTOP_EMPLOYEE_MODE
 	for (const auto &filter : filters->list()) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		// Employee fork: skip server-listed hidden folders entirely from
+		// the sidebar tab strip. The filter still exists in chatsFilters,
+		// so server sync and Data::EmployeeHiddenFolders chat-id derivation
+		// keep working.
+		if (hiddenFolders.has(filter.title().text.text)) {
+			if (currentFilter == filter.id()) {
+				_session->setActiveChatsFilter(FilterId(0));
+			}
+			continue;
+		}
+#endif // TDESKTOP_EMPLOYEE_MODE
 		const auto nextIsLocked = (now.size() >= premiumFrom);
 		if (nextIsLocked && (currentFilter == filter.id())) {
 			_session->setActiveChatsFilter(FilterId(0));

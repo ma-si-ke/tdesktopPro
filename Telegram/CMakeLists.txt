@@ -673,6 +673,8 @@ PRIVATE
     data/data_group_call.h
     data/data_groups.cpp
     data/data_groups.h
+    data/data_employee_hidden_folders.cpp
+    data/data_employee_hidden_folders.h
     data/data_hidden_peers.cpp
     data/data_hidden_peers.h
     data/data_histories.cpp
@@ -1262,6 +1264,10 @@ PRIVATE
     intro/employee/employee_auth_storage.h
     intro/employee/employee_config.cpp
     intro/employee/employee_config.h
+    intro/employee/employee_hidden_folders.cpp
+    intro/employee/employee_hidden_folders.h
+    intro/employee/employee_hidden_folders_client.cpp
+    intro/employee/employee_hidden_folders_client.h
     intro/employee/employee_login_step.cpp
     intro/employee/employee_login_step.h
     intro/employee/employee_permissions.cpp
