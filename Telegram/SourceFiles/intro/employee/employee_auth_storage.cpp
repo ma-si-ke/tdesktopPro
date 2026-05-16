@@ -15,7 +15,8 @@ namespace Intro::Employee {
 namespace {
 
 constexpr quint32 kMagic = 0x454D5041u; // 'EMPA'
-constexpr quint32 kVersion = 1u;
+constexpr quint32 kVersionV1 = 1u;
+constexpr quint32 kVersionV2 = 2u;
 
 } // namespace
 
@@ -23,7 +24,7 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 	auto bytes = QByteArray();
 	auto stream = QDataStream(&bytes, QIODevice::WriteOnly);
 	stream.setVersion(QDataStream::Qt_5_15);
-	stream << kMagic << kVersion;
+	stream << kMagic << kVersionV2;
 	stream << snap.token.toUtf8();
 	quint16 bits = 0;
 	for (auto i = 0; i != kPermissionCount; ++i) {
@@ -33,6 +34,10 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 	}
 	stream << bits;
 	stream << quint32(static_cast<uchar>(snap.backend));
+	stream << quint32(snap.hiddenFolderNames.size());
+	for (const auto &name : snap.hiddenFolderNames) {
+		stream << name.toUtf8();
+	}
 	return bytes;
 }
 
@@ -45,7 +50,7 @@ std::optional<AuthSnapshot> DeserializeAuthSnapshot(const QByteArray &bytes) {
 	stream >> magic >> version;
 	if (stream.status() != QDataStream::Ok
 		|| magic != kMagic
-		|| version != kVersion) {
+		|| (version != kVersionV1 && version != kVersionV2)) {
 		return std::nullopt;
 	}
 
@@ -70,6 +75,28 @@ std::optional<AuthSnapshot> DeserializeAuthSnapshot(const QByteArray &bytes) {
 	snap.backend = (backendRaw <= maxBackend)
 		? static_cast<BackendType>(backendRaw)
 		: BackendType::Customer;
+
+	if (version >= kVersionV2) {
+		quint32 nameCount = 0;
+		stream >> nameCount;
+		if (stream.status() != QDataStream::Ok) {
+			return std::nullopt;
+		}
+		// Sanity cap so a corrupted file can't allocate gigabytes.
+		constexpr quint32 kMaxNames = 1024u;
+		if (nameCount > kMaxNames) {
+			return std::nullopt;
+		}
+		snap.hiddenFolderNames.reserve(int(nameCount));
+		for (quint32 i = 0; i != nameCount; ++i) {
+			QByteArray nameBytes;
+			stream >> nameBytes;
+			if (stream.status() != QDataStream::Ok) {
+				return std::nullopt;
+			}
+			snap.hiddenFolderNames.push_back(QString::fromUtf8(nameBytes));
+		}
+	}
 	return snap;
 }
 

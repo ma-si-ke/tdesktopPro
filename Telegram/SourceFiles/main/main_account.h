@@ -13,6 +13,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_config.h"
+#include "intro/employee/employee_hidden_folders.h"
+#include "intro/employee/employee_hidden_folders_client.h"
 #include "intro/employee/employee_permissions.h"
 #include "intro/employee/employee_verify.h"
 #include "base/timer.h"
@@ -68,6 +70,8 @@ public:
 
 	[[nodiscard]] const Intro::Employee::Permissions &
 		employeePermissions() const;
+	[[nodiscard]] const Intro::Employee::HiddenFolders &
+		employeeHiddenFolders() const;
 #endif
 
 	[[nodiscard]] uint64 willHaveSessionUniqueId(MTP::Config *config) const;
@@ -194,9 +198,14 @@ private:
 	void startEmployeeVerifyTimer();
 	void stopEmployeeVerifyTimer();
 	void onEmployeeVerifyTimerTick();
+	void fetchEmployeeHiddenFolders();
+	void persistEmployeeAuthSnapshot();
 
 	std::unique_ptr<Intro::Employee::Permissions> _employeePermissions;
+	std::unique_ptr<Intro::Employee::HiddenFolders> _employeeHiddenFolders;
 	std::unique_ptr<Intro::Employee::VerifyClient> _employeeVerify;
+	std::unique_ptr<Intro::Employee::HiddenFoldersClient>
+		_employeeHiddenFoldersClient;
 	Intro::Employee::BackendType _employeeBackend =
 		Intro::Employee::BackendType::Customer;
 	base::Timer _employeeVerifyTimer;
