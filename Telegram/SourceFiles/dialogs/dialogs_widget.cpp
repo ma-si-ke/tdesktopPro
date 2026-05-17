@@ -725,6 +725,9 @@ Widget::Widget(
 
 	setupFrozenAccountBar();
 	setupTopBarSuggestions();
+#ifdef _DEBUG
+	setupTopBarSuggestionTestHotkeys();
+#endif // _DEBUG
 }
 
 void Widget::setupSwipeBack() {
