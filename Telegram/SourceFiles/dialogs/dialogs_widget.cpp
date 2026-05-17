@@ -1147,6 +1147,7 @@ void Widget::setupTopBarSuggestions() {
 							_topBarSuggestionPlaceholder->width(),
 							h);
 					}
+					_scroll->setBarTopInset(h);
 					_topBarSuggestionHeightChanged.fire_copy(h);
 				}, _topBarSuggestion->entity()->lifetime());
 				const auto pinToScroll = [=] {
@@ -1163,6 +1164,7 @@ void Widget::setupTopBarSuggestions() {
 			} else {
 				_topBarSuggestionPlaceholder = nullptr;
 				_topBarSuggestion = nullptr;
+				_scroll->setBarTopInset(0);
 				_topBarSuggestionHeightChanged.fire(0);
 			}
 		}, lifetime());
