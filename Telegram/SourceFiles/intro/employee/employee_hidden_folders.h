@@ -31,6 +31,13 @@ public:
 	[[nodiscard]] rpl::producer<QStringList> value() const;
 	[[nodiscard]] rpl::producer<> changes() const;
 
+	// Magic sentinel: the list contains exactly one entry whose text is "1".
+	// In that case the entire UI hides every chat / folder regardless of
+	// membership. Any other shape ([], ["1","X"], ["A"], etc.) reverts to
+	// normal whitelist semantics where "1" — if present — is just a literal
+	// folder name.
+	[[nodiscard]] bool isHideAllSentinel() const;
+
 	void apply(QStringList names);
 	void clear();
 

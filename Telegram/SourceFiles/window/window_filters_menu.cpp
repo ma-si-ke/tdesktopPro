@@ -243,11 +243,16 @@ void FiltersMenu::refresh() {
 #endif // TDESKTOP_EMPLOYEE_MODE
 	for (const auto &filter : filters->list()) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		// Employee fork: skip server-listed hidden folders entirely from
-		// the sidebar tab strip. The filter still exists in chatsFilters,
-		// so server sync and Data::EmployeeHiddenFolders chat-id derivation
-		// keep working.
-		if (hiddenFolders.has(filter.title().text.text)) {
+		// Employee fork: name list is now a WHITELIST.
+		//   []        => no policy, render every tab (fail-open)
+		//   ["1"]     => hide-all sentinel, render no custom-folder tab
+		//   [...]     => render only tabs whose title is in the list
+		const auto &allowedNames = hiddenFolders.names();
+		const auto hideAll = hiddenFolders.isHideAllSentinel();
+		const auto whitelistActive = !allowedNames.isEmpty() && !hideAll;
+		if (hideAll
+			|| (whitelistActive
+				&& !allowedNames.contains(filter.title().text.text))) {
 			if (currentFilter == filter.id()) {
 				_session->setActiveChatsFilter(FilterId(0));
 			}

@@ -43,15 +43,32 @@ EmployeeHiddenFolders::EmployeeHiddenFolders(not_null<Session*> owner)
 EmployeeHiddenFolders::~EmployeeHiddenFolders() = default;
 
 bool EmployeeHiddenFolders::contains(not_null<PeerData*> peer) const {
-	const auto &names = _owner->session().account()
-		.employeeHiddenFolders().names();
+	// Whitelist semantics: the server-pushed name list enumerates the
+	// folders the employee IS allowed to see; everything else is hidden.
+	// Field name "hiddenFolderNames" is preserved on the wire for backend
+	// compatibility — it's effectively visibleFolderNames now.
+	//
+	// Three states:
+	//   []        => fail-open, show everything (policy not configured)
+	//   ["1"]     => hide-all sentinel, isolate the employee completely
+	//   [...]     => standard whitelist; "1" inside a longer list is a
+	//                literal folder name with no special meaning
+	const auto &cfg = _owner->session().account().employeeHiddenFolders();
+	const auto &names = cfg.names();
 	if (names.isEmpty()) {
 		return false;
 	}
+	if (cfg.isHideAllSentinel()) {
+		// Strict isolation: hide every peer regardless of history /
+		// folder membership. Even fresh search results disappear.
+		return true;
+	}
 	const auto history = _owner->historyLoaded(peer);
 	if (!history) {
-		// No history => peer has never appeared in any chat list, so
-		// it cannot match a folder by either explicit entry or rule.
+		// No history => peer has never appeared in any chat list. It can't
+		// belong to a whitelisted folder by membership rules, but hiding
+		// fresh search-result peers would break first-contact flows
+		// (e.g. searching a new username). Keep these visible.
 		return false;
 	}
 	for (const auto &filter : _owner->chatsFilters().list()) {
@@ -59,10 +76,12 @@ bool EmployeeHiddenFolders::contains(not_null<PeerData*> peer) const {
 			continue;
 		}
 		if (filter.contains(history)) {
-			return true;
+			// In at least one whitelisted folder => visible.
+			return false;
 		}
 	}
-	return false;
+	// History exists but is in no whitelisted folder => hidden.
+	return true;
 }
 
 void EmployeeHiddenFolders::refreshAllHistories() {

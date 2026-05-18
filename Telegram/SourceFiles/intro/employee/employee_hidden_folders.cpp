@@ -33,6 +33,11 @@ rpl::producer<> HiddenFolders::changes() const {
 	return _names.changes() | rpl::to_empty;
 }
 
+bool HiddenFolders::isHideAllSentinel() const {
+	const auto &list = _names.current();
+	return (list.size() == 1) && (list.first() == u"1"_q);
+}
+
 void HiddenFolders::apply(QStringList names) {
 	LOG(("Employee: HiddenFolders::apply count=%1").arg(names.size()));
 	_names = std::move(names);
