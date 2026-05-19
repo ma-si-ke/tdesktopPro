@@ -264,8 +264,7 @@ FieldAutocomplete::FieldAutocomplete(
 	) | rpl::on_next([=] {
 		if (_hiding
 			|| isHidden()
-			|| (_type != Type::Mentions)
-			|| !_addInlineBots) {
+			|| (_type != Type::Mentions)) {
 			return;
 		}
 		updateFiltered();
@@ -466,12 +465,11 @@ void FieldAutocomplete::updateFiltered(bool resetScroll) {
 	if (_emoji) {
 		srows = getStickerSuggestions();
 	} else if (_type == Type::Mentions) {
-		const auto guestChatBots = _addInlineBots
-			? _session->topGuestChatBots().list()
-			: std::vector<not_null<PeerData*>>();
-		int maxListSize = _addInlineBots
-			? (_session->recentInlineBots().list().size() + int(guestChatBots.size()))
-			: 0;
+		const auto guestChatBots = _session->topGuestChatBots().list();
+		int maxListSize = int(guestChatBots.size())
+			+ (_addInlineBots
+				? int(_session->recentInlineBots().list().size())
+				: 0);
 		if (_chat) {
 			maxListSize += (_chat->participants.empty() ? _chat->lastAuthors.size() : _chat->participants.size());
 		} else if (_channel && _channel->isMegagroup()) {
@@ -538,18 +536,18 @@ void FieldAutocomplete::updateFiltered(bool resetScroll) {
 				}
 				pushMentionRow(user, MentionRow::Source::InlineRecent);
 			}
-			for (const auto &peer : guestChatBots) {
-				const auto user = peer->asUser();
-				if (!user
-					|| user->isInaccessible()
-					|| !user->isBot()
-					|| (!listAllSuggestions
-						&& filterNotPassedByUsername(user))
-					|| containsMentionUser(user)) {
-					continue;
-				}
-				pushMentionRow(user, MentionRow::Source::GuestChatTopPeer);
+		}
+		for (const auto &peer : guestChatBots) {
+			const auto user = peer->asUser();
+			if (!user
+				|| user->isInaccessible()
+				|| !user->isBot()
+				|| (!listAllSuggestions
+					&& filterNotPassedByUsername(user))
+				|| containsMentionUser(user)) {
+				continue;
 			}
+			pushMentionRow(user, MentionRow::Source::GuestChatTopPeer);
 		}
 		if (_chat) {
 			auto sorted = base::flat_multi_map<TimeId, not_null<UserData*>>();
@@ -1842,9 +1840,7 @@ void InitFieldAutocomplete(
 			parsed.query.clear();
 		}
 #endif // TDESKTOP_EMPLOYEE_MODE
-		if (!parsed.query.isEmpty()
-			&& parsed.query[0] == '@'
-			&& parsed.fromStart) {
+		if (!parsed.query.isEmpty() && parsed.query[0] == '@') {
 			peer->session().topGuestChatBots().reload();
 		}
 		raw->showFiltered(peer, parsed.query, parsed.fromStart);
