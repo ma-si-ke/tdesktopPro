@@ -141,10 +141,9 @@ template <typename T>
 	return false;
 }
 
-[[nodiscard]] auto ParsedRichPage(
+[[nodiscard]] std::shared_ptr<const Iv::RichPage> ParsedRichPage(
 		not_null<Main::Session*> session,
-		const MTPRichMessage *richMessage)
--> std::shared_ptr<const Iv::RichPage> {
+		const MTPRichMessage *richMessage) {
 	return richMessage ? Iv::ParseRichPage(session, *richMessage) : nullptr;
 }
 
@@ -4111,7 +4110,7 @@ void HistoryItem::setText(TextWithEntities textWithEntities) {
 		: std::move(textWithEntities));
 }
 
-auto HistoryItem::richPage() const -> std::shared_ptr<const Iv::RichPage> {
+std::shared_ptr<const Iv::RichPage> HistoryItem::richPage() const {
 	const auto source = Get<HistoryMessageRichPageSource>();
 	return source ? source->page : nullptr;
 }
