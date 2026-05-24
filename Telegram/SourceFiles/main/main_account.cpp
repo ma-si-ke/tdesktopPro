@@ -584,6 +584,18 @@ void Account::logOut() {
 		return;
 	}
 	_loggingOut = true;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	// Employee fork: the MTProto session is bootstrapped and owned by the
+	// backend (it hands the client a ready auth key at login). Sending
+	// auth.logOut would invalidate that session server-side, so the same
+	// employee id + password could no longer sign in until the backend
+	// re-authorizes a fresh session — which is not acceptable. Tear down
+	// locally only (clears tdata + returns to the login screen) and leave
+	// the server session intact for the next login to reuse.
+	LOG(("Employee: local logout, skipping auth.logOut to keep session"));
+	loggedOut();
+	return;
+#endif
 	if (_mtp) {
 		_mtp->logout([=] { loggedOut(); });
 	} else {

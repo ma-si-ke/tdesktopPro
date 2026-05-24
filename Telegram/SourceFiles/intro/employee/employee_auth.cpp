@@ -67,6 +67,16 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 				return MakeFailure(
 					AuthFailure::Kind::VersionTooLow,
 					tr::lng_employee_err_version_low(tr::now));
+			} else if (code == u"445"_q) {
+				LOG(("Employee: device already bound to another device"));
+				return MakeFailure(
+					AuthFailure::Kind::DeviceBound,
+					tr::lng_employee_err_device_bound(tr::now));
+			} else if (code == u"446"_q) {
+				LOG(("Employee: client deviceId missing"));
+				return MakeFailure(
+					AuthFailure::Kind::DeviceMissing,
+					tr::lng_employee_err_device_missing(tr::now));
 			}
 		}
 		// 其他 4xx/5xx：优先用后端 body.error 中文文案，否则回退本地化。

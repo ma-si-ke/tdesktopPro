@@ -8067,6 +8067,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_employee_err_already" = "该账号已在其他设备登录";
 "lng_employee_err_not_bound" = "账号未绑定 Telegram，请联系管理员";
 "lng_employee_err_version_low" = "客户端版本过低，请联系管理员升级";
+"lng_employee_err_device_bound" = "该账号已被其他设备绑定，请联系管理员";
+"lng_employee_err_device_missing" = "客户端异常：无法识别设备，请联系管理员";
 "lng_employee_err_bad_json" = "服务器响应异常";
 "lng_employee_err_mtp_timeout" = "连接 Telegram 超时，请重试";
 "lng_employee_err_mtp_auth" = "账号验证失败";

@@ -39,6 +39,8 @@ struct AuthFailure {
 		AlreadyOnline,
 		NotBound,
 		VersionTooLow,
+		DeviceBound,    // code 445: account already bound to another device
+		DeviceMissing,  // code 446: client could not provide a deviceId
 	};
 	Kind kind = Kind::Network;
 	QString message;  // Pre-localized for UI display
