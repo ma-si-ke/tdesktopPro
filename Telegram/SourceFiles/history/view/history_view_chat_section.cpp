@@ -1099,7 +1099,7 @@ void ChatWidget::setupSwipeReplyAndBack() {
 				? _inner->viewByPosition(still->position())
 				: nullptr;
 			const auto selected = (still && view)
-				? view->selectedQuote(_inner->getSelectedTextRange(still))
+				? view->selectedQuote(_inner->getSelectedTextSelection(still))
 				: SelectedQuote();
 			const auto exact = selected.item
 				? selected.item
