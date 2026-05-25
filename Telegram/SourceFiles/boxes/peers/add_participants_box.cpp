@@ -1903,6 +1903,7 @@ void AddSpecialBoxSearchController::requestGlobal() {
 
 	auto perPage = SearchPeopleLimit;
 	_requestId = _api.request(MTPcontacts_Search(
+		MTP_flags(0),
 		MTP_string(_query),
 		MTP_int(perPage)
 	)).done([=](const MTPcontacts_Found &result, mtpRequestId requestId) {
