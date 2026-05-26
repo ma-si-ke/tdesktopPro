@@ -678,9 +678,15 @@ HistoryItem::HistoryItem(
 	const auto dropText = fields.ignoreForwardCaptions
 		&& _media
 		&& (_media->allowsEditCaption() || _media->poll());
+	const auto forwardRichPage = dropText
+		? std::shared_ptr<const Iv::RichPage>()
+		: original->richPage();
 	const auto forwardText = [&] {
 		if (dropText) {
 			return TextWithEntities();
+		}
+		if (forwardRichPage) {
+			return Iv::FlattenRichPageSummary(forwardRichPage);
 		}
 		const auto &text = original->originalText();
 		if (!text.text.isEmpty()) {
@@ -693,6 +699,9 @@ HistoryItem::HistoryItem(
 		}
 		return TextWithEntities();
 	}();
+	if (forwardRichPage) {
+		setRichPage(forwardRichPage);
+	}
 	setText(forwardText);
 
 	if (fields.groupedId) {
