@@ -1814,6 +1814,7 @@ void Widget::updateSuggestions(anim::type animated) {
 			_scroll->show();
 		}
 	} else if (suggest && !_suggestions) {
+		_hidingSuggestions.clear();
 		if (animated == anim::type::normal) {
 			startWidthAnimation();
 		}
