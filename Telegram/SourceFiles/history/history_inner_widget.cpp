@@ -3927,7 +3927,7 @@ void HistoryInner::keyPressEvent(QKeyEvent *e) {
 	}
 
 	const auto count = accessibilityChildCount();
-	if (count > 0) {
+	if (count > 0 && QAccessible::isActive()) {
 		if (_accessibilityFocusedItem
 			&& _accessibilityFocusedIndex >= 0) {
 			const auto elements = accessibleElements();
