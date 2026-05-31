@@ -2230,16 +2230,7 @@ std::unique_ptr<QMimeData> HistoryInner::prepareDrag() {
 				pressedHandler->property(
 					kPhotoLinkMediaProperty).toULongLong());
 			if (lnkPhoto) {
-				const auto itemDate = _mouseActionItem
-					? _mouseActionItem->date()
-					: TimeId(0);
-				photoData = HistoryView::PreparePhotoDragData(
-					lnkPhoto,
-					itemDate);
-				if (!photoData.tempPath.isEmpty()) {
-					urls.push_back(
-						QUrl::fromLocalFile(photoData.tempPath));
-				}
+				photoData = HistoryView::PreparePhotoDragData(lnkPhoto);
 			}
 		}
 
@@ -2249,8 +2240,7 @@ std::unique_ptr<QMimeData> HistoryInner::prepareDrag() {
 			return nullptr;
 		}
 
-		auto result = std::make_unique<HistoryView::DragMimeData>(
-			std::move(photoData.tempPath));
+		auto result = std::make_unique<QMimeData>();
 		if (!forwardIds.empty()) {
 			session().data().setMimeForwardIds(std::move(forwardIds));
 			result->setData(u"application/x-td-forward"_q, "1");
@@ -2258,9 +2248,9 @@ std::unique_ptr<QMimeData> HistoryInner::prepareDrag() {
 		if (!urls.isEmpty()) {
 			result->setUrls(urls);
 		}
-		if (!photoData.image.isNull()) {
-			result->setImageData(std::move(photoData.image));
-		}
+		HistoryView::FillDragMimeWithPhoto(
+			result.get(),
+			std::move(photoData));
 		return result;
 	}
 	return nullptr;
