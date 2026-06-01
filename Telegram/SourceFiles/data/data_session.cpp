@@ -2212,12 +2212,12 @@ auto Session::itemsAboutToBeDestroyed() const
 }
 
 void Session::notifyViewAboutToBeRemoved(
-		not_null<const ViewElement*> view) {
-	_viewAboutToBeRemoved.fire_copy(view);
+		not_null<const ViewElement*> view,
+		ViewRemovalReason reason) {
+	_viewAboutToBeRemoved.fire({ view, reason });
 }
 
-rpl::producer<not_null<const ViewElement*>>
-Session::viewAboutToBeRemoved() const {
+rpl::producer<ViewRemoval> Session::viewAboutToBeRemoved() const {
 	return _viewAboutToBeRemoved.events();
 }
 
