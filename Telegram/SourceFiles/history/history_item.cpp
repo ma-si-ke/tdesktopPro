@@ -4003,6 +4003,12 @@ FullStoryId HistoryItem::replyToStory() const {
 	return {};
 }
 
+void HistoryItem::resolveAdminLogReplyTo(not_null<HistoryItem*> replyTo) {
+	if (const auto reply = Get<HistoryMessageReply>()) {
+		reply->setInLogReplyTo(this, replyTo);
+	}
+}
+
 FullReplyTo HistoryItem::replyTo() const {
 	const auto monoforumPeerId = _history->peer->amMonoforumAdmin()
 		? sublistPeerId()
