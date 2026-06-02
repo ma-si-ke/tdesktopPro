@@ -148,6 +148,13 @@ template <typename T>
 	return richMessage ? Iv::ParseRichPage(session, *richMessage) : nullptr;
 }
 
+[[nodiscard]] std::shared_ptr<const Iv::RichPage> BestRichPage(
+		const HistoryMessageRichPageSource *source) {
+	return source
+		? (source->fullPage ? source->fullPage : source->page)
+		: nullptr;
+}
+
 [[nodiscard]] HistoryItemCommonFields ForwardedFields(
 		HistoryItemCommonFields fields,
 		not_null<History*> history,
@@ -2200,6 +2207,7 @@ void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {
 	const auto &checkedMedia = updatingSavedLocalEdit
 		? Get<HistoryMessageSavedMediaData>()->media
 		: _media;
+	clearFullRichPage();
 	if (edition.richPage) {
 		setRichPage(edition.richPage);
 	} else {
@@ -2465,7 +2473,12 @@ void HistoryItem::applySentMessage(
 		Api::EntitiesFromMTP(
 			&_history->session(),
 			data.ventities().value_or_empty())
-		}, data.vmedia(), existingRichPage ? existingRichPage->page : nullptr);
+		},
+		data.vmedia(),
+		existingRichPage ? existingRichPage->page : nullptr,
+		(existingRichPage && existingRichPage->page)
+			? existingRichPage->fullPage
+			: nullptr);
 	contributeToSlowmode(data.vdate().v);
 	if (!wasAlready) {
 		addToSharedMediaIndex();
@@ -2492,7 +2505,8 @@ void HistoryItem::updateSentContent(
 void HistoryItem::updateSentContent(
 		const TextWithEntities &textWithEntities,
 		const MTPMessageMedia *media,
-		std::shared_ptr<const Iv::RichPage> richPage) {
+		std::shared_ptr<const Iv::RichPage> richPage,
+		std::shared_ptr<const Iv::RichPage> preservedFullPage) {
 	if (isEditingMedia()) {
 		return;
 	}
@@ -2504,6 +2518,9 @@ void HistoryItem::updateSentContent(
 		_flags |= MessageFlag::Legacy;
 		if (richPage) {
 			setRichPage(richPage);
+			if (preservedFullPage) {
+				setFullRichPage(std::move(preservedFullPage));
+			}
 			setText(Iv::FlattenRichPageSummary(richPage));
 		} else {
 			clearRichPage();
@@ -2516,6 +2533,9 @@ void HistoryItem::updateSentContent(
 		}
 		if (richPage) {
 			setRichPage(richPage);
+			if (preservedFullPage) {
+				setFullRichPage(std::move(preservedFullPage));
+			}
 			setText(Iv::FlattenRichPageSummary(richPage));
 		} else {
 			clearRichPage();
@@ -2914,10 +2934,11 @@ bool HistoryItem::isTooOldForEdit(TimeId now) const {
 
 bool HistoryItem::allowsEdit(TimeId now) const {
 	const auto richPageSource = Get<HistoryMessageRichPageSource>();
+	const auto richPage = BestRichPage(richPageSource);
 	return !isService()
 		&& canBeEdited()
 		&& !isTooOldForEdit(now)
-		&& (!richPageSource || richPageSource->canEdit)
+		&& (!richPage || richPageSource->canEdit)
 		&& (!_media || _media->allowsEdit())
 		&& !isLegacyMessage()
 		&& !isEditingMedia()
@@ -4128,6 +4149,16 @@ std::shared_ptr<const Iv::RichPage> HistoryItem::richPage() const {
 	return source ? source->page : nullptr;
 }
 
+std::shared_ptr<const Iv::RichPage> HistoryItem::fullRichPage() const {
+	const auto source = Get<HistoryMessageRichPageSource>();
+	return source ? source->fullPage : nullptr;
+}
+
+uint64 HistoryItem::fullRichPageVersion() const {
+	const auto source = Get<HistoryMessageRichPageSource>();
+	return source ? source->fullPageVersion : 0;
+}
+
 void HistoryItem::applyLocalRichPage(std::shared_ptr<const Iv::RichPage> page) {
 	const auto summary = page
 		? Iv::FlattenRichPageSummary(page)
@@ -4155,12 +4186,41 @@ void HistoryItem::setRichPage(std::shared_ptr<const Iv::RichPage> page) {
 		const auto source = Get<HistoryMessageRichPageSource>();
 		const auto media = Get<HistoryMessageMediaForInstantView>();
 		source->page = std::move(page);
+		if (source->fullPage) {
+			++source->fullPageVersion;
+		}
+		source->fullPage = nullptr;
 		source->canEdit = Iv::Editor::CanEditRichPage(source->page);
 		media->url = QString();
 		media->documents.clear();
 		media->photos.clear();
 	} else {
 		clearRichPage();
+	}
+}
+
+void HistoryItem::setFullRichPage(std::shared_ptr<const Iv::RichPage> page) {
+	if (page) {
+		AddComponents(HistoryMessageRichPageSource::Bit());
+		const auto source = Get<HistoryMessageRichPageSource>();
+		source->fullPage = std::move(page);
+		source->canEdit = Iv::Editor::CanEditRichPage(BestRichPage(source));
+	} else {
+		clearFullRichPage();
+	}
+}
+
+void HistoryItem::clearFullRichPage() {
+	const auto source = Get<HistoryMessageRichPageSource>();
+	if (!source) {
+		return;
+	}
+	++source->fullPageVersion;
+	source->fullPage = nullptr;
+	if (source->page) {
+		source->canEdit = Iv::Editor::CanEditRichPage(source->page);
+	} else {
+		RemoveComponents(HistoryMessageRichPageSource::Bit());
 	}
 }
 
