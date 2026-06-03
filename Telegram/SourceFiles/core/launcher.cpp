@@ -307,7 +307,10 @@ base::options::toggle OptionFractionalScalingEnabled({
 base::options::toggle OptionUseQtRhi({
 	.id = kOptionUseQtRhi,
 	.name = "Use Qt RHI renderer",
-	.defaultValue = !Platform::IsMac(),
+	// 默认关闭 QRhi：本 fork 的 Qt 构建缺 qtshadertools/qsb，
+	// QRhi 着色器无法编译（QSB not found），运行时 GPU 渲染图片会纯白。
+	// 关闭后图片查看器回退到 OpenGL 渲染（与 6.8.4 一致，稳定）。
+	.defaultValue = false,
 	.scope = [] {
 		return (!Platform::IsWindows() || Platform::IsWindowsARM64())
 			&& QLibraryInfo::version() >= QVersionNumber(6, 7);
