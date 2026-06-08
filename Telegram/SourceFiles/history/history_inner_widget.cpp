@@ -5566,7 +5566,7 @@ bool HistoryInner::scrollToElementLocalY(
 	if (wanted == _scroll->scrollTop()) {
 		return true;
 	}
-	_scroll->scrollToY(top + localTop);
+	_widget->animatedScrollToY(wanted, view->data());
 	return true;
 }
 
