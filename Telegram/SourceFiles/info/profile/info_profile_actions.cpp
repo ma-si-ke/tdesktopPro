@@ -120,6 +120,7 @@ namespace Profile {
 namespace {
 
 constexpr auto kDay = Data::WorkingInterval::kDay;
+constexpr auto kPeerIdLinkIndex = uint16(1);
 
 // Hide @username row (and its QR button / secondary usernames) in user
 // profile. Matches Web client's SHOW_USERNAME = false in
@@ -248,7 +249,7 @@ base::options::toggle ShowChannelJoinedBelowAbout({
 			const auto raw = peer->id.value & PeerId::kChatTypeMask;
 			value.append(Link(
 				Italic(Lang::FormatCountDecimal(raw)),
-				"internal:~peer_id~:copy:" + QString::number(raw)));
+				kPeerIdLinkIndex));
 		}
 		if (ShowChannelJoinedBelowAbout.value()) {
 			if (const auto channel = peer->asChannel()) {
@@ -276,6 +277,24 @@ base::options::toggle ShowChannelJoinedBelowAbout({
 		}
 		return std::move(value);
 	});
+}
+
+void SetupAboutPeerIdDrag(
+		not_null<Ui::FlatLabel*> label,
+		not_null<PeerData*> peer) {
+	if (!ShowPeerIdBelowAbout.value()) {
+		return;
+	}
+	const auto id = QString::number(peer->id.value & PeerId::kChatTypeMask);
+	AboutValue(
+		peer
+	) | rpl::on_next([=] {
+		label->setLink(
+			kPeerIdLinkIndex,
+			std::make_shared<DraggableUrlClickHandler>(
+				u"internal:~peer_id~:copy:"_q + id,
+				id));
+	}, label->lifetime());
 }
 
 [[nodiscard]] bool AreNonTrivialHours(const Data::WorkingHours &hours) {
@@ -1651,9 +1670,11 @@ Section DetailsFiller::makeInfo() {
 		auto label = user->isBot()
 			? tr::lng_info_about_label()
 			: tr::lng_info_bio_label();
-		addTranslateToMenu(
-			addInfoLine(std::move(label), AboutWithAdvancedValue(user)).text,
+		const auto about = addInfoLine(
+			std::move(label),
 			AboutWithAdvancedValue(user));
+		addTranslateToMenu(about.text, AboutWithAdvancedValue(user));
+		SetupAboutPeerIdDrag(about.text, user);
 
 		if constexpr (kShowUserUsername) {
 			const auto usernameLine = addInfoOneLine(
@@ -1820,6 +1841,7 @@ Section DetailsFiller::makeInfo() {
 			: AboutWithAdvancedValue(_peer));
 		if (!_topic) {
 			addTranslateToMenu(about.text, AboutWithAdvancedValue(_peer));
+			SetupAboutPeerIdDrag(about.text, _peer);
 		}
 	}
 	raw->toggleOn(tracker.atLeastOneShownValue());
