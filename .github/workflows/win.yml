@@ -160,8 +160,8 @@ jobs:
       - name: Read configuration matrix.
         shell: bash
         env:
-          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
-          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+          TDESKTOP_API_ID: ${{ secrets.TG_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TG_API_HASH }}
         run: |
           ARTIFACT_NAME="Telegram"
 
