@@ -163,6 +163,9 @@ jobs:
 
       - name: Read configuration matrix.
         shell: bash
+        env:
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
           ARTIFACT_NAME="Telegram"
 
@@ -202,11 +205,11 @@ jobs:
 
           echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
 
-          API="-D TDESKTOP_API_TEST=ON"
-          if [ $GITHUB_REF == 'refs/heads/nightly' ]; then
-            echo "Use the open credentials."
-            API="-D TDESKTOP_API_ID=611335 -D TDESKTOP_API_HASH=d524b414d21f4d37f08684c1df41ac9c"
+          if [ -z "$TDESKTOP_API_ID" ] || [ -z "$TDESKTOP_API_HASH" ]; then
+            echo "::error::Set TDESKTOP_API_ID and TDESKTOP_API_HASH repository secrets."
+            exit 1
           fi
+          API="-D TDESKTOP_API_ID=$TDESKTOP_API_ID -D TDESKTOP_API_HASH=$TDESKTOP_API_HASH"
           echo "TDESKTOP_BUILD_API=$API" >> $GITHUB_ENV
 
       - name: Free up some disk space.
