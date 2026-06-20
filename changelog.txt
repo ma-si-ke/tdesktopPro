@@ -1,3 +1,7 @@
+6.9.4 (21.06.26)
+
+- Update the build workflow.
+
 6.9.3 (12.06.26)
 
 - Fix possible crash in formula parsing.
