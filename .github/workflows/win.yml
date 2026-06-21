@@ -175,6 +175,17 @@ jobs:
         shell: bash
         run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
 
+      - name: Provide DesktopPrivate signing keys.
+        if: env.ONLY_CACHE == 'false'
+        shell: bash
+        env:
+          PACKER_B64: ${{ secrets.DESKTOP_PRIVATE_PACKER_B64 }}
+          ALPHA_B64: ${{ secrets.DESKTOP_PRIVATE_ALPHA_B64 }}
+        run: |
+          mkdir -p "$TBUILD/DesktopPrivate"
+          echo "$PACKER_B64" | base64 -d > "$TBUILD/DesktopPrivate/packer_private.h"
+          echo "$ALPHA_B64" | base64 -d > "$TBUILD/DesktopPrivate/alpha_private.h"
+
       - name: Telegram Desktop build.
         if: env.ONLY_CACHE == 'false'
         run: |
