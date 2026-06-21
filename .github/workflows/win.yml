@@ -207,13 +207,20 @@ jobs:
 
           cmake --build ..\out --config Release --parallel
 
-      - name: Move artifact.
+      - name: Pack update and move artifact.
         if: (env.UPLOAD_ARTIFACT == 'true') || (github.ref == 'refs/heads/nightly')
         run: |
-          set OUT=%TBUILD%\%REPO_NAME%\out\Debug
+          set OUT=%TBUILD%\%REPO_NAME%\out\Release
+          for /f "tokens=2" %%v in ('findstr /b /c:"AppVersion " %TBUILD%\%REPO_NAME%\Telegram\build\version') do set APPVER=%%v
+          mkdir %OUT%\a
+          copy /y %OUT%\Telegram.exe %OUT%\a\ >nul
+          copy /y %OUT%\Updater.exe %OUT%\a\ >nul
+          %OUT%\Packer.exe -path %OUT%\a\Telegram.exe -path %OUT%\a\Updater.exe -target win64 -version %APPVER%
+          if errorlevel 1 exit /b 1
           mkdir artifact
-          move %OUT%\Telegram.exe artifact/
-          move %OUT%\Updater.exe artifact/
+          move %OUT%\Telegram.exe artifact\
+          move %OUT%\Updater.exe artifact\
+          move tx64upd%APPVER% artifact\
       - uses: actions/upload-artifact@v7
         name: Upload artifact.
         if: (env.UPLOAD_ARTIFACT == 'true') || (github.ref == 'refs/heads/nightly')
