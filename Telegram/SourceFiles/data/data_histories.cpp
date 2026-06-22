@@ -23,6 +23,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "base/random.h"
 #include "main/main_session.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "audit/audit_reporter.h"
+#endif
 #include "window/notifications_manager.h"
 #include "history/history.h"
 #include "history/history_item.h"
@@ -775,6 +778,16 @@ void Histories::deleteMessages(
 		not_null<History*> history,
 		const QVector<MTPint> &ids,
 		bool revoke) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (const auto reporter = history->session().audit()) {
+		for (const auto &id : ids) {
+			const auto fullId = FullMsgId(history->peer->id, MsgId(id.v));
+			if (const auto item = _owner->message(fullId)) {
+				reporter->recordDelete(item, revoke);
+			}
+		}
+	}
+#endif
 	sendRequest(history, RequestType::Delete, [=](Fn<void()> finish) {
 		const auto done = [=](const MTPmessages_AffectedMessages &result) {
 			session().api().applyAffectedMessages(history->peer, result);

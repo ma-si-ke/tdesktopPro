@@ -25,6 +25,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_components.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "audit/audit_reporter.h"
+#endif
 #include "mtproto/mtproto_response.h"
 #include "boxes/abstract_box.h" // Ui::show().
 
@@ -473,6 +476,11 @@ mtpRequestId EditCaption(
 		SendOptions options,
 		Fn<void()> done,
 		Fn<void(const QString &)> fail) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (const auto reporter = item->history()->session().audit()) {
+		reporter->recordEdit(item, item->originalText(), caption);
+	}
+#endif
 	return EditMessage(
 		item,
 		caption,
@@ -490,6 +498,11 @@ mtpRequestId EditTextMessage(
 		Fn<void(mtpRequestId requestId)> done,
 		Fn<void(const QString &error, mtpRequestId requestId)> fail,
 		bool spoilered) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (const auto reporter = item->history()->session().audit()) {
+		reporter->recordEdit(item, item->originalText(), caption);
+	}
+#endif
 	const auto media = item->media();
 	if (media
 		&& HistoryView::MediaEditManager::CanBeSpoilered(item)

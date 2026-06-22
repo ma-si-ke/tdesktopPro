@@ -90,6 +90,9 @@ public:
 	void writeEmployeeAuth(const QByteArray &bytes);
 	[[nodiscard]] QByteArray readEmployeeAuth();
 	void clearEmployeeAuth();
+	void writeAuditQueue(const QByteArray &bytes);
+	[[nodiscard]] QByteArray readAuditQueue();
+	void clearAuditQueue();
 #endif
 
 	void registerDraftSource(
@@ -366,6 +369,7 @@ private:
 	FileKey _mediaLastPlaybackPositionsKey = 0;
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	FileKey _employeeAuthKey = 0;
+	FileKey _auditQueueKey = 0;
 #endif
 
 	qint64 _cacheTotalSizeLimit = 0;

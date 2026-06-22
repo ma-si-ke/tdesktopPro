@@ -43,6 +43,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/components/top_peers.h"
 #include "settings/settings_faq_suggestions.h"
 #include "settings/settings_recent_searches.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "audit/audit_reporter.h"
+#endif
 #include "data/data_session.h"
 #include "data/data_changes.h"
 #include "data/data_user.h"
@@ -171,6 +174,10 @@ Session::Session(
 , _fastButtonsBots(std::make_unique<Support::FastButtonsBots>(this))
 , _saveSettingsTimer([=] { saveSettings(); }) {
 	Expects(_settings != nullptr);
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	_audit = std::make_unique<Audit::Reporter>(this);
+#endif
 
 	_api->requestTermsUpdate();
 	_api->requestFullPeer(_user);
