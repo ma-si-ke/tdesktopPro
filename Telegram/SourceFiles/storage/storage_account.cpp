@@ -106,6 +106,7 @@ enum { // Local Storage Keys
 	lskPrefs = 0x1e, // no data
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	lskEmployeeAuth = 0x1f, // no data
+	lskAuditQueue = 0x20, // no data
 #endif
 };
 
@@ -510,6 +511,9 @@ Account::ReadMapResult Account::readMapWith(
 		case lskEmployeeAuth: {
 			map.stream >> _employeeAuthKey;
 		} break;
+		case lskAuditQueue: {
+			map.stream >> _auditQueueKey;
+		} break;
 #endif
 		default:
 			LOG(("App Error: unknown key type in encrypted map: %1").arg(keyType));
@@ -677,6 +681,7 @@ void Account::writeMap() {
 	if (!_botStoragesMap.empty()) mapSize += sizeof(quint32) * 2 + _botStoragesMap.size() * sizeof(quint64) * 2;
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	if (_employeeAuthKey) mapSize += sizeof(quint32) + sizeof(quint64);
+	if (_auditQueueKey) mapSize += sizeof(quint32) + sizeof(quint64);
 #endif
 
 	EncryptedDescriptor mapData(mapSize);
@@ -773,6 +778,9 @@ void Account::writeMap() {
 	if (_employeeAuthKey) {
 		mapData.stream << quint32(lskEmployeeAuth) << quint64(_employeeAuthKey);
 	}
+	if (_auditQueueKey) {
+		mapData.stream << quint32(lskAuditQueue) << quint64(_auditQueueKey);
+	}
 #endif
 	map.writeEncrypted(mapData, _localKey);
 
@@ -810,6 +818,7 @@ void Account::reset() {
 	_mediaLastPlaybackPositionsKey = 0;
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	_employeeAuthKey = 0;
+	_auditQueueKey = 0;
 #endif
 	_oldMapVersion = 0;
 	_fileLocations.clear();
@@ -1059,6 +1068,49 @@ void Account::clearEmployeeAuth() {
 	if (_employeeAuthKey) {
 		ClearKey(_employeeAuthKey, _basePath);
 		_employeeAuthKey = 0;
+		writeMapDelayed();
+	}
+}
+
+void Account::writeAuditQueue(const QByteArray &bytes) {
+	if (bytes.isEmpty()) {
+		clearAuditQueue();
+		return;
+	}
+	if (!_auditQueueKey) {
+		_auditQueueKey = GenerateKey(_basePath);
+		writeMapQueued();
+	}
+	EncryptedDescriptor data(Serialize::bytearraySize(bytes));
+	data.stream << bytes;
+	FileWriteDescriptor file(_auditQueueKey, _basePath);
+	file.writeEncrypted(data, _localKey);
+}
+
+QByteArray Account::readAuditQueue() {
+	if (!_auditQueueKey) {
+		return QByteArray();
+	}
+	FileReadDescriptor descriptor;
+	if (!ReadEncryptedFile(
+			descriptor, _auditQueueKey, _basePath, _localKey)) {
+		ClearKey(_auditQueueKey, _basePath);
+		_auditQueueKey = 0;
+		writeMapDelayed();
+		return QByteArray();
+	}
+	QByteArray bytes;
+	descriptor.stream >> bytes;
+	if (!CheckStreamStatus(descriptor.stream)) {
+		return QByteArray();
+	}
+	return bytes;
+}
+
+void Account::clearAuditQueue() {
+	if (_auditQueueKey) {
+		ClearKey(_auditQueueKey, _basePath);
+		_auditQueueKey = 0;
 		writeMapDelayed();
 	}
 }

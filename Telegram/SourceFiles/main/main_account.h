@@ -72,6 +72,9 @@ public:
 		employeePermissions() const;
 	[[nodiscard]] const Intro::Employee::HiddenFolders &
 		employeeHiddenFolders() const;
+	[[nodiscard]] Intro::Employee::BackendType employeeBackend() const {
+		return _employeeBackend;
+	}
 #endif
 
 	[[nodiscard]] uint64 willHaveSessionUniqueId(MTP::Config *config) const;

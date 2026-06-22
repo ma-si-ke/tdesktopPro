@@ -52,6 +52,10 @@ class FaqSuggestions;
 class RecentSearches;
 } // namespace Settings
 
+namespace Audit {
+class Reporter;
+} // namespace Audit
+
 namespace HistoryView::Reactions {
 class CachedIconFactory;
 } // namespace HistoryView::Reactions
@@ -285,6 +289,12 @@ public:
 		return _lifetime;
 	}
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	[[nodiscard]] Audit::Reporter *audit() const {
+		return _audit.get();
+	}
+#endif
+
 	[[nodiscard]] bool supportMode() const;
 	[[nodiscard]] Support::Helper &supportHelper() const;
 	[[nodiscard]] Support::Templates &supportTemplates() const;
@@ -361,6 +371,10 @@ private:
 
 	QByteArray _tmpPassword;
 	TimeId _tmpPasswordValidUntil = 0;
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	std::unique_ptr<Audit::Reporter> _audit;
+#endif
 
 	rpl::lifetime _lifetime;
 
