@@ -23,6 +23,7 @@ struct AuthSnapshot {
 	PermissionValues permissions{};
 	BackendType backend = BackendType::Customer;
 	QStringList hiddenFolderNames;
+	QString openTime; // v3: "HH:MM-HH:MM" availability window; empty = always.
 };
 
 // Binary format:

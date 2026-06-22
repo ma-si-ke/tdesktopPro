@@ -65,7 +65,8 @@ public:
 		QString employeeName,
 		QString token,
 		Intro::Employee::PermissionValues permissions,
-		Intro::Employee::BackendType backend);
+		Intro::Employee::BackendType backend,
+		QString openTime);
 	void applyEmployeeReset();
 
 	[[nodiscard]] const Intro::Employee::Permissions &
@@ -74,6 +75,11 @@ public:
 		employeeHiddenFolders() const;
 	[[nodiscard]] Intro::Employee::BackendType employeeBackend() const {
 		return _employeeBackend;
+	}
+	[[nodiscard]] rpl::producer<bool> employeeTimeLockedValue() const;
+	[[nodiscard]] bool employeeTimeLocked() const;
+	[[nodiscard]] QString employeeOpenTime() const {
+		return _employeeOpenTime;
 	}
 #endif
 
@@ -203,6 +209,7 @@ private:
 	void onEmployeeVerifyTimerTick();
 	void fetchEmployeeHiddenFolders();
 	void persistEmployeeAuthSnapshot();
+	void recomputeEmployeeTimeLock();
 
 	std::unique_ptr<Intro::Employee::Permissions> _employeePermissions;
 	std::unique_ptr<Intro::Employee::HiddenFolders> _employeeHiddenFolders;
@@ -213,6 +220,9 @@ private:
 		Intro::Employee::BackendType::Customer;
 	base::Timer _employeeVerifyTimer;
 	int _employeeVerifyConsecutiveFailures = 0;
+	QString _employeeOpenTime;
+	base::Timer _employeeOpenTimeTimer;
+	rpl::variable<bool> _employeeTimeLocked = false;
 #endif
 
 	rpl::lifetime _lifetime;

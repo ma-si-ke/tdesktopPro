@@ -28,6 +28,7 @@ struct AuthSuccess {
 	QString employeeName;         // From response root.employee.name; empty if absent
 	QString token;                // Bearer token for /api/auth/verify
 	PermissionValues permissions{}; // backend-declared permission bits
+	QString openTime;             // "HH:MM-HH:MM" availability window; empty = always.
 };
 
 struct AuthFailure {

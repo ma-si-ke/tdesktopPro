@@ -74,6 +74,10 @@ public:
 	void clearPasscodeLock();
 	void setupSetupEmailLock();
 	void clearSetupEmailLock();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	void setupTimeLock(const QString &text);
+	void clearTimeLock();
+#endif
 
 	void showLogoutConfirmation();
 
