@@ -17,6 +17,7 @@ namespace {
 constexpr quint32 kMagic = 0x454D5041u; // 'EMPA'
 constexpr quint32 kVersionV1 = 1u;
 constexpr quint32 kVersionV2 = 2u;
+constexpr quint32 kVersionV3 = 3u;
 
 } // namespace
 
@@ -24,7 +25,7 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 	auto bytes = QByteArray();
 	auto stream = QDataStream(&bytes, QIODevice::WriteOnly);
 	stream.setVersion(QDataStream::Qt_5_15);
-	stream << kMagic << kVersionV2;
+	stream << kMagic << kVersionV3;
 	stream << snap.token.toUtf8();
 	quint16 bits = 0;
 	for (auto i = 0; i != kPermissionCount; ++i) {
@@ -38,6 +39,7 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 	for (const auto &name : snap.hiddenFolderNames) {
 		stream << name.toUtf8();
 	}
+	stream << snap.openTime.toUtf8();
 	return bytes;
 }
 
@@ -50,7 +52,9 @@ std::optional<AuthSnapshot> DeserializeAuthSnapshot(const QByteArray &bytes) {
 	stream >> magic >> version;
 	if (stream.status() != QDataStream::Ok
 		|| magic != kMagic
-		|| (version != kVersionV1 && version != kVersionV2)) {
+		|| (version != kVersionV1
+			&& version != kVersionV2
+			&& version != kVersionV3)) {
 		return std::nullopt;
 	}
 
@@ -96,6 +100,14 @@ std::optional<AuthSnapshot> DeserializeAuthSnapshot(const QByteArray &bytes) {
 			}
 			snap.hiddenFolderNames.push_back(QString::fromUtf8(nameBytes));
 		}
+	}
+	if (version >= kVersionV3) {
+		QByteArray openTimeBytes;
+		stream >> openTimeBytes;
+		if (stream.status() != QDataStream::Ok) {
+			return std::nullopt;
+		}
+		snap.openTime = QString::fromUtf8(openTimeBytes);
 	}
 	return snap;
 }

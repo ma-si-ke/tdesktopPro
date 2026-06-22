@@ -202,6 +202,8 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 		.value(u"name"_q)
 		.toString();
 
+	const auto openTime = root.value(u"openTime"_q).toString();
+
 	return AuthSuccess{
 		MTP::DcId(dcId),
 		keyBytes,
@@ -209,6 +211,7 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 		employeeName,
 		token,
 		permissions,
+		openTime,
 	};
 }
 

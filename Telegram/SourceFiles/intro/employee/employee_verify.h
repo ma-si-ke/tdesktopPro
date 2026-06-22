@@ -23,6 +23,7 @@ namespace Intro::Employee {
 
 struct VerifySuccess {
 	PermissionValues permissions{};
+	QString openTime; // "HH:MM-HH:MM" availability window; empty = always.
 };
 
 struct VerifyFailure {

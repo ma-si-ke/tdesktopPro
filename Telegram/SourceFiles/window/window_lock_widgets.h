@@ -22,6 +22,7 @@ class PasswordInput;
 class LinkButton;
 class RoundButton;
 class CheckView;
+class FlatLabel;
 } // namespace Ui
 
 namespace Main {
@@ -91,6 +92,26 @@ private:
 
 	rpl::lifetime _systemUnlockSuggested;
 	base::Timer _systemUnlockCooldown;
+
+};
+
+// A passwordless full-screen gate shown outside the employee "open time"
+// window. It has no input and no unlock affordance: it only disappears when
+// the lock condition itself clears (time enters the open window, or the
+// window changes via the per-minute permission refresh).
+class TimeLockWidget : public LockWidget {
+public:
+	TimeLockWidget(QWidget *parent, not_null<Controller*> window);
+
+	void setText(const QString &text);
+
+	void setInnerFocus() override;
+
+protected:
+	void resizeEvent(QResizeEvent *e) override;
+
+private:
+	object_ptr<Ui::FlatLabel> _label;
 
 };
 

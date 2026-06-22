@@ -1293,6 +1293,8 @@ PRIVATE
     intro/employee/employee_hidden_folders_client.h
     intro/employee/employee_login_step.cpp
     intro/employee/employee_login_step.h
+    intro/employee/employee_open_time.cpp
+    intro/employee/employee_open_time.h
     intro/employee/employee_permissions.cpp
     intro/employee/employee_permissions.h
     intro/employee/employee_prefs.cpp

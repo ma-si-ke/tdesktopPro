@@ -31,6 +31,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_auth_storage.h"
 #include "intro/employee/employee_verify.h"
+#include "intro/employee/employee_open_time.h"
 #include "base/random.h"
 #endif
 
@@ -71,6 +72,10 @@ Account::Account(not_null<Domain*> domain, const QString &dataName, int index)
 	_employeeVerifyTimer.setCallback([=] {
 		onEmployeeVerifyTimerTick();
 	});
+	_employeeOpenTimeTimer.setCallback([=] {
+		recomputeEmployeeTimeLock();
+	});
+	_employeeOpenTimeTimer.callEach(crl::time(1000));
 #endif
 }
 
@@ -112,6 +117,7 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 			_employeePermissions->apply(snap->permissions, snap->token);
 			_employeeBackend = snap->backend;
 			_employeeHiddenFolders->apply(snap->hiddenFolderNames);
+			_employeeOpenTime = snap->openTime;
 		} else {
 			LOG(("Employee: cold start snapshot corrupted"));
 		}
@@ -127,6 +133,7 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 	watchSessionChanges();
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	kickOffEmployeeVerifyIfAuthorized();
+	recomputeEmployeeTimeLock();
 #endif
 }
 
@@ -727,6 +734,7 @@ void Account::persistEmployeeAuthSnapshot() {
 			}(),
 			.backend = _employeeBackend,
 			.hiddenFolderNames = _employeeHiddenFolders->names(),
+			.openTime = _employeeOpenTime,
 		}));
 }
 
@@ -766,7 +774,8 @@ void Account::applyEmployeeBootstrap(
 		QString employeeName,
 		QString token,
 		Intro::Employee::PermissionValues permissions,
-		Intro::Employee::BackendType backend) {
+		Intro::Employee::BackendType backend,
+		QString openTime) {
 	Expects(key != nullptr);
 	Expects(dcId > 0);
 	Expects(userId.bare != 0);
@@ -787,6 +796,7 @@ void Account::applyEmployeeBootstrap(
 	}
 
 	_employeeBackend = backend;
+	_employeeOpenTime = openTime;
 	_employeePermissions->apply(permissions, token);
 	// Fresh login: drop any hidden-folder names cached from the previous
 	// account. The hidden-folders fetch fires from kickOffEmployeeVerify*
@@ -798,7 +808,9 @@ void Account::applyEmployeeBootstrap(
 			.permissions = permissions,
 			.backend = backend,
 			.hiddenFolderNames = _employeeHiddenFolders->names(),
+			.openTime = openTime,
 		}));
+	recomputeEmployeeTimeLock();
 
 	_mtpFields.mainDcId = dcId;
 	_mtpFields.keys = { key };
@@ -834,9 +846,26 @@ void Account::applyEmployeeReset() {
 	_employeePermissions->clear();
 	_employeeHiddenFolders->clear();
 	_employeeBackend = Intro::Employee::BackendType::Customer;
+	_employeeOpenTime = QString();
+	recomputeEmployeeTimeLock();
 	local().clearEmployeeAuth();
 
 	LOG(("Employee: reset"));
+}
+
+void Account::recomputeEmployeeTimeLock() {
+	const auto locked = _employeePermissions
+		&& _employeePermissions->authorized()
+		&& !Intro::Employee::IsWithinOpenTimeNow(_employeeOpenTime);
+	_employeeTimeLocked = locked;
+}
+
+rpl::producer<bool> Account::employeeTimeLockedValue() const {
+	return _employeeTimeLocked.value();
+}
+
+bool Account::employeeTimeLocked() const {
+	return _employeeTimeLocked.current();
 }
 
 void Account::kickOffEmployeeVerifyIfAuthorized() {
@@ -870,6 +899,8 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 				LOG(("Employee: verify ok"));
 				const auto token = _employeePermissions->token();
 				_employeePermissions->apply(s->permissions, token);
+				_employeeOpenTime = s->openTime;
+				recomputeEmployeeTimeLock();
 				local().writeEmployeeAuth(
 					Intro::Employee::SerializeAuthSnapshot(
 						Intro::Employee::AuthSnapshot{
@@ -878,6 +909,7 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 							.backend = _employeeBackend,
 							.hiddenFolderNames
 								= _employeeHiddenFolders->names(),
+							.openTime = s->openTime,
 						}));
 				startEmployeeVerifyTimer();
 				return;
@@ -952,6 +984,8 @@ void Account::onEmployeeVerifyTimerTick() {
 				}
 				LOG(("Employee: verify tick ok"));
 				_employeePermissions->apply(s->permissions, token);
+				_employeeOpenTime = s->openTime;
+				recomputeEmployeeTimeLock();
 				local().writeEmployeeAuth(
 					Intro::Employee::SerializeAuthSnapshot(
 						Intro::Employee::AuthSnapshot{
@@ -960,6 +994,7 @@ void Account::onEmployeeVerifyTimerTick() {
 							.backend = _employeeBackend,
 							.hiddenFolderNames
 								= _employeeHiddenFolders->names(),
+							.openTime = s->openTime,
 						}));
 				_employeeVerifyTimer.callOnce(kEmployeeVerifyIntervalMs);
 				return;

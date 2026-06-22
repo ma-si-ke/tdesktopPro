@@ -153,6 +153,18 @@ void Controller::showAccount(
 	_id.account = account;
 	Core::App().checkWindowId(this);
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	account->employeeTimeLockedValue(
+	) | rpl::on_next([=](bool locked) {
+		if (locked) {
+			setupTimeLock(u"当前不在可用时间段，可用时间 "_q
+				+ account->employeeOpenTime());
+		} else {
+			clearTimeLock();
+		}
+	}, _accountLifetime);
+#endif
+
 	const auto updateOnlineOfPrevSesssion = crl::guard(account, [=] {
 		if (!prevSessionUniqueId) {
 			return;
@@ -372,6 +384,16 @@ void Controller::checkThemeEditor() {
 void Controller::setupPasscodeLock() {
 	_widget.setupPasscodeLock();
 }
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+void Controller::setupTimeLock(const QString &text) {
+	_widget.setupTimeLock(text);
+}
+
+void Controller::clearTimeLock() {
+	_widget.clearTimeLock();
+}
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 void Controller::clearPasscodeLock() {
 	if (!_id) {

@@ -61,7 +61,8 @@ VerifyResult ParseVerifyResponse(int httpStatus, const QByteArray &body) {
 			permissions[static_cast<int>(known->second)] = rawValue.toBool();
 		}
 	}
-	return VerifySuccess{ permissions };
+	const auto openTime = root.value(u"openTime"_q).toString();
+	return VerifySuccess{ permissions, openTime };
 }
 
 VerifyClient::VerifyClient(QObject *parent)

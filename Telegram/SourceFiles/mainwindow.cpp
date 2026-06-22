@@ -254,6 +254,28 @@ void MainWindow::clearSetupEmailLock() {
 	}
 }
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+void MainWindow::setupTimeLock(const QString &text) {
+	if (!_timeLock) {
+		_timeLock.create(bodyWidget(), &controller());
+		updateControlsGeometry();
+		_timeLock->show();
+	}
+	_timeLock->setText(text);
+	ui_hideSettingsAndLayer(anim::type::instant);
+	_timeLock->raise();
+	_timeLock->setInnerFocus();
+}
+
+void MainWindow::clearTimeLock() {
+	if (!_timeLock) {
+		return;
+	}
+	_timeLock.destroy();
+	setInnerFocus();
+}
+#endif // TDESKTOP_EMPLOYEE_MODE
+
 void MainWindow::clearPasscodeLock() {
 	Expects(_intro || _main);
 
@@ -364,6 +386,11 @@ void MainWindow::showSettings() {
 	if (_passcodeLock || _setupEmailLock) {
 		return;
 	}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_timeLock) {
+		return;
+	}
+#endif
 
 	if (const auto session = sessionController()) {
 		session->showSettings();
@@ -380,6 +407,11 @@ void MainWindow::showSpecialLayer(
 	if (_passcodeLock || _setupEmailLock) {
 		return;
 	}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_timeLock) {
+		return;
+	}
+#endif
 
 	if (layer) {
 		ensureLayerCreated();
@@ -400,6 +432,9 @@ bool MainWindow::showSectionInExistingLayer(
 
 void MainWindow::showMainMenu() {
 	if (_passcodeLock || _setupEmailLock) return;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_timeLock) return;
+#endif
 
 	if (isHidden()) showFromTray();
 
@@ -625,6 +660,10 @@ void MainWindow::setInnerFocus() {
 		_passcodeLock->setInnerFocus();
 	} else if (_setupEmailLock) {
 		_setupEmailLock->setInnerFocus();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	} else if (_timeLock) {
+		_timeLock->setInnerFocus();
+#endif
 	} else if (_main) {
 		_main->setInnerFocus();
 	} else if (_intro) {
@@ -713,6 +752,9 @@ void MainWindow::fixOrder() {
 	if (_layer) _layer->raise();
 	if (_mediaPreview) _mediaPreview->raise();
 	if (_testingThemeWarning) _testingThemeWarning->raise();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_timeLock) _timeLock->raise();
+#endif
 }
 
 void MainWindow::closeEvent(QCloseEvent *e) {
@@ -747,6 +789,9 @@ void MainWindow::updateControlsGeometry() {
 	auto body = bodyWidget()->rect();
 	if (_passcodeLock) _passcodeLock->setGeometry(body);
 	if (_setupEmailLock) _setupEmailLock->setGeometry(body);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_timeLock) _timeLock->setGeometry(body);
+#endif
 	auto mainLeft = 0;
 	auto mainWidth = body.width();
 	if (const auto session = sessionController()) {

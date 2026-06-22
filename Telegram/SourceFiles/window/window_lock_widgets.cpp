@@ -29,6 +29,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_domain.h"
 #include "styles/style_layers.h"
 #include "styles/style_boxes.h"
+#include "styles/style_widgets.h"
 
 namespace Window {
 namespace {
@@ -306,6 +307,34 @@ void PasscodeLockWidget::resizeEvent(QResizeEvent *e) {
 void PasscodeLockWidget::setInnerFocus() {
 	LockWidget::setInnerFocus();
 	_passcode->setFocusFast();
+}
+
+TimeLockWidget::TimeLockWidget(
+	QWidget *parent,
+	not_null<Controller*> window)
+: LockWidget(parent, window)
+, _label(this, QString(), st::defaultFlatLabel) {
+	_label->setTextColorOverride(st::windowSubTextFg->c);
+	_label->show();
+}
+
+void TimeLockWidget::setText(const QString &text) {
+	_label->setText(text);
+	if (width() > 0 && height() > 0) {
+		resizeEvent(nullptr);
+	}
+}
+
+void TimeLockWidget::setInnerFocus() {
+	setFocus();
+}
+
+void TimeLockWidget::resizeEvent(QResizeEvent *e) {
+	const auto available = std::max(width() * 2 / 3, 1);
+	_label->resizeToWidth(available);
+	_label->move(
+		(width() - _label->width()) / 2,
+		(height() - _label->height()) / 2);
 }
 
 TermsLock TermsLock::FromMTP(

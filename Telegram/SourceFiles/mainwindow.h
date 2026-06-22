@@ -25,6 +25,7 @@ class SectionMemento;
 struct SectionShow;
 class PasscodeLockWidget;
 class SetupEmailLockWidget;
+class TimeLockWidget;
 namespace Theme {
 struct BackgroundUpdate;
 class WarningWidget;
@@ -54,6 +55,10 @@ public:
 	void clearPasscodeLock();
 	void setupSetupEmailLock();
 	void clearSetupEmailLock();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	void setupTimeLock(const QString &text);
+	void clearTimeLock();
+#endif
 	void setupIntro(Intro::EnterPoint point, QPixmap oldContentCache);
 	void setupMain(MsgId singlePeerShowAtMsgId, QPixmap oldContentCache);
 
@@ -132,6 +137,9 @@ private:
 
 	object_ptr<Window::PasscodeLockWidget> _passcodeLock = { nullptr };
 	object_ptr<Window::SetupEmailLockWidget> _setupEmailLock = { nullptr };
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	object_ptr<Window::TimeLockWidget> _timeLock = { nullptr };
+#endif
 	object_ptr<Intro::Widget> _intro = { nullptr };
 	object_ptr<MainWidget> _main = { nullptr };
 	base::unique_qptr<Ui::LayerStackWidget> _layer;
