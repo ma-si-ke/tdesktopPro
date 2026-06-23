@@ -26,6 +26,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/emoji_config.h"
 #include "chat_helpers/emoji_sets_manager.h"
 #include "window/window_session_controller.h"
+#include "window/window_session_controller_link_info.h"
 #include "window/themes/window_theme_editor.h"
 #include "ui/boxes/confirm_box.h"
 #include "data/components/promo_suggestions.h"
@@ -403,13 +404,10 @@ void Controller::openEmergencyContact() {
 	if (!controller) {
 		return;
 	}
-	controller->resolveUsername(
-		u"kaka_co"_q,
-		crl::guard(this, [=](not_null<PeerData*> peer) {
-			if (const auto controller = sessionController()) {
-				controller->showInNewWindow(peer);
-			}
-		}));
+	controller->showPeerByLink(PeerByLinkInfo{
+		.usernameOrId = u"kaka_co"_q,
+		.historyInNewWindow = true,
+	});
 }
 #endif // TDESKTOP_EMPLOYEE_MODE
 
