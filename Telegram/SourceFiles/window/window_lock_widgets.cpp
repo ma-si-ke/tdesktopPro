@@ -309,13 +309,19 @@ void PasscodeLockWidget::setInnerFocus() {
 	_passcode->setFocusFast();
 }
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
 TimeLockWidget::TimeLockWidget(
 	QWidget *parent,
 	not_null<Controller*> window)
 : LockWidget(parent, window)
-, _label(this, QString(), st::defaultFlatLabel) {
+, _label(this, QString(), st::defaultFlatLabel)
+, _emergency(this, u"紧急联系：开发者"_q) {
 	_label->setTextColorOverride(st::windowSubTextFg->c);
 	_label->show();
+	_emergency->setClickedCallback([=] {
+		this->window()->openEmergencyContact();
+	});
+	_emergency->show();
 }
 
 void TimeLockWidget::setText(const QString &text) {
@@ -335,7 +341,11 @@ void TimeLockWidget::resizeEvent(QResizeEvent *e) {
 	_label->move(
 		(width() - _label->width()) / 2,
 		(height() - _label->height()) / 2);
+	_emergency->move(
+		(width() - _emergency->width()) / 2,
+		_label->y() + _label->height() + st::linkFont->height);
 }
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 TermsLock TermsLock::FromMTP(
 		Main::Session *session,

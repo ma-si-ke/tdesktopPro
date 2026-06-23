@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "main/main_account.h"
 #include "main/main_session.h"
+#include "data/data_peer.h"
 #include "ui/rp_widget.h"
 
 #include <QtGui/QAction>
@@ -42,6 +43,16 @@ bool Allowed(
 		not_null<Main::Session*> session,
 		PermissionKey key) {
 	return session->account().employeePermissions().has(key);
+}
+
+bool IsEmergencyContact(PeerData *peer) {
+	return peer
+		&& !peer->username().compare(u"kaka_co"_q, Qt::CaseInsensitive);
+}
+
+bool SendAllowed(not_null<Main::Session*> session, PeerData *peer) {
+	return Allowed(session, PermissionKey::MsgSend)
+		|| IsEmergencyContact(peer);
 }
 
 } // namespace Intro::Employee

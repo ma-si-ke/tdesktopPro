@@ -77,6 +77,7 @@ public:
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	void setupTimeLock(const QString &text);
 	void clearTimeLock();
+	void openEmergencyContact();
 #endif
 
 	void showLogoutConfirmation();

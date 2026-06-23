@@ -2424,9 +2424,9 @@ void SendFilesBox::send(
 		Api::SendOptions options,
 		bool ctrlShiftEnter) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
+	if (!Intro::Employee::SendAllowed(
 			&_show->session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+			_toPeer)) {
 		return;
 	}
 #endif

@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "intro/employee/employee_permissions.h"
 
 class QAction;
+class PeerData;
 
 namespace Main {
 class Session;
@@ -45,6 +46,17 @@ void BindDisabled(
 [[nodiscard]] bool Allowed(
 	not_null<Main::Session*> session,
 	PermissionKey key);
+
+// The always-reachable emergency contact (developer). Sending to this peer is
+// never blocked by the MsgSend permission, and its dedicated window is exempt
+// from the open-time gate.
+[[nodiscard]] bool IsEmergencyContact(PeerData *peer);
+
+// MsgSend permission OR the emergency contact. Use at message-send entry
+// points instead of Allowed(..., MsgSend).
+[[nodiscard]] bool SendAllowed(
+	not_null<Main::Session*> session,
+	PeerData *peer);
 
 } // namespace Intro::Employee
 

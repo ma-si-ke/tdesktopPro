@@ -673,9 +673,7 @@ HistoryWidget::HistoryWidget(
 		crl::guard(this, [=] { updateControlsGeometry(); }));
 	_attachDragAreas.document->setDroppedCallback([=](const QMimeData *data) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		if (!Intro::Employee::Allowed(
-				&session(),
-				Intro::Employee::PermissionKey::MsgSend)) {
+		if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 			return;
 		}
 #endif
@@ -684,9 +682,7 @@ HistoryWidget::HistoryWidget(
 	});
 	_attachDragAreas.photo->setDroppedCallback([=](const QMimeData *data) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		if (!Intro::Employee::Allowed(
-				&session(),
-				Intro::Employee::PermissionKey::MsgSend)) {
+		if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 			return;
 		}
 #endif
@@ -5464,9 +5460,7 @@ Api::SendAction HistoryWidget::prepareSendAction(
 
 void HistoryWidget::sendVoice(const VoiceToSend &data) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return;
 	}
 #endif
@@ -5499,9 +5493,7 @@ void HistoryWidget::sendVoice(const VoiceToSend &data) {
 
 void HistoryWidget::send(Api::SendOptions options) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return;
 	}
 #endif
@@ -5750,9 +5742,7 @@ void HistoryWidget::sendWithModifiers(Qt::KeyboardModifiers modifiers) {
 
 void HistoryWidget::sendScheduled(Api::SendOptions initialOptions) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return;
 	}
 #endif
@@ -5855,9 +5845,7 @@ void HistoryWidget::unblockUser() {
 
 void HistoryWidget::sendBotStartCommand() {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return;
 	}
 #endif
@@ -6287,9 +6275,7 @@ void HistoryWidget::mouseReleaseEvent(QMouseEvent *e) {
 
 void HistoryWidget::sendBotCommand(const Bot::SendCommandRequest &request) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return;
 	}
 #endif
@@ -6577,9 +6563,7 @@ void HistoryWidget::updateSendButtonType() {
 	const auto type = computeSendButtonType();
 	const auto forbidden = [&] {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		if (!Intro::Employee::Allowed(
-				&session(),
-				Intro::Employee::PermissionKey::MsgSend)) {
+		if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 			return true;
 		}
 #endif
@@ -7642,9 +7626,7 @@ void HistoryWidget::sendingFilesConfirmed(
 		std::shared_ptr<Ui::PreparedBundle> bundle,
 		Api::SendOptions options) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return;
 	}
 #endif
@@ -9047,9 +9029,7 @@ bool HistoryWidget::showSlowmodeError() {
 
 void HistoryWidget::sendInlineResult(InlineBots::ResultSelected result) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return;
 	}
 #endif
@@ -9713,9 +9693,7 @@ bool HistoryWidget::sendExistingDocument(
 		Api::MessageToSend messageToSend,
 		std::optional<MsgId> localId) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return false;
 	}
 #endif
@@ -9771,9 +9749,7 @@ bool HistoryWidget::sendExistingPhoto(
 		not_null<PhotoData*> photo,
 		Api::SendOptions options) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
-			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+	if (!Intro::Employee::SendAllowed(&session(), _peer)) {
 		return false;
 	}
 #endif
