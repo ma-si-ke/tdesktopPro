@@ -2506,9 +2506,9 @@ void ComposeControls::initFieldAutocomplete() {
 		},
 		.stickerChosen = [=](ChatHelpers::FileChosen &&data) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-			if (!Intro::Employee::Allowed(
+			if (!Intro::Employee::SendAllowed(
 					_session,
-					Intro::Employee::PermissionKey::MsgSend)) {
+					_history ? _history->peer.get() : nullptr)) {
 				return;
 			}
 #endif
@@ -2940,9 +2940,9 @@ void ComposeControls::initTabbedSelector() {
 			}
 		} else {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-			if (!Intro::Employee::Allowed(
+			if (!Intro::Employee::SendAllowed(
 					_session,
-					Intro::Employee::PermissionKey::MsgSend)) {
+					_history ? _history->peer.get() : nullptr)) {
 				return;
 			}
 #endif
@@ -3574,9 +3574,9 @@ void ComposeControls::updateSendButtonType() {
 	const auto type = computeSendButtonType();
 	const auto forbidden = [&] {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		if (!Intro::Employee::Allowed(
+		if (!Intro::Employee::SendAllowed(
 				_session,
-				Intro::Employee::PermissionKey::MsgSend)) {
+				_history ? _history->peer.get() : nullptr)) {
 			return true;
 		}
 #endif

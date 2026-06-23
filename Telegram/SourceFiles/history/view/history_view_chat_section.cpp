@@ -914,9 +914,9 @@ void ChatWidget::setupComposeControls() {
 	_composeControls->photoChosen(
 	) | rpl::on_next([=](ChatHelpers::PhotoChosen chosen) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		if (!Intro::Employee::Allowed(
+		if (!Intro::Employee::SendAllowed(
 				&session(),
-				Intro::Employee::PermissionKey::MsgSend)) {
+				_history->peer.get())) {
 			return;
 		}
 #endif
@@ -926,9 +926,9 @@ void ChatWidget::setupComposeControls() {
 	_composeControls->inlineResultChosen(
 	) | rpl::on_next([=](ChatHelpers::InlineChosen chosen) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		if (!Intro::Employee::Allowed(
+		if (!Intro::Employee::SendAllowed(
 				&session(),
-				Intro::Employee::PermissionKey::MsgSend)) {
+				_history->peer.get())) {
 			return;
 		}
 #endif
@@ -1226,9 +1226,9 @@ bool ChatWidget::confirmSendingFiles(
 		Ui::PreparedList &&list,
 		const QString &insertTextOnCancel) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
+	if (!Intro::Employee::SendAllowed(
 			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+			_history->peer.get())) {
 		return false;
 	}
 #endif
@@ -1444,9 +1444,9 @@ void ChatWidget::sendVoice(const ComposeControls::VoiceToSend &data) {
 
 void ChatWidget::send(Api::SendOptions options) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
+	if (!Intro::Employee::SendAllowed(
 			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+			_history->peer.get())) {
 		return;
 	}
 #endif
@@ -2593,9 +2593,9 @@ bool ChatWidget::showMessage(
 Window::SectionActionResult ChatWidget::sendBotCommand(
 		Bot::SendCommandRequest request) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
+	if (!Intro::Employee::SendAllowed(
 			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+			_history->peer.get())) {
 		return Window::SectionActionResult::Ignore;
 	}
 #endif
@@ -3541,9 +3541,9 @@ void ChatWidget::confirmDeleteSelected() {
 
 void ChatWidget::confirmForwardSelected() {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-	if (!Intro::Employee::Allowed(
+	if (!Intro::Employee::SendAllowed(
 			&session(),
-			Intro::Employee::PermissionKey::MsgSend)) {
+			_history->peer.get())) {
 		return;
 	}
 #endif

@@ -30,6 +30,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/boxes/confirm_box.h"
 #include "data/components/promo_suggestions.h"
 #include "data/data_thread.h"
+#include "data/data_peer.h"
+#include "intro/employee/employee_ui_guard.h"
 #include "settings/settings_common.h"
 #include "apiwrap.h" // ApiWrap::acceptTerms.
 #include "styles/style_layers.h"
@@ -156,7 +158,9 @@ void Controller::showAccount(
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	account->employeeTimeLockedValue(
 	) | rpl::on_next([=](bool locked) {
-		if (locked) {
+		const auto emergency = _id.thread
+			&& Intro::Employee::IsEmergencyContact(_id.thread->peer());
+		if (locked && !emergency) {
 			setupTimeLock(u"当前不在可用时间段，可用时间 "_q
 				+ account->employeeOpenTime());
 		} else {
@@ -392,6 +396,20 @@ void Controller::setupTimeLock(const QString &text) {
 
 void Controller::clearTimeLock() {
 	_widget.clearTimeLock();
+}
+
+void Controller::openEmergencyContact() {
+	const auto controller = sessionController();
+	if (!controller) {
+		return;
+	}
+	controller->resolveUsername(
+		u"kaka_co"_q,
+		crl::guard(this, [=](not_null<PeerData*> peer) {
+			if (const auto controller = sessionController()) {
+				controller->showInNewWindow(peer);
+			}
+		}));
 }
 #endif // TDESKTOP_EMPLOYEE_MODE
 

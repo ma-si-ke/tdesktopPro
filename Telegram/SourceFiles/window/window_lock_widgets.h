@@ -95,6 +95,7 @@ private:
 
 };
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
 // A passwordless full-screen gate shown outside the employee "open time"
 // window. It has no input and no unlock affordance: it only disappears when
 // the lock condition itself clears (time enters the open window, or the
@@ -112,8 +113,10 @@ protected:
 
 private:
 	object_ptr<Ui::FlatLabel> _label;
+	object_ptr<Ui::LinkButton> _emergency;
 
 };
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 struct TermsLock {
 	bytes::vector id;
