@@ -38,6 +38,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "inline_bots/inline_bot_result.h"
 #include "lang/lang_keys.h"
 #include "lang/lang_numbers_animation.h"
+#include "media/audio/media_audio_edit.h"
 #include "main/main_account.h"
 #include "main/main_app_config.h"
 #include "main/main_session.h"
@@ -66,6 +67,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat_helpers.h"
 #include "styles/style_chat.h"
 #include "styles/style_menu_icons.h"
+
+#include <QtCore/QFile>
 #include "styles/style_layers.h"
 
 namespace Settings {
@@ -201,6 +204,12 @@ private:
 	bool confirmSendingFiles(
 		Ui::PreparedList &&list,
 		const QString &insertTextOnCancel = QString());
+	bool sendFilesThroughBox(
+		Ui::PreparedList &&list,
+		const QString &insertTextOnCancel = QString());
+	void convertOggToVoiceAndSend(
+		Ui::PreparedList &&list,
+		const QString &insertTextOnCancel);
 	bool confirmSendingFiles(
 		not_null<const QMimeData*> data,
 		std::optional<bool> overrideSendImagesAsPhotos,
@@ -319,6 +328,26 @@ struct Factory final : AbstractSectionFactory {
 
 [[nodiscard]] bool IsGreeting(const QString &shortcut) {
 	return (shortcut == u"hello"_q);
+}
+
+[[nodiscard]] bool IsSingleOggAudio(const Ui::PreparedList &list) {
+	if (list.error != Ui::PreparedList::Error::None
+		|| list.files.size() != 1) {
+		return false;
+	}
+	const auto &file = list.files.front();
+	const auto mime = file.information
+		? file.information->filemime
+		: QString();
+	const auto name = !file.path.isEmpty() ? file.path : file.displayName;
+	const auto ends = [&](const QString &value) {
+		return name.endsWith(value, Qt::CaseInsensitive);
+	};
+	return (mime == u"audio/ogg"_q)
+		|| (mime == u"audio/opus"_q)
+		|| ends(u".ogg"_q)
+		|| ends(u".opus"_q)
+		|| ends(u".oga"_q);
 }
 
 ShortcutMessages::ShortcutMessages(
@@ -1333,7 +1362,45 @@ bool ShortcutMessages::confirmSendingFiles(
 		const QString &insertTextOnCancel) {
 	if (_composeControls->confirmMediaEdit(list)) {
 		return true;
-	} else if (showSendingFilesError(list)) {
+	} else if (IsSingleOggAudio(list)) {
+		convertOggToVoiceAndSend(std::move(list), insertTextOnCancel);
+		return true;
+	}
+	return sendFilesThroughBox(std::move(list), insertTextOnCancel);
+}
+
+void ShortcutMessages::convertOggToVoiceAndSend(
+		Ui::PreparedList &&list,
+		const QString &insertTextOnCancel) {
+	if (showPremiumRequired()) {
+		return;
+	}
+	const auto &file = list.files.front();
+	auto bytes = file.content;
+	if (bytes.isEmpty() && !file.path.isEmpty()) {
+		auto device = QFile(file.path);
+		if (device.open(QIODevice::ReadOnly)) {
+			bytes = device.readAll();
+		}
+	}
+	auto converted = bytes.isEmpty()
+		? Media::AudioEditResult()
+		: Media::ConvertToVoiceMessage(bytes);
+	if (converted.content.isEmpty()) {
+		sendFilesThroughBox(std::move(list), insertTextOnCancel);
+		return;
+	}
+	sendVoice({
+		.bytes = converted.content,
+		.waveform = converted.waveform,
+		.duration = converted.duration,
+	});
+}
+
+bool ShortcutMessages::sendFilesThroughBox(
+		Ui::PreparedList &&list,
+		const QString &insertTextOnCancel) {
+	if (showSendingFilesError(list)) {
 		return false;
 	}
 
