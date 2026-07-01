@@ -19,6 +19,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mainwidget.h"
 #include "mainwindow.h"
 #include "main/main_session.h"
+#include "main/main_account.h"
+#include "intro/employee/employee_permissions.h"
 #include "mtproto/mtproto_config.h"
 #include "lang/lang_keys.h"
 #include "core/shortcuts.h"
@@ -148,6 +150,20 @@ TopBarWidget::TopBarWidget(
 	_sendNow->setWidthChangedCallback([=] { updateControlsGeometry(); });
 	_delete->setClickedCallback([=] { _deleteSelection.fire({}); });
 	_delete->setWidthChangedCallback([=] { updateControlsGeometry(); });
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	session().account().employeePermissions().value(
+		Intro::Employee::PermissionKey::MsgDelete
+	) | rpl::on_next([raw = _delete.data()](bool allowed) {
+		raw->setDisabled(!allowed);
+		raw->setAttribute(Qt::WA_TransparentForMouseEvents, !allowed);
+		raw->setBrushOverride(allowed
+			? std::optional<QBrush>()
+			: std::optional<QBrush>(st::windowBgOver->b));
+		raw->setTextFgOverride(allowed
+			? std::optional<QColor>()
+			: std::optional<QColor>(st::windowSubTextFg->c));
+	}, _delete->lifetime());
+#endif // TDESKTOP_EMPLOYEE_MODE
 	_clear->setClickedCallback([=] { _clearSelection.fire({}); });
 	_call->setClickedCallback([=] { call({}); });
 	_call->setAcceptBoth(true, true);
