@@ -26,4 +26,6 @@ struct AudioEditResult {
 	const QByteArray &first,
 	const QByteArray &second);
 
+[[nodiscard]] AudioEditResult ConvertToVoiceMessage(const QByteArray &content);
+
 } // namespace Media
