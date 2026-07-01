@@ -33,6 +33,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_widget.h"
 #include "dialogs/ui/dialogs_layout.h"
 #include "history/history_item_components.h"
+#include "history/history_widget.h"
 #include "history/view/controls/compose_controls_common.h"
 #include "history/view/history_view_message.h"
 #include "info/profile/info_profile_actions.h"
@@ -282,6 +283,7 @@ void SetupExperimental(
 	addToggle(Webview::kOptionWebviewDebugEnabled);
 	addToggle(Webview::kOptionWebviewLegacyEdge);
 	addToggle(kOptionAutoScrollInactiveChat);
+	addToggle(kOptionDynamicUnloadChats);
 	addToggle(Window::Notifications::kOptionHideReplyButton);
 	addToggle(Window::Notifications::kOptionCustomNotification);
 	addToggle(Window::Notifications::kOptionGNotification);
