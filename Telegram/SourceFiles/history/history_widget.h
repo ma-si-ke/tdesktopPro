@@ -142,6 +142,8 @@ struct VoiceToSend;
 class BotKeyboard;
 class HistoryInner;
 
+extern const char kOptionDynamicUnloadChats[];
+
 class HistoryWidget final
 	: public Window::AbstractSectionWidget
 	, private HistoryView::CornerButtonsDelegate {

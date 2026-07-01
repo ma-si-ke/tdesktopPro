@@ -220,6 +220,21 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace {
 
+base::options::toggle DynamicUnloadChats({
+	.id = kOptionDynamicUnloadChats,
+	.name = "\xe5\x8a\xa8\xe6\x80\x81\xe5\x8d\xb8\xe8\xbd\xbd\xe8\x81\x8a\xe5\xa4\xa9\xe5\xaf\xb9\xe8\xb1\xa1",
+	.description = "\xe7\xa6\xbb\xe5\xbc\x80\xe8\x81\x8a\xe5\xa4\xa9\xe5\x90\x8e"
+		"\xe9\x87\x8a\xe6\x94\xbe\xe5\x85\xb6\xe5\xb7\xb2\xe6\xb8\xb2\xe6\x9f\x93"
+		"\xe7\x9a\x84\xe6\xb6\x88\xe6\x81\xaf\xef\xbc\x88\xe8\xa7\x86\xe5\x9b\xbe"
+		"\xe4\xb8\x8e\xe6\x8e\x92\xe7\x89\x88\xe6\x96\x87\xe6\x9c\xac\xef\xbc\x89"
+		"\xef\xbc\x8c\xe9\x87\x8d\xe6\x96\xb0\xe6\x89\x93\xe5\xbc\x80\xe6\x97\xb6"
+		"\xe5\x86\x8d\xe9\x87\x8d\xe5\xbb\xba\xe3\x80\x82\xe9\x99\x8d\xe4\xbd\x8e"
+		"\xe5\x86\x85\xe5\xad\x98\xe5\x8d\xa0\xe7\x94\xa8\xef\xbc\x8c\xe4\xbb\xa3"
+		"\xe4\xbb\xb7\xe6\x98\xaf\xe9\x87\x8d\xe6\x96\xb0\xe6\x89\x93\xe5\xbc\x80"
+		"\xe6\x97\xb6\xe9\x9c\x80\xe8\xa6\x81\xe9\x87\x8d\xe6\x96\xb0\xe6\x8e\x92"
+		"\xe7\x89\x88\xe3\x80\x82",
+});
+
 constexpr auto kMessagesPerPageFirst = 30;
 constexpr auto kMessagesPerPage = 50;
 constexpr auto kPreloadHeightsCount = 3; // when 3 screens to scroll left make a preload request
@@ -260,6 +275,8 @@ const auto kPsaAboutPrefix = "cloud_lng_about_psa_";
 }
 
 } // namespace
+
+const char kOptionDynamicUnloadChats[] = "dynamic-unload-chats";
 
 HistoryWidget::HistoryWidget(
 	QWidget *parent,
@@ -3348,11 +3365,18 @@ void HistoryWidget::setHistory(History *history) {
 		_attachToggle->installEventFilter(_attachBotsMenu.get());
 	}
 
-	const auto unloadHeavyViewParts = [](History *history) {
+	const auto unloadHeavyViewParts = [this](History *history) {
 		if (history) {
 			history->owner().unloadHeavyViewParts(
 				history->delegateMixin()->delegate());
 			history->forceFullResize();
+			if (DynamicUnloadChats.value()) {
+				crl::on_main(this, [=] {
+					if (history != _history && history != _migrated) {
+						history->clear(History::ClearType::Unload);
+					}
+				});
+			}
 		}
 	};
 
