@@ -1386,8 +1386,8 @@ void ShortcutMessages::convertOggToVoiceAndSend(
 		}
 	}
 	auto converted = bytes.isEmpty()
-		? Media::AudioEditResult()
-		: Media::ConvertToVoiceMessage(bytes);
+		? ::Media::AudioEditResult()
+		: ::Media::ConvertToVoiceMessage(bytes);
 	if (converted.content.isEmpty()) {
 		sendFilesThroughBox(std::move(list), insertTextOnCancel);
 		return;
