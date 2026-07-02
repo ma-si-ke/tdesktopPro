@@ -59,7 +59,6 @@ private:
 	base::Timer _timer;
 
 	std::vector<QJsonObject> _pending;
-	uint64 _nextSeq = 1;
 	bool _uploading = false;
 	QString _deviceId;
 
