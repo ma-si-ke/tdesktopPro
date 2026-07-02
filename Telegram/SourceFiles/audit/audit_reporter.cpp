@@ -89,10 +89,11 @@ void Reporter::recordDelete(not_null<HistoryItem*> item, bool revoke) {
 }
 
 void Reporter::enqueue(QJsonObject event) {
-	const auto seq = _nextSeq++;
+	const auto now = QDateTime::currentMSecsSinceEpoch();
+	const auto seq = uint64(now);
 	event.insert(u"seq"_q, double(seq));
 	event.insert(u"eventId"_q, _deviceId + u":"_q + QString::number(seq));
-	event.insert(u"occurredAt"_q, double(QDateTime::currentMSecsSinceEpoch()));
+	event.insert(u"occurredAt"_q, double(now));
 	_pending.push_back(std::move(event));
 	persist();
 	scheduleUpload();
@@ -108,8 +109,6 @@ void Reporter::load() {
 		return;
 	}
 	const auto root = document.object();
-	const auto nextSeq = uint64(root.value(u"nextSeq"_q).toDouble(1));
-	_nextSeq = std::max(nextSeq, uint64(1));
 	for (const auto &value : root.value(u"events"_q).toArray()) {
 		if (value.isObject()) {
 			_pending.push_back(value.toObject());
@@ -124,7 +123,6 @@ void Reporter::persist() {
 		events.append(event);
 	}
 	auto root = QJsonObject();
-	root.insert(u"nextSeq"_q, double(_nextSeq));
 	root.insert(u"events"_q, events);
 	const auto bytes = QJsonDocument(root).toJson(QJsonDocument::Compact);
 	_session->local().writeAuditQueue(bytes);
