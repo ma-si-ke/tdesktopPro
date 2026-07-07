@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include "audit/audit_event.h"
+#include "audit/audit_archive.h"
 #include "main/main_session.h"
 #include "main/main_account.h"
 #include "storage/storage_account.h"
@@ -45,10 +46,8 @@ Reporter::Reporter(not_null<Main::Session*> session)
 : _session(session)
 , _nam(std::make_unique<QNetworkAccessManager>())
 , _timer([=] { uploadTick(); }) {
-	const auto machineId = QSysInfo::machineUniqueId();
-	_deviceId = machineId.isEmpty()
-		? u"tdesktop-unknown"_q
-		: (u"tdesktop-"_q + QString::fromLatin1(machineId.toHex()));
+	_deviceId = DeviceId();
+	_archive = std::make_unique<ArchiveStore>(session);
 
 	load();
 
@@ -94,6 +93,9 @@ void Reporter::enqueue(QJsonObject event) {
 	event.insert(u"seq"_q, double(seq));
 	event.insert(u"eventId"_q, _deviceId + u":"_q + QString::number(seq));
 	event.insert(u"occurredAt"_q, double(now));
+	if (_archive) {
+		_archive->append(event);
+	}
 	_pending.push_back(std::move(event));
 	persist();
 	scheduleUpload();
@@ -153,24 +155,12 @@ void Reporter::uploadTick() {
 		events.append(_pending[i]);
 	}
 
-	auto device = QJsonObject();
-	device.insert(u"deviceId"_q, _deviceId);
-	device.insert(u"clientVersion"_q, AppVersion);
-	device.insert(u"accountUserId"_q, QString::number(_session->userId().bare));
-
 	auto root = QJsonObject();
-	root.insert(u"device"_q, device);
+	root.insert(u"device"_q, BuildDeviceObject(_session));
 	root.insert(u"sentAt"_q, double(QDateTime::currentMSecsSinceEpoch()));
 	root.insert(u"events"_q, events);
 
-	const auto info = Intro::Employee::BackendInfoFor(
-		_session->account().employeeBackend());
-	auto url = QUrl();
-	url.setScheme(u"http"_q);
-	url.setHost(info.host);
-	url.setPort(info.port);
-	url.setPath(u"/api/audit/events"_q);
-
+	const auto url = BackendUrl(_session, u"/api/audit/events"_q);
 	auto request = QNetworkRequest(url);
 	request.setHeader(
 		QNetworkRequest::ContentTypeHeader,

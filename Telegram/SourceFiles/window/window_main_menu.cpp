@@ -76,6 +76,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
+#include "audit/audit_management_box.h"
 #endif
 
 #include <QtGui/QWindow>
@@ -759,6 +760,15 @@ void MainMenu::setupMenu() {
 			_controller->session().supportTemplates().reload();
 		});
 	}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	addAction(
+		rpl::single(u"本地审计数据管理"_q),
+		{ &st::menuIconStats }
+	)->setClickedCallback([=] {
+		Audit::ShowAuditManagement(controller);
+	});
+#endif // TDESKTOP_EMPLOYEE_MODE
+
 	addAction(
 		tr::lng_menu_settings(),
 		{ &st::menuIconSettings }

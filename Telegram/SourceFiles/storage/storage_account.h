@@ -93,6 +93,14 @@ public:
 	void writeAuditQueue(const QByteArray &bytes);
 	[[nodiscard]] QByteArray readAuditQueue();
 	void clearAuditQueue();
+	void writeAuditArchiveIndex(const QByteArray &bytes);
+	[[nodiscard]] QByteArray readAuditArchiveIndex();
+	void clearAuditArchiveIndex();
+	[[nodiscard]] quint64 auditArchiveWriteBlob(
+		quint64 key,
+		const QByteArray &bytes);
+	[[nodiscard]] QByteArray auditArchiveReadBlob(quint64 key);
+	void auditArchiveClearBlob(quint64 key);
 #endif
 
 	void registerDraftSource(
@@ -370,6 +378,7 @@ private:
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	FileKey _employeeAuthKey = 0;
 	FileKey _auditQueueKey = 0;
+	FileKey _auditArchiveKey = 0;
 #endif
 
 	qint64 _cacheTotalSizeLimit = 0;

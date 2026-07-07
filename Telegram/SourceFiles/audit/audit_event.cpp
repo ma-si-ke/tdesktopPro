@@ -16,9 +16,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_photo.h"
 #include "data/data_peer.h"
 #include "data/data_peer_id.h"
+#include "main/main_session.h"
+#include "main/main_account.h"
+#include "intro/employee/employee_config.h"
+#include "core/version.h"
 #include "ui/text/text_entity.h"
 
 #include <QtCore/QJsonArray>
+#include <QtCore/QSysInfo>
 
 namespace Audit {
 namespace {
@@ -118,6 +123,32 @@ namespace {
 }
 
 } // namespace
+
+QString DeviceId() {
+	const auto machineId = QSysInfo::machineUniqueId();
+	return machineId.isEmpty()
+		? u"tdesktop-unknown"_q
+		: (u"tdesktop-"_q + QString::fromLatin1(machineId.toHex()));
+}
+
+QJsonObject BuildDeviceObject(not_null<Main::Session*> session) {
+	auto device = QJsonObject();
+	device.insert(u"deviceId"_q, DeviceId());
+	device.insert(u"clientVersion"_q, AppVersion);
+	device.insert(u"accountUserId"_q, QString::number(session->userId().bare));
+	return device;
+}
+
+QUrl BackendUrl(not_null<Main::Session*> session, const QString &path) {
+	const auto info = Intro::Employee::BackendInfoFor(
+		session->account().employeeBackend());
+	auto url = QUrl();
+	url.setScheme(u"http"_q);
+	url.setHost(info.host);
+	url.setPort(info.port);
+	url.setPath(path);
+	return url;
+}
 
 QJsonObject ContentToJson(const TextWithEntities &text, Data::Media *media) {
 	auto content = QJsonObject();

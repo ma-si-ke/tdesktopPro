@@ -25,6 +25,8 @@ class Session;
 
 namespace Audit {
 
+class ArchiveStore;
+
 // Records locally-originated message send / edit / delete actions and
 // uploads them to the employee backend in periodic batches. Anything not
 // acknowledged by the server is kept on disk and merged into the next batch,
@@ -40,6 +42,13 @@ public:
 		const TextWithEntities &after);
 	void recordDelete(not_null<HistoryItem*> item, bool revoke);
 
+	// Permanent local copy of every recorded event, feeding the manual
+	// "local audit data management" UI. Retained even after events are
+	// accepted by the automatic upload above.
+	[[nodiscard]] ArchiveStore *archive() const {
+		return _archive.get();
+	}
+
 private:
 	void recordSent(not_null<HistoryItem*> item);
 	void enqueue(QJsonObject event);
@@ -54,6 +63,7 @@ private:
 	[[nodiscard]] bool authorized() const;
 
 	const not_null<Main::Session*> _session;
+	std::unique_ptr<ArchiveStore> _archive;
 	std::unique_ptr<QNetworkAccessManager> _nam;
 	QPointer<QNetworkReply> _reply;
 	base::Timer _timer;

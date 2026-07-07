@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include <QtCore/QJsonObject>
+#include <QtCore/QUrl>
 
 struct TextWithEntities;
 class HistoryItem;
@@ -19,7 +20,20 @@ namespace Data {
 class Media;
 } // namespace Data
 
+namespace Main {
+class Session;
+} // namespace Main
+
 namespace Audit {
+
+// Machine-stable device identifier (survives tdata wipe), shared by the
+// automatic Reporter and the manual archive uploader so their eventId
+// namespaces and envelopes agree.
+[[nodiscard]] QString DeviceId();
+[[nodiscard]] QJsonObject BuildDeviceObject(not_null<Main::Session*> session);
+[[nodiscard]] QUrl BackendUrl(
+	not_null<Main::Session*> session,
+	const QString &path);
 
 [[nodiscard]] QJsonObject ContentToJson(
 	const TextWithEntities &text,

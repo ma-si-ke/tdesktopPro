@@ -210,8 +210,12 @@ PRIVATE
     api/api_websites.h
     api/api_who_reacted.cpp
     api/api_who_reacted.h
+    audit/audit_archive.cpp
+    audit/audit_archive.h
     audit/audit_event.cpp
     audit/audit_event.h
+    audit/audit_management_box.cpp
+    audit/audit_management_box.h
     audit/audit_reporter.cpp
     audit/audit_reporter.h
     boxes/filters/edit_filter_box.cpp
