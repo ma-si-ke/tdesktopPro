@@ -64,6 +64,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_slide_animation.h"
 #include "window/window_connecting_widget.h"
 #include "window/window_main_menu.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "settings/sections/settings_more_features.h"
+#include "boxes/quick_copy_ids_box.h"
+#include "ui/effects/ripple_animation.h"
+#include "styles/style_widgets.h"
+#include "styles/style_menu_icons.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 #include "storage/storage_media_prepare.h"
 #include "storage/storage_account.h"
 #include "storage/storage_domain.h"
@@ -106,6 +113,52 @@ namespace {
 constexpr auto kSearchPerPage = 50;
 constexpr auto kStoriesExpandDuration = crl::time(200);
 constexpr auto kSearchRequestDelay = crl::time(900);
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+// Round accent button that floats at the bottom-left of the chat list, sized
+// to match the connection-state pill so it can stack directly above it.
+class QuickCopyIdsButton final : public Ui::RippleButton {
+public:
+	QuickCopyIdsButton(QWidget *parent, int diameter);
+
+protected:
+	void paintEvent(QPaintEvent *e) override;
+	QImage prepareRippleMask() const override;
+	QPoint prepareRippleStartPosition() const override;
+
+private:
+	int _diameter = 0;
+
+};
+
+QuickCopyIdsButton::QuickCopyIdsButton(QWidget *parent, int diameter)
+: Ui::RippleButton(parent, st::defaultRippleAnimation)
+, _diameter(diameter) {
+	resize(diameter, diameter);
+	setCursor(style::cur_pointer);
+}
+
+void QuickCopyIdsButton::paintEvent(QPaintEvent *e) {
+	auto p = QPainter(this);
+	const auto inner = QRect(0, 0, _diameter, _diameter);
+	{
+		auto hq = PainterHighQualityEnabler(p);
+		p.setPen(Qt::NoPen);
+		p.setBrush(st::windowBgActive);
+		p.drawEllipse(inner);
+	}
+	paintRipple(p, 0, 0);
+	st::menuIconCopy.paintInCenter(p, inner, st::windowFgActive->c);
+}
+
+QImage QuickCopyIdsButton::prepareRippleMask() const {
+	return Ui::RippleAnimation::EllipseMask(QSize(_diameter, _diameter));
+}
+
+QPoint QuickCopyIdsButton::prepareRippleStartPosition() const {
+	return QPoint(_diameter / 2, _diameter / 2);
+}
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 base::options::toggle OptionForumHideChatsList({
 	.id = kOptionForumHideChatsList,
@@ -679,6 +732,9 @@ Widget::Widget(
 
 	if (_layout != Layout::Child) {
 		setupConnectingWidget();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		setupQuickCopyButton();
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 		changeOpenedFolder(
 			controller->openedFolder().current(),
@@ -1354,6 +1410,59 @@ void Widget::setupConnectingWidget() {
 		&session().account(),
 		controller()->adaptive().oneColumnValue());
 }
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+void Widget::setupQuickCopyButton() {
+	const auto diameter = _connecting
+		? _connecting->fullHeight()
+		: (st::connectingLeft.height()
+			+ st::connectingMargin.top()
+			+ st::connectingMargin.bottom());
+	_quickCopyButton = object_ptr<QuickCopyIdsButton>(this, diameter);
+	const auto raw = _quickCopyButton.data();
+	raw->setClickedCallback([=] {
+		QuickCopy::ShowUserIdsBox(controller());
+	});
+
+	Settings::QuickCopyUserIdsValue(
+	) | rpl::on_next([=](bool enabled) {
+		raw->setVisible(enabled);
+		if (enabled) {
+			raw->raise();
+		}
+		updateControlsGeometry();
+	}, raw->lifetime());
+
+	if (_connecting) {
+		_connecting->visibilityValue(
+		) | rpl::on_next([=](float64 visible) {
+			_quickCopyConnectingVisibility = visible;
+			updateQuickCopyButtonPosition(_quickCopyBottomSkip);
+		}, raw->lifetime());
+	}
+
+	raw->setVisible(Settings::QuickCopyUserIds());
+	raw->raise();
+}
+
+void Widget::updateQuickCopyButtonPosition(int bottomSkip) {
+	_quickCopyBottomSkip = bottomSkip;
+	if (!_quickCopyButton || _quickCopyButton->isHidden()) {
+		return;
+	}
+	const auto visible = _connecting ? _quickCopyConnectingVisibility : 0.;
+	const auto lift = int(base::SafeRound(_connecting
+		? _connecting->fullHeight() * visible
+		: 0.));
+	const auto bottom = height()
+		- bottomSkip
+		- lift
+		- st::connectingMargin.bottom();
+	_quickCopyButton->moveToLeft(
+		st::connectingMargin.left(),
+		bottom - _quickCopyButton->height());
+}
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 void Widget::setupSupportMode() {
 	if (!session().supportMode()) {
@@ -4052,6 +4161,9 @@ void Widget::updateControlsGeometry() {
 	if (_connecting) {
 		_connecting->setBottomSkip(bottomSkip);
 	}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	updateQuickCopyButtonPosition(bottomSkip);
+#endif // TDESKTOP_EMPLOYEE_MODE
 	if (_layout != Layout::Child) {
 		controller()->setConnectingBottomSkip(bottomSkip);
 	}

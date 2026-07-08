@@ -437,6 +437,16 @@ rpl::producer<float64> ConnectionState::visibility() const {
 	return _visibilityValues.events_starting_with(currentVisibility());
 }
 
+rpl::producer<float64> ConnectionState::visibilityValue() const {
+	return visibility();
+}
+
+int ConnectionState::fullHeight() const {
+	return st::connectingLeft.height()
+		+ st::connectingMargin.top()
+		+ st::connectingMargin.bottom();
+}
+
 auto ConnectionState::computeLayout(const State &state) const -> Layout {
 	auto result = Layout();
 	result.proxyEnabled = state.useProxy;
