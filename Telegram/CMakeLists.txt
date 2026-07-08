@@ -355,6 +355,8 @@ PRIVATE
     boxes/premium_limits_box.h
     boxes/premium_preview_box.cpp
     boxes/premium_preview_box.h
+    boxes/quick_copy_ids_box.cpp
+    boxes/quick_copy_ids_box.h
     boxes/reactions_settings_box.cpp
     boxes/reactions_settings_box.h
     boxes/report_messages_box.cpp
@@ -1825,6 +1827,8 @@ PRIVATE
     settings/sections/settings_local_storage.h
     settings/sections/settings_main.cpp
     settings/sections/settings_main.h
+    settings/sections/settings_more_features.cpp
+    settings/sections/settings_more_features.h
     settings/settings_recent_searches.cpp
     settings/settings_recent_searches.h
     settings/settings_search.cpp

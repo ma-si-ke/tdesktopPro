@@ -32,6 +32,12 @@ public:
 	void setForceHidden(bool hidden);
 	void setBottomSkip(int skip);
 
+	// Current interpolated visibility (0..1) of the connector pill, and the
+	// pixel height it occupies when fully shown. Used to place other
+	// bottom-left overlays just above it.
+	[[nodiscard]] rpl::producer<float64> visibilityValue() const;
+	[[nodiscard]] int fullHeight() const;
+
 	rpl::lifetime &lifetime() {
 		return _lifetime;
 	}

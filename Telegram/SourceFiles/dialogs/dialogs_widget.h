@@ -42,6 +42,7 @@ class ContactStatus;
 namespace Ui {
 class AbstractButton;
 class IconButton;
+class RippleButton;
 class PopupMenu;
 class DropdownMenu;
 class FlatButton;
@@ -210,6 +211,10 @@ private:
 	void setupTouchChatPreview();
 	void setupFrozenAccountBar();
 	void setupConnectingWidget();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	void setupQuickCopyButton();
+	void updateQuickCopyButtonPosition(int bottomSkip);
+#endif // TDESKTOP_EMPLOYEE_MODE
 	void setupMainMenuToggle();
 	void setupMoreChatsBar();
 	void setupDownloadBar();
@@ -373,6 +378,11 @@ private:
 	object_ptr<BottomButton> _loadMoreChats = { nullptr };
 	std::unique_ptr<Ui::DownloadBar> _downloadBar;
 	std::unique_ptr<Window::ConnectionState> _connecting;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	object_ptr<Ui::RippleButton> _quickCopyButton = { nullptr };
+	int _quickCopyBottomSkip = 0;
+	float64 _quickCopyConnectingVisibility = 0.;
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 	Ui::Animations::Simple _scrollToAnimation;
 	int _scrollAnimationTo = 0;

@@ -46,6 +46,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/settings_builder.h"
 #include "settings/cloud_password/settings_cloud_password_input.h"
 #include "settings/sections/settings_advanced.h"
+#ifdef TDESKTOP_EMPLOYEE_MODE
+#include "settings/sections/settings_more_features.h"
+#endif // TDESKTOP_EMPLOYEE_MODE
 #include "settings/sections/settings_business.h"
 #include "settings/sections/settings_calls.h"
 #include "settings/sections/settings_chat.h"
@@ -441,6 +444,14 @@ void BuildSectionButtons(SectionBuilder &builder) {
 		.icon = { &st::menuIconManage },
 		.keywords = { u"performance"_q, u"proxy"_q, u"experimental"_q },
 	});
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	builder.addSectionButton({
+		.title = rpl::single(u"更多功能"_q),
+		.targetSection = MoreFeaturesId(),
+		.icon = { &st::menuIconCustomize },
+	});
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 	builder.addSectionButton({
 		.title = tr::lng_settings_section_devices(),
