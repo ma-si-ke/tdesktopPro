@@ -67,6 +67,7 @@ public:
 		const QString &status);
 
 	QString generateName() override;
+	QString generateShortName() override;
 	PaintRoundImageCallback generatePaintUserpicCallback(
 		bool forceRound) override;
 
@@ -93,6 +94,10 @@ AuditBucketRow::AuditBucketRow(
 }
 
 QString AuditBucketRow::generateName() {
+	return _name;
+}
+
+QString AuditBucketRow::generateShortName() {
 	return _name;
 }
 
