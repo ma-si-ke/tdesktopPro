@@ -17,7 +17,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QJsonObject>
 #include <QtCore/QPointer>
 
-#include <map>
 #include <memory>
 #include <vector>
 
@@ -55,8 +54,9 @@ struct ArchiveUploadResult {
 // Reporter's automatic upload queue, records kept here are NEVER removed when
 // an automatic upload succeeds; they are only ever marked as uploaded when the
 // user manually pushes them to the import endpoint. Each day is stored in its
-// own encrypted file so appending only rewrites the current day, and a small
-// index (day -> {fileKey, count, chars, uploaded}) drives the management UI.
+// own encrypted file (the day -> FileKey map lives in the account's local
+// storage map, so the files survive the startup leftover-file sweep); per-day
+// counts for the management UI are computed lazily by reading those files.
 class ArchiveStore final {
 public:
 	explicit ArchiveStore(not_null<Main::Session*> session);
@@ -86,18 +86,7 @@ public:
 	[[nodiscard]] bool uploading() const;
 
 private:
-	struct DayData {
-		quint64 fileKey = 0;
-		int count = 0;
-		qint64 chars = 0;
-		int uploaded = 0;
-	};
-
-	void load();
-	void persistIndex();
 	void ensureCached(qint32 day);
-	void writeDayFile(qint32 day, const std::vector<QJsonObject> &events);
-	void removeDay(qint32 day);
 	void markUploaded(
 		const std::vector<qint32> &days,
 		const base::flat_set<QString> &acceptedIds,
@@ -108,7 +97,6 @@ private:
 	void finishUpload(bool ok, const QString &error);
 
 	const not_null<Main::Session*> _session;
-	std::map<qint32, DayData> _index;
 
 	qint32 _cachedDay = 0;
 	std::vector<QJsonObject> _cachedEvents;

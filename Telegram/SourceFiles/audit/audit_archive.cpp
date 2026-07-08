@@ -98,7 +98,6 @@ constexpr auto kImportPath = "/api/audit/events/import";
 ArchiveStore::ArchiveStore(not_null<Main::Session*> session)
 : _session(session)
 , _nam(std::make_unique<QNetworkAccessManager>()) {
-	load();
 }
 
 ArchiveStore::~ArchiveStore() {
@@ -110,82 +109,12 @@ ArchiveStore::~ArchiveStore() {
 	}
 }
 
-void ArchiveStore::load() {
-	const auto bytes = _session->local().readAuditArchiveIndex();
-	if (bytes.isEmpty()) {
-		return;
-	}
-	const auto document = QJsonDocument::fromJson(bytes);
-	if (!document.isObject()) {
-		return;
-	}
-	for (const auto &value : document.object().value(u"days"_q).toArray()) {
-		const auto object = value.toObject();
-		const auto day = qint32(object.value(u"day"_q).toInt());
-		auto data = DayData();
-		data.fileKey = object.value(u"key"_q).toString().toULongLong();
-		data.count = object.value(u"count"_q).toInt();
-		data.chars = qint64(object.value(u"chars"_q).toDouble());
-		data.uploaded = object.value(u"uploaded"_q).toInt();
-		if (day && data.fileKey) {
-			_index[day] = data;
-		}
-	}
-	LOG(("Audit: loaded archive index with %1 days").arg(_index.size()));
-}
-
-void ArchiveStore::persistIndex() {
-	auto array = QJsonArray();
-	for (const auto &[day, data] : _index) {
-		auto object = QJsonObject();
-		object.insert(u"day"_q, day);
-		object.insert(u"key"_q, QString::number(data.fileKey));
-		object.insert(u"count"_q, data.count);
-		object.insert(u"chars"_q, double(data.chars));
-		object.insert(u"uploaded"_q, data.uploaded);
-		array.append(object);
-	}
-	auto root = QJsonObject();
-	root.insert(u"version"_q, 1);
-	root.insert(u"days"_q, array);
-	_session->local().writeAuditArchiveIndex(
-		QJsonDocument(root).toJson(QJsonDocument::Compact));
-}
-
 void ArchiveStore::ensureCached(qint32 day) {
 	if (_cachedDay == day) {
 		return;
 	}
-	const auto it = _index.find(day);
-	_cachedEvents = (it != _index.end() && it->second.fileKey)
-		? ParseEvents(_session->local().auditArchiveReadBlob(it->second.fileKey))
-		: std::vector<QJsonObject>();
+	_cachedEvents = ParseEvents(_session->local().readAuditArchiveDay(day));
 	_cachedDay = day;
-}
-
-void ArchiveStore::writeDayFile(
-		qint32 day,
-		const std::vector<QJsonObject> &events) {
-	auto data = DayData();
-	if (const auto it = _index.find(day); it != _index.end()) {
-		data = it->second;
-	}
-	data.count = int(events.size());
-	data.chars = 0;
-	data.uploaded = 0;
-	for (const auto &event : events) {
-		data.chars += CharCount(event);
-		if (event.contains(u"uploadedAt"_q)) {
-			++data.uploaded;
-		}
-	}
-	data.fileKey = _session->local().auditArchiveWriteBlob(
-		data.fileKey,
-		SerializeEvents(events));
-	_index[day] = data;
-	if (day == _cachedDay && &events != &_cachedEvents) {
-		_cachedEvents = events;
-	}
 }
 
 void ArchiveStore::append(const QJsonObject &event) {
@@ -195,16 +124,25 @@ void ArchiveStore::append(const QJsonObject &event) {
 	}
 	ensureCached(day);
 	_cachedEvents.push_back(event);
-	writeDayFile(day, _cachedEvents);
-	persistIndex();
+	_session->local().writeAuditArchiveDay(day, SerializeEvents(_cachedEvents));
 	_changes.fire({});
 }
 
 std::vector<ArchiveDay> ArchiveStore::days() const {
 	auto result = std::vector<ArchiveDay>();
-	result.reserve(_index.size());
-	for (const auto &[day, data] : _index) {
-		result.push_back({ day, data.count, data.chars, data.uploaded });
+	for (const auto day : _session->local().auditArchiveDays()) {
+		const auto events = dayEvents(day);
+		auto info = ArchiveDay{ day };
+		info.count = int(events.size());
+		for (const auto &event : events) {
+			info.chars += CharCount(event);
+			if (event.contains(u"uploadedAt"_q)) {
+				++info.uploaded;
+			}
+		}
+		if (info.count > 0) {
+			result.push_back(info);
+		}
 	}
 	std::sort(result.begin(), result.end(), [](
 			const ArchiveDay &a,
@@ -218,11 +156,7 @@ std::vector<QJsonObject> ArchiveStore::dayEvents(qint32 day) const {
 	if (day == _cachedDay) {
 		return _cachedEvents;
 	}
-	const auto it = _index.find(day);
-	if (it == _index.end() || !it->second.fileKey) {
-		return {};
-	}
-	return ParseEvents(_session->local().auditArchiveReadBlob(it->second.fileKey));
+	return ParseEvents(_session->local().readAuditArchiveDay(day));
 }
 
 std::vector<ArchiveHour> ArchiveStore::dayHours(qint32 day) const {
@@ -288,29 +222,16 @@ int ArchiveStore::deleteHours(qint32 day, const base::flat_set<int> &hours) {
 		return 0;
 	}
 	if (events.empty()) {
-		removeDay(day);
+		_session->local().removeAuditArchiveDay(day);
 	} else {
-		writeDayFile(day, events);
-		persistIndex();
+		_session->local().writeAuditArchiveDay(day, SerializeEvents(events));
 	}
-	_changes.fire({});
-	return removed;
-}
-
-void ArchiveStore::removeDay(qint32 day) {
-	const auto it = _index.find(day);
-	if (it == _index.end()) {
-		return;
-	}
-	if (it->second.fileKey) {
-		_session->local().auditArchiveClearBlob(it->second.fileKey);
-	}
-	_index.erase(it);
 	if (_cachedDay == day) {
 		_cachedDay = 0;
 		_cachedEvents.clear();
 	}
-	persistIndex();
+	_changes.fire({});
+	return removed;
 }
 
 rpl::producer<> ArchiveStore::changes() const {
@@ -333,12 +254,15 @@ void ArchiveStore::markUploaded(
 			}
 		}
 		if (changed) {
-			writeDayFile(day, events);
+			_session->local().writeAuditArchiveDay(day, SerializeEvents(events));
+			if (_cachedDay == day) {
+				_cachedDay = 0;
+				_cachedEvents.clear();
+			}
 			changedAny = true;
 		}
 	}
 	if (changedAny) {
-		persistIndex();
 		_changes.fire({});
 	}
 }

@@ -107,7 +107,8 @@ enum { // Local Storage Keys
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	lskEmployeeAuth = 0x1f, // no data
 	lskAuditQueue = 0x20, // no data
-	lskAuditArchive = 0x21, // no data
+	lskAuditArchive = 0x21, // legacy: unused single index key
+	lskAuditArchiveDays = 0x22, // data: qint32 day
 #endif
 };
 
@@ -306,6 +307,13 @@ base::flat_set<QString> Account::collectGoodNames() const {
 	for (const auto &value : keys) {
 		push(value);
 	}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	push(_employeeAuthKey);
+	push(_auditQueueKey);
+	for (const auto &[day, key] : _auditArchiveDays) {
+		push(key);
+	}
+#endif
 	return result;
 }
 
@@ -516,7 +524,22 @@ Account::ReadMapResult Account::readMapWith(
 			map.stream >> _auditQueueKey;
 		} break;
 		case lskAuditArchive: {
-			map.stream >> _auditArchiveKey;
+			// Legacy single index-blob key, no longer used. Read to keep the
+			// map stream aligned; the stale blob is swept as a leftover file.
+			quint64 legacyAuditArchiveKey = 0;
+			map.stream >> legacyAuditArchiveKey;
+		} break;
+		case lskAuditArchiveDays: {
+			quint32 count = 0;
+			map.stream >> count;
+			for (quint32 i = 0; i != count; ++i) {
+				qint32 day = 0;
+				quint64 key = 0;
+				map.stream >> day >> key;
+				if (day && key) {
+					_auditArchiveDays.emplace(day, key);
+				}
+			}
 		} break;
 #endif
 		default:
@@ -686,7 +709,10 @@ void Account::writeMap() {
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	if (_employeeAuthKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (_auditQueueKey) mapSize += sizeof(quint32) + sizeof(quint64);
-	if (_auditArchiveKey) mapSize += sizeof(quint32) + sizeof(quint64);
+	if (!_auditArchiveDays.empty()) {
+		mapSize += sizeof(quint32) * 2
+			+ _auditArchiveDays.size() * (sizeof(qint32) + sizeof(quint64));
+	}
 #endif
 
 	EncryptedDescriptor mapData(mapSize);
@@ -786,8 +812,13 @@ void Account::writeMap() {
 	if (_auditQueueKey) {
 		mapData.stream << quint32(lskAuditQueue) << quint64(_auditQueueKey);
 	}
-	if (_auditArchiveKey) {
-		mapData.stream << quint32(lskAuditArchive) << quint64(_auditArchiveKey);
+	if (!_auditArchiveDays.empty()) {
+		mapData.stream
+			<< quint32(lskAuditArchiveDays)
+			<< quint32(_auditArchiveDays.size());
+		for (const auto &[day, key] : _auditArchiveDays) {
+			mapData.stream << qint32(day) << quint64(key);
+		}
 	}
 #endif
 	map.writeEncrypted(mapData, _localKey);
@@ -827,7 +858,7 @@ void Account::reset() {
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	_employeeAuthKey = 0;
 	_auditQueueKey = 0;
-	_auditArchiveKey = 0;
+	_auditArchiveDays.clear();
 #endif
 	_oldMapVersion = 0;
 	_fileLocations.clear();
@@ -1124,81 +1155,63 @@ void Account::clearAuditQueue() {
 	}
 }
 
-void Account::writeAuditArchiveIndex(const QByteArray &bytes) {
+std::vector<qint32> Account::auditArchiveDays() const {
+	auto result = std::vector<qint32>();
+	result.reserve(_auditArchiveDays.size());
+	for (const auto &[day, key] : _auditArchiveDays) {
+		result.push_back(day);
+	}
+	return result;
+}
+
+QByteArray Account::readAuditArchiveDay(qint32 day) {
+	const auto i = _auditArchiveDays.find(day);
+	if (i == _auditArchiveDays.end() || !i->second) {
+		return QByteArray();
+	}
+	FileReadDescriptor descriptor;
+	if (!ReadEncryptedFile(descriptor, i->second, _basePath, _localKey)) {
+		ClearKey(i->second, _basePath);
+		_auditArchiveDays.erase(i);
+		writeMapDelayed();
+		return QByteArray();
+	}
+	QByteArray bytes;
+	descriptor.stream >> bytes;
+	if (!CheckStreamStatus(descriptor.stream)) {
+		return QByteArray();
+	}
+	return bytes;
+}
+
+void Account::writeAuditArchiveDay(qint32 day, const QByteArray &bytes) {
 	if (bytes.isEmpty()) {
-		clearAuditArchiveIndex();
+		removeAuditArchiveDay(day);
 		return;
 	}
-	if (!_auditArchiveKey) {
-		_auditArchiveKey = GenerateKey(_basePath);
+	auto i = _auditArchiveDays.find(day);
+	if (i == _auditArchiveDays.end()) {
+		const auto key = GenerateKey(_basePath);
+		_auditArchiveDays.emplace(day, key);
 		writeMapQueued();
+		i = _auditArchiveDays.find(day);
 	}
 	EncryptedDescriptor data(Serialize::bytearraySize(bytes));
 	data.stream << bytes;
-	FileWriteDescriptor file(_auditArchiveKey, _basePath);
+	FileWriteDescriptor file(i->second, _basePath);
 	file.writeEncrypted(data, _localKey);
 }
 
-QByteArray Account::readAuditArchiveIndex() {
-	if (!_auditArchiveKey) {
-		return QByteArray();
+void Account::removeAuditArchiveDay(qint32 day) {
+	const auto i = _auditArchiveDays.find(day);
+	if (i == _auditArchiveDays.end()) {
+		return;
 	}
-	FileReadDescriptor descriptor;
-	if (!ReadEncryptedFile(
-			descriptor, _auditArchiveKey, _basePath, _localKey)) {
-		ClearKey(_auditArchiveKey, _basePath);
-		_auditArchiveKey = 0;
-		writeMapDelayed();
-		return QByteArray();
+	if (i->second) {
+		ClearKey(i->second, _basePath);
 	}
-	QByteArray bytes;
-	descriptor.stream >> bytes;
-	if (!CheckStreamStatus(descriptor.stream)) {
-		return QByteArray();
-	}
-	return bytes;
-}
-
-void Account::clearAuditArchiveIndex() {
-	if (_auditArchiveKey) {
-		ClearKey(_auditArchiveKey, _basePath);
-		_auditArchiveKey = 0;
-		writeMapDelayed();
-	}
-}
-
-quint64 Account::auditArchiveWriteBlob(quint64 key, const QByteArray &bytes) {
-	if (!key) {
-		key = GenerateKey(_basePath);
-	}
-	EncryptedDescriptor data(Serialize::bytearraySize(bytes));
-	data.stream << bytes;
-	FileWriteDescriptor file(key, _basePath);
-	file.writeEncrypted(data, _localKey);
-	return key;
-}
-
-QByteArray Account::auditArchiveReadBlob(quint64 key) {
-	if (!key) {
-		return QByteArray();
-	}
-	FileReadDescriptor descriptor;
-	if (!ReadEncryptedFile(descriptor, key, _basePath, _localKey)) {
-		ClearKey(key, _basePath);
-		return QByteArray();
-	}
-	QByteArray bytes;
-	descriptor.stream >> bytes;
-	if (!CheckStreamStatus(descriptor.stream)) {
-		return QByteArray();
-	}
-	return bytes;
-}
-
-void Account::auditArchiveClearBlob(quint64 key) {
-	if (key) {
-		ClearKey(key, _basePath);
-	}
+	_auditArchiveDays.erase(i);
+	writeMapDelayed();
 }
 #endif // TDESKTOP_EMPLOYEE_MODE
 

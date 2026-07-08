@@ -93,14 +93,10 @@ public:
 	void writeAuditQueue(const QByteArray &bytes);
 	[[nodiscard]] QByteArray readAuditQueue();
 	void clearAuditQueue();
-	void writeAuditArchiveIndex(const QByteArray &bytes);
-	[[nodiscard]] QByteArray readAuditArchiveIndex();
-	void clearAuditArchiveIndex();
-	[[nodiscard]] quint64 auditArchiveWriteBlob(
-		quint64 key,
-		const QByteArray &bytes);
-	[[nodiscard]] QByteArray auditArchiveReadBlob(quint64 key);
-	void auditArchiveClearBlob(quint64 key);
+	[[nodiscard]] std::vector<qint32> auditArchiveDays() const;
+	[[nodiscard]] QByteArray readAuditArchiveDay(qint32 day);
+	void writeAuditArchiveDay(qint32 day, const QByteArray &bytes);
+	void removeAuditArchiveDay(qint32 day);
 #endif
 
 	void registerDraftSource(
@@ -378,7 +374,7 @@ private:
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	FileKey _employeeAuthKey = 0;
 	FileKey _auditQueueKey = 0;
-	FileKey _auditArchiveKey = 0;
+	base::flat_map<qint32, FileKey> _auditArchiveDays;
 #endif
 
 	qint64 _cacheTotalSizeLimit = 0;
