@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "styles/style_dialogs.h"
 #include "styles/style_boxes.h"
+#include "styles/style_layers.h"
 
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
