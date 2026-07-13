@@ -28,6 +28,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/share_box.h"
 #include "boxes/star_gift_box.h"
 #include "boxes/translate_box.h"
+#include "cloudmemo/cloud_memo.h"
 #include "core/application.h"
 #include "core/click_handler_types.h"
 #include "core/file_utilities.h"
@@ -116,6 +117,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_widgets.h"
 #include "styles/style_window.h" // mainMenuToggleFourStrokes.
 
+#include <QtCore/QBuffer>
+#include <QtCore/QFileInfo>
 #include <QtCore/QMimeData>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
@@ -1149,6 +1152,326 @@ void EditLocalNoteBox(
 	}, button->lifetime());
 	button->setClickedCallback([=] {
 		controller->window().show(Box(EditLocalNoteBox, peer));
+	});
+
+	return result;
+}
+
+struct SharedNoteEntry {
+	QString photoId;
+	QString source;
+	QImage image;
+	QImage thumb;
+};
+
+[[nodiscard]] QString MimeForImagePath(const QString &path) {
+	const auto suffix = QFileInfo(path).suffix().toLower();
+	return (suffix == u"jpg"_q || suffix == u"jpeg"_q)
+		? u"image/jpeg"_q
+		: (suffix == u"webp"_q)
+		? u"image/webp"_q
+		: (suffix == u"gif"_q)
+		? u"image/gif"_q
+		: u"image/png"_q;
+}
+
+void EditSharedNoteBox(
+		not_null<Ui::GenericBox*> box,
+		not_null<PeerData*> peer) {
+	struct State {
+		std::vector<SharedNoteEntry> entries;
+		base::unique_qptr<Ui::PopupMenu> menu;
+		Fn<void(int)> uploadFrom;
+		QStringList collected;
+		bool saving = false;
+	};
+	const auto tgId = QString::number(peer->id.value);
+	box->setTitle(rpl::single(u"共享备注"_q));
+	box->addRow(
+		object_ptr<Ui::FlatLabel>(
+			box,
+			rpl::single(
+				u"所有使用本客户端的人共享，最后保存者覆盖。可粘贴图片。"_q),
+			st::boxLabel));
+
+	const auto state = box->lifetime().make_state<State>();
+	const auto memo = CloudMemo::Cached(tgId);
+
+	const auto field = box->addRow(object_ptr<Ui::InputField>(
+		box,
+		st::defaultInputField,
+		Ui::InputField::Mode::NoNewlines,
+		rpl::single(u"输入备注"_q),
+		memo.text));
+	field->setMaxLength(kLocalNoteLimit);
+	box->setFocusCallback([=] { field->setFocusFast(); });
+
+	const auto thumbs = box->addRow(
+		object_ptr<NoteThumbsWidget>(box),
+		QMargins(
+			st::boxRowPadding.left(),
+			st::infoLocalNoteThumbSkip,
+			st::boxRowPadding.right(),
+			0));
+	const auto refreshThumbs = [=] {
+		auto list = std::vector<QImage>();
+		list.reserve(state->entries.size());
+		for (const auto &entry : state->entries) {
+			list.push_back(entry.thumb);
+		}
+		thumbs->setThumbs(std::move(list));
+	};
+
+	for (const auto &id : memo.photoIds) {
+		state->entries.push_back({ .photoId = id });
+	}
+	refreshThumbs();
+	for (auto i = 0, count = int(state->entries.size()); i != count; ++i) {
+		const auto index = i;
+		const auto id = state->entries[i].photoId;
+		CloudMemo::LoadPhoto(id, crl::guard(box, [=](QImage image) {
+			if (index < int(state->entries.size())
+				&& state->entries[index].photoId == id) {
+				state->entries[index].thumb = PrepareNoteThumb(image);
+				refreshThumbs();
+			}
+		}));
+	}
+
+	const auto addEntry = [=](SharedNoteEntry &&entry) {
+		if (entry.thumb.isNull()) {
+			return false;
+		}
+		state->entries.push_back(std::move(entry));
+		refreshThumbs();
+		return true;
+	};
+	const auto addImageFile = [=](const QString &path) {
+		return addEntry({
+			.source = path,
+			.thumb = PrepareNoteThumb(QImage(path)),
+		});
+	};
+
+	const auto hasImageFileUrls = [](not_null<const QMimeData*> data) {
+		for (const auto &url : Core::ReadMimeUrls(data)) {
+			if (url.isLocalFile()
+				&& (Core::DetectNameType(url.toLocalFile())
+					== Core::NameType::Image)) {
+				return true;
+			}
+		}
+		return false;
+	};
+	field->setMimeDataHook([=](
+			not_null<const QMimeData*> data,
+			Ui::InputField::MimeAction action) {
+		if (action == Ui::InputField::MimeAction::Check) {
+			return data->hasImage() || hasImageFileUrls(data);
+		} else if (const auto read = Core::ReadMimeImage(data)) {
+			return addEntry({
+				.image = read.image,
+				.thumb = PrepareNoteThumb(read.image),
+			});
+		}
+		auto added = false;
+		for (const auto &url : Core::ReadMimeUrls(data)) {
+			if (url.isLocalFile() && addImageFile(url.toLocalFile())) {
+				added = true;
+			}
+		}
+		return added;
+	});
+
+	const auto add = box->addRow(
+		object_ptr<Ui::LinkButton>(box, u"添加图片"_q),
+		QMargins(
+			st::boxRowPadding.left(),
+			st::infoLocalNoteThumbSkip,
+			st::boxRowPadding.right(),
+			0));
+	add->setClickedCallback([=] {
+		FileDialog::GetOpenPaths(
+			box.get(),
+			u"选择图片"_q,
+			FileDialog::ImagesFilter(),
+			crl::guard(box, [=](FileDialog::OpenResult &&result) {
+				for (const auto &path : result.paths) {
+					addImageFile(path);
+				}
+			}));
+	});
+
+	thumbs->thumbClicks() | rpl::on_next([=](int index) {
+		if (index < 0 || index >= int(state->entries.size())) {
+			return;
+		}
+		const auto &entry = state->entries[index];
+		const auto path = !entry.photoId.isEmpty()
+			? CloudMemo::PhotoCachePath(entry.photoId)
+			: entry.source;
+		state->menu = base::make_unique_q<Ui::PopupMenu>(thumbs);
+		if (!path.isEmpty() && QFile::exists(path)) {
+			state->menu->addAction(u"查看图片"_q, [=] {
+				File::Launch(path);
+			});
+		}
+		state->menu->addAction(u"删除图片"_q, [=] {
+			if (index < int(state->entries.size())) {
+				state->entries.erase(state->entries.begin() + index);
+				refreshThumbs();
+			}
+		});
+		state->menu->popup(QCursor::pos());
+	}, thumbs->lifetime());
+
+	const auto finishSave = [=] {
+		CloudMemo::Write(tgId, {
+			.text = field->getLastText().trimmed(),
+			.photoIds = state->collected,
+		}, crl::guard(box, [=](QString error) {
+			state->saving = false;
+			if (error.isEmpty()) {
+				box->closeBox();
+			} else {
+				box->uiShow()->showToast(u"保存失败："_q + error);
+			}
+		}));
+	};
+	state->uploadFrom = [=](int index) {
+		if (index >= int(state->entries.size())) {
+			finishSave();
+			return;
+		}
+		const auto &entry = state->entries[index];
+		if (!entry.photoId.isEmpty()) {
+			state->collected.push_back(entry.photoId);
+			state->uploadFrom(index + 1);
+			return;
+		}
+		auto bytes = QByteArray();
+		auto mime = QString();
+		if (!entry.source.isEmpty()) {
+			auto file = QFile(entry.source);
+			if (file.open(QIODevice::ReadOnly)) {
+				bytes = file.readAll();
+			}
+			mime = MimeForImagePath(entry.source);
+		} else {
+			auto buffer = QBuffer(&bytes);
+			buffer.open(QIODevice::WriteOnly);
+			entry.image.save(&buffer, "PNG");
+			mime = u"image/png"_q;
+		}
+		CloudMemo::UploadPhoto(bytes, mime, crl::guard(box, [=](QString id) {
+			if (id.isEmpty()) {
+				state->saving = false;
+				box->uiShow()->showToast(u"图片上传失败"_q);
+				return;
+			}
+			state->collected.push_back(id);
+			state->uploadFrom(index + 1);
+		}));
+	};
+	const auto save = [=] {
+		if (state->saving) {
+			return;
+		}
+		state->saving = true;
+		state->collected = QStringList();
+		state->uploadFrom(0);
+	};
+	field->submits() | rpl::on_next(save, field->lifetime());
+	box->addButton(tr::lng_settings_save(), save);
+	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+}
+
+[[nodiscard]] object_ptr<Ui::SlideWrap<>> CreateSharedNote(
+		not_null<QWidget*> parent,
+		not_null<Window::SessionController*> controller,
+		not_null<PeerData*> peer) {
+	const auto tgId = QString::number(peer->id.value);
+	auto result = object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+		parent,
+		object_ptr<Ui::VerticalLayout>(parent));
+	result->toggleOn(rpl::single(true));
+	result->finishAnimating();
+
+	const auto container = result->entity();
+	auto noteText = CloudMemo::MemoValue(
+		tgId
+	) | rpl::map([](const CloudMemo::Memo &memo) {
+		return !memo.text.isEmpty()
+			? TextWithEntities{ memo.text }
+			: memo.photoIds.isEmpty()
+			? Ui::Text::Italic(u"点击添加"_q)
+			: Ui::Text::Italic(u"图片备注"_q);
+	});
+	auto line = CreateTextWithLabel(
+		container,
+		rpl::single(TextWithEntities{ u"共享备注"_q }),
+		std::move(noteText),
+		st::infoLabel,
+		st::infoLabeled,
+		st::infoProfileLabeledPadding);
+	container->add(std::move(line.wrap));
+
+	const auto thumbsWrap = container->add(
+		object_ptr<Ui::SlideWrap<NoteThumbsWidget>>(
+			container,
+			object_ptr<NoteThumbsWidget>(container),
+			st::infoLocalNoteThumbsMargin));
+	thumbsWrap->finishAnimating();
+	const auto thumbs = thumbsWrap->entity();
+
+	struct ThumbsState {
+		QStringList ids;
+		base::flat_map<QString, QImage> loaded;
+	};
+	const auto state = thumbs->lifetime().make_state<ThumbsState>();
+	const auto rebuild = [=] {
+		auto list = std::vector<QImage>();
+		list.reserve(state->ids.size());
+		for (const auto &id : state->ids) {
+			const auto i = state->loaded.find(id);
+			list.push_back((i != end(state->loaded))
+				? i->second
+				: QImage());
+		}
+		const auto has = !list.empty();
+		thumbs->setThumbs(std::move(list));
+		thumbsWrap->toggle(has, anim::type::instant);
+	};
+	CloudMemo::MemoValue(
+		tgId
+	) | rpl::on_next([=](const CloudMemo::Memo &memo) {
+		state->ids = memo.photoIds;
+		rebuild();
+		for (const auto &id : memo.photoIds) {
+			if (state->loaded.contains(id)) {
+				continue;
+			}
+			CloudMemo::LoadPhoto(id, crl::guard(thumbs, [=](QImage image) {
+				const auto thumb = PrepareNoteThumb(image);
+				if (thumb.isNull()) {
+					return;
+				}
+				state->loaded[id] = thumb;
+				rebuild();
+			}));
+		}
+	}, thumbs->lifetime());
+	CloudMemo::Fetch(tgId);
+
+	const auto button = Ui::CreateChild<Ui::AbstractButton>(container);
+	button->setPointerCursor(true);
+	button->show();
+	container->sizeValue() | rpl::on_next([=](QSize size) {
+		button->setGeometry(0, 0, size.width(), size.height());
+		button->raise();
+	}, button->lifetime());
+	button->setClickedCallback([=] {
+		controller->window().show(Box(EditSharedNoteBox, peer));
 	});
 
 	return result;
@@ -2217,6 +2540,10 @@ Section DetailsFiller::makeInfo() {
 	if (!_topic) {
 		tracker.track(result->add(
 			CreateLocalNote(result, controller, _peer),
+			{},
+			style::al_justify));
+		tracker.track(result->add(
+			CreateSharedNote(result, controller, _peer),
 			{},
 			style::al_justify));
 	}
