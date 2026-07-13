@@ -10,15 +10,20 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include "settings/settings_common_session.h"
+#include "cloudmemo/cloud_memo.h"
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "lang/lang_keys.h"
+#include "ui/layers/generic_box.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/fields/input_field.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/vertical_list.h"
 #include "ui/rp_widget.h"
 #include "ui/qt_object_factory.h"
 #include "window/window_session_controller.h"
 #include "styles/style_settings.h"
+#include "styles/style_widgets.h"
 
 namespace Settings {
 namespace {
@@ -29,6 +34,29 @@ constexpr auto kPrefKey = "more_features/quick_copy_user_ids";
 	static auto value = rpl::variable<bool>(
 		Core::App().settings().readPref<bool>(kPrefKey, false));
 	return value;
+}
+
+[[nodiscard]] rpl::variable<QString> &CloudMemoUrlVar() {
+	static auto value = rpl::variable<QString>(CloudMemo::BaseUrl());
+	return value;
+}
+
+void EditCloudMemoUrlBox(not_null<Ui::GenericBox*> box) {
+	box->setTitle(rpl::single(u"共享备注服务器"_q));
+	const auto field = box->addRow(object_ptr<Ui::InputField>(
+		box,
+		st::defaultInputField,
+		rpl::single(CloudMemo::DefaultBaseUrl()),
+		CloudMemo::BaseUrl()));
+	box->setFocusCallback([=] { field->setFocusFast(); });
+	const auto save = [=] {
+		CloudMemo::SetBaseUrl(field->getLastText());
+		CloudMemoUrlVar() = CloudMemo::BaseUrl();
+		box->closeBox();
+	};
+	field->submits() | rpl::on_next(save, field->lifetime());
+	box->addButton(tr::lng_settings_save(), save);
+	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
 }
 
 class MoreFeatures : public Section<MoreFeatures> {
@@ -42,12 +70,15 @@ public:
 private:
 	void setupContent();
 
+	const not_null<Window::SessionController*> _controller;
+
 };
 
 MoreFeatures::MoreFeatures(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller)
-: Section(parent, controller) {
+: Section(parent, controller)
+, _controller(controller) {
 	setupContent();
 }
 
@@ -71,6 +102,23 @@ void MoreFeatures::setupContent() {
 		SetQuickCopyUserIds(checked);
 	}, button->lifetime());
 	Ui::AddSkip(content);
+
+	Ui::AddDivider(content);
+	Ui::AddSkip(content);
+	Ui::AddSubsectionTitle(content, rpl::single(u"共享备注"_q));
+	const auto server = content->add(object_ptr<Ui::SettingsButton>(
+		content,
+		rpl::single(u"服务器地址"_q),
+		st::settingsButtonNoIcon));
+	server->setClickedCallback([=] {
+		_controller->show(Box(EditCloudMemoUrlBox));
+	});
+	Ui::AddSkip(content);
+	Ui::AddDividerText(
+		content,
+		CloudMemoUrlVar().value() | rpl::map([](const QString &url) {
+			return u"当前："_q + url;
+		}));
 
 	Ui::ResizeFitChild(this, content);
 }
