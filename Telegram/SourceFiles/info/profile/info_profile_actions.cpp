@@ -31,6 +31,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/translate_box.h"
 #include "core/application.h"
 #include "core/click_handler_types.h"
+#include "core/file_utilities.h"
+#include "core/mime_type.h"
 #include "core/ui_integration.h"
 #include "data/business/data_business_common.h"
 #include "data/business/data_business_info.h"
@@ -41,6 +43,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_folder.h"
 #include "data/data_forum.h"
 #include "data/data_forum_topic.h"
+#include "data/data_local_notes.h"
 #include "data/data_peer_values.h"
 #include "data/data_saved_sublist.h"
 #include "data/data_session.h"
@@ -79,6 +82,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/controls/userpic_button.h"
 #include "ui/effects/credits_graphics.h"
 #include "ui/effects/toggle_arrow.h"
+#include "ui/image/image_prepare.h"
+#include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/rect.h"
 #include "ui/ui_utility.h"
@@ -90,6 +95,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/checkbox.h"
+#include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/menu/menu_add_action_callback.h"
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
@@ -109,10 +115,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h" // settingsButtonRightSkip.
+#include "styles/style_widgets.h"
 #include "styles/style_window.h" // mainMenuToggleFourStrokes.
 
+#include <QtCore/QMimeData>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
+#include <QtGui/QtEvents>
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
@@ -795,6 +804,359 @@ void SetupAboutPeerIdDrag(
 	) | rpl::map([](const WorkingHours &data) {
 		return bool(data);
 	}));
+
+	return result;
+}
+
+constexpr auto kLocalNoteLimit = 200;
+
+class NoteThumbsWidget final : public Ui::RpWidget {
+public:
+	explicit NoteThumbsWidget(QWidget *parent);
+
+	void setThumbs(std::vector<QImage> thumbs);
+	[[nodiscard]] rpl::producer<int> thumbClicks() const;
+
+protected:
+	int resizeGetHeight(int newWidth) override;
+	void paintEvent(QPaintEvent *e) override;
+	void mousePressEvent(QMouseEvent *e) override;
+	void mouseReleaseEvent(QMouseEvent *e) override;
+	void mouseMoveEvent(QMouseEvent *e) override;
+
+private:
+	[[nodiscard]] int indexAt(QPoint position) const;
+
+	std::vector<QImage> _thumbs;
+	rpl::event_stream<int> _thumbClicks;
+	int _columns = 1;
+	int _pressed = -1;
+
+};
+
+NoteThumbsWidget::NoteThumbsWidget(QWidget *parent) : RpWidget(parent) {
+	setMouseTracking(true);
+}
+
+void NoteThumbsWidget::setThumbs(std::vector<QImage> thumbs) {
+	_thumbs = std::move(thumbs);
+	resizeToWidth(width());
+	update();
+}
+
+rpl::producer<int> NoteThumbsWidget::thumbClicks() const {
+	return _thumbClicks.events();
+}
+
+int NoteThumbsWidget::resizeGetHeight(int newWidth) {
+	if (_thumbs.empty() || newWidth <= 0) {
+		return 0;
+	}
+	const auto single = st::infoLocalNoteThumbSize;
+	const auto skip = st::infoLocalNoteThumbSkip;
+	_columns = std::max((newWidth + skip) / (single + skip), 1);
+	const auto rows = (int(_thumbs.size()) + _columns - 1) / _columns;
+	return rows * (single + skip) - skip;
+}
+
+void NoteThumbsWidget::paintEvent(QPaintEvent *e) {
+	auto p = QPainter(this);
+	const auto single = st::infoLocalNoteThumbSize;
+	const auto skip = st::infoLocalNoteThumbSkip;
+	for (auto i = 0, count = int(_thumbs.size()); i != count; ++i) {
+		p.drawImage(
+			QRect(
+				(i % _columns) * (single + skip),
+				(i / _columns) * (single + skip),
+				single,
+				single),
+			_thumbs[i]);
+	}
+}
+
+int NoteThumbsWidget::indexAt(QPoint position) const {
+	const auto single = st::infoLocalNoteThumbSize;
+	const auto skip = st::infoLocalNoteThumbSkip;
+	const auto column = position.x() / (single + skip);
+	const auto row = position.y() / (single + skip);
+	if (column >= _columns
+		|| (position.x() % (single + skip)) >= single
+		|| (position.y() % (single + skip)) >= single) {
+		return -1;
+	}
+	const auto result = row * _columns + column;
+	return (result < int(_thumbs.size())) ? result : -1;
+}
+
+void NoteThumbsWidget::mousePressEvent(QMouseEvent *e) {
+	_pressed = indexAt(e->pos());
+}
+
+void NoteThumbsWidget::mouseReleaseEvent(QMouseEvent *e) {
+	const auto index = indexAt(e->pos());
+	if (index >= 0 && index == _pressed) {
+		_thumbClicks.fire_copy(index);
+	}
+	_pressed = -1;
+}
+
+void NoteThumbsWidget::mouseMoveEvent(QMouseEvent *e) {
+	setCursor((indexAt(e->pos()) >= 0)
+		? style::cur_pointer
+		: style::cur_default);
+}
+
+[[nodiscard]] QImage PrepareNoteThumb(QImage image) {
+	if (image.isNull()) {
+		return QImage();
+	}
+	const auto ratio = style::DevicePixelRatio();
+	const auto size = st::infoLocalNoteThumbSize * ratio;
+	const auto scaled = image.scaled(
+		size,
+		size,
+		Qt::KeepAspectRatioByExpanding,
+		Qt::SmoothTransformation);
+	auto cropped = scaled.copy(
+		(scaled.width() - size) / 2,
+		(scaled.height() - size) / 2,
+		size,
+		size).convertToFormat(QImage::Format_ARGB32_Premultiplied);
+	auto result = Images::Round(std::move(cropped), ImageRoundRadius::Large);
+	result.setDevicePixelRatio(ratio);
+	return result;
+}
+
+struct NoteImageEntry {
+	QString existing;
+	QString source;
+	QImage image;
+	QImage thumb;
+};
+
+void EditLocalNoteBox(
+		not_null<Ui::GenericBox*> box,
+		not_null<PeerData*> peer) {
+	struct State {
+		std::vector<NoteImageEntry> entries;
+		base::unique_qptr<Ui::PopupMenu> menu;
+	};
+	box->setTitle(rpl::single(u"本地备注"_q));
+	box->addRow(
+		object_ptr<Ui::FlatLabel>(
+			box,
+			rpl::single(u"仅保存在本机，不会上传到 Telegram。可粘贴图片。"_q),
+			st::boxLabel));
+
+	const auto state = box->lifetime().make_state<State>();
+	const auto note = Data::LocalNote(peer);
+	for (const auto &name : note.images) {
+		state->entries.push_back({
+			.existing = name,
+			.thumb = PrepareNoteThumb(
+				QImage(Data::LocalNoteImagePath(peer, name))),
+		});
+	}
+
+	const auto field = box->addRow(object_ptr<Ui::InputField>(
+		box,
+		st::defaultInputField,
+		Ui::InputField::Mode::NoNewlines,
+		rpl::single(u"输入备注"_q),
+		note.text));
+	field->setMaxLength(kLocalNoteLimit);
+	box->setFocusCallback([=] { field->setFocusFast(); });
+
+	const auto thumbs = box->addRow(
+		object_ptr<NoteThumbsWidget>(box),
+		QMargins(
+			st::boxRowPadding.left(),
+			st::infoLocalNoteThumbSkip,
+			st::boxRowPadding.right(),
+			0));
+	const auto refreshThumbs = [=] {
+		auto list = std::vector<QImage>();
+		list.reserve(state->entries.size());
+		for (const auto &entry : state->entries) {
+			list.push_back(entry.thumb);
+		}
+		thumbs->setThumbs(std::move(list));
+	};
+	refreshThumbs();
+
+	const auto addEntry = [=](NoteImageEntry &&entry) {
+		if (entry.thumb.isNull()) {
+			return false;
+		}
+		state->entries.push_back(std::move(entry));
+		refreshThumbs();
+		return true;
+	};
+	const auto addImageFile = [=](const QString &path) {
+		return addEntry({
+			.source = path,
+			.thumb = PrepareNoteThumb(QImage(path)),
+		});
+	};
+
+	const auto hasImageFileUrls = [](not_null<const QMimeData*> data) {
+		for (const auto &url : Core::ReadMimeUrls(data)) {
+			if (url.isLocalFile()
+				&& (Core::DetectNameType(url.toLocalFile())
+					== Core::NameType::Image)) {
+				return true;
+			}
+		}
+		return false;
+	};
+	field->setMimeDataHook([=](
+			not_null<const QMimeData*> data,
+			Ui::InputField::MimeAction action) {
+		if (action == Ui::InputField::MimeAction::Check) {
+			return data->hasImage() || hasImageFileUrls(data);
+		} else if (const auto read = Core::ReadMimeImage(data)) {
+			return addEntry({
+				.image = read.image,
+				.thumb = PrepareNoteThumb(read.image),
+			});
+		}
+		auto added = false;
+		for (const auto &url : Core::ReadMimeUrls(data)) {
+			if (url.isLocalFile() && addImageFile(url.toLocalFile())) {
+				added = true;
+			}
+		}
+		return added;
+	});
+
+	const auto add = box->addRow(
+		object_ptr<Ui::LinkButton>(box, u"添加图片"_q),
+		QMargins(
+			st::boxRowPadding.left(),
+			st::infoLocalNoteThumbSkip,
+			st::boxRowPadding.right(),
+			0));
+	add->setClickedCallback([=] {
+		FileDialog::GetOpenPaths(
+			box.get(),
+			u"选择图片"_q,
+			FileDialog::ImagesFilter(),
+			crl::guard(box, [=](FileDialog::OpenResult &&result) {
+				for (const auto &path : result.paths) {
+					addImageFile(path);
+				}
+			}));
+	});
+
+	thumbs->thumbClicks() | rpl::on_next([=](int index) {
+		if (index < 0 || index >= int(state->entries.size())) {
+			return;
+		}
+		const auto &entry = state->entries[index];
+		const auto path = !entry.existing.isEmpty()
+			? Data::LocalNoteImagePath(peer, entry.existing)
+			: entry.source;
+		state->menu = base::make_unique_q<Ui::PopupMenu>(thumbs);
+		if (!path.isEmpty()) {
+			state->menu->addAction(u"查看图片"_q, [=] {
+				File::Launch(path);
+			});
+		}
+		state->menu->addAction(u"删除图片"_q, [=] {
+			if (index < int(state->entries.size())) {
+				state->entries.erase(state->entries.begin() + index);
+				refreshThumbs();
+			}
+		});
+		state->menu->popup(QCursor::pos());
+	}, thumbs->lifetime());
+
+	const auto save = [=] {
+		auto images = QStringList();
+		for (const auto &entry : state->entries) {
+			auto name = !entry.existing.isEmpty()
+				? entry.existing
+				: !entry.source.isEmpty()
+				? Data::CopyLocalNoteImage(peer, entry.source)
+				: Data::SaveLocalNoteImage(peer, entry.image);
+			if (!name.isEmpty()) {
+				images.push_back(name);
+			}
+		}
+		Data::SetLocalNote(peer, {
+			.text = field->getLastText().trimmed(),
+			.images = std::move(images),
+		});
+		box->closeBox();
+	};
+	field->submits() | rpl::on_next(save, field->lifetime());
+	box->addButton(tr::lng_settings_save(), save);
+	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+}
+
+[[nodiscard]] object_ptr<Ui::SlideWrap<>> CreateLocalNote(
+		not_null<QWidget*> parent,
+		not_null<Window::SessionController*> controller,
+		not_null<PeerData*> peer) {
+	auto result = object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+		parent,
+		object_ptr<Ui::VerticalLayout>(parent));
+	result->toggleOn(rpl::single(true));
+	result->finishAnimating();
+
+	const auto container = result->entity();
+	auto noteText = Data::LocalNoteValue(
+		peer
+	) | rpl::map([](const Data::LocalNoteData &note) {
+		return !note.text.isEmpty()
+			? TextWithEntities{ note.text }
+			: note.images.isEmpty()
+			? Ui::Text::Italic(u"点击添加"_q)
+			: Ui::Text::Italic(u"图片备注"_q);
+	});
+	auto line = CreateTextWithLabel(
+		container,
+		rpl::single(TextWithEntities{ u"本地备注（仅本机）"_q }),
+		std::move(noteText),
+		st::infoLabel,
+		st::infoLabeled,
+		st::infoProfileLabeledPadding);
+	container->add(std::move(line.wrap));
+
+	const auto thumbsWrap = container->add(
+		object_ptr<Ui::SlideWrap<NoteThumbsWidget>>(
+			container,
+			object_ptr<NoteThumbsWidget>(container),
+			st::infoLocalNoteThumbsMargin));
+	thumbsWrap->finishAnimating();
+	const auto thumbs = thumbsWrap->entity();
+	Data::LocalNoteValue(
+		peer
+	) | rpl::on_next([=](const Data::LocalNoteData &note) {
+		auto list = std::vector<QImage>();
+		list.reserve(note.images.size());
+		for (const auto &name : note.images) {
+			auto thumb = PrepareNoteThumb(
+				QImage(Data::LocalNoteImagePath(peer, name)));
+			if (!thumb.isNull()) {
+				list.push_back(std::move(thumb));
+			}
+		}
+		const auto has = !list.empty();
+		thumbs->setThumbs(std::move(list));
+		thumbsWrap->toggle(has, anim::type::instant);
+	}, thumbs->lifetime());
+
+	const auto button = Ui::CreateChild<Ui::AbstractButton>(container);
+	button->setPointerCursor(true);
+	button->show();
+	container->sizeValue() | rpl::on_next([=](QSize size) {
+		button->setGeometry(0, 0, size.width(), size.height());
+		button->raise();
+	}, button->lifetime());
+	button->setClickedCallback([=] {
+		controller->window().show(Box(EditLocalNoteBox, peer));
+	});
 
 	return result;
 }
@@ -1865,6 +2227,12 @@ Section DetailsFiller::makeInfo() {
 			addTranslateToMenu(about.text, AboutWithAdvancedValue(_peer));
 			SetupAboutPeerIdDrag(about.text, _peer);
 		}
+	}
+	if (!_topic) {
+		tracker.track(result->add(
+			CreateLocalNote(result, controller, _peer),
+			{},
+			style::al_justify));
 	}
 	raw->toggleOn(tracker.atLeastOneShownValue());
 	raw->finishAnimating();
