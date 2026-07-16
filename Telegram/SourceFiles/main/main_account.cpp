@@ -69,6 +69,8 @@ Account::Account(not_null<Domain*> domain, const QString &dataName, int index)
 	_employeeVerify = std::make_unique<Intro::Employee::VerifyClient>();
 	_employeeHiddenFoldersClient =
 		std::make_unique<Intro::Employee::HiddenFoldersClient>();
+	_employeeIpCheck =
+		std::make_unique<Intro::Employee::IpCheckScheduler>();
 	_employeeVerifyTimer.setCallback([=] {
 		onEmployeeVerifyTimerTick();
 	});
@@ -625,6 +627,11 @@ void Account::forcedLogOut() {
 
 void Account::loggedOut() {
 	_loggingOut = false;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_employeeIpCheck) {
+		_employeeIpCheck->stop();
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 	Media::Player::mixer()->stopAndClear();
 	destroySession(DestroyReason::LoggedOut);
 	local().reset();
@@ -828,6 +835,7 @@ void Account::applyEmployeeBootstrap(
 	}
 	LOG(("Employee: bootstrap step=old_mtp_destroyed"));
 	startEmployeeVerifyTimer();
+	_employeeIpCheck->startPeriodic();
 }
 
 void Account::applyEmployeeReset() {
@@ -837,6 +845,9 @@ void Account::applyEmployeeReset() {
 	}
 	if (_employeeHiddenFoldersClient) {
 		_employeeHiddenFoldersClient->cancel();
+	}
+	if (_employeeIpCheck) {
+		_employeeIpCheck->stop();
 	}
 	if (_mtp) {
 		base::take(_mtp);
@@ -890,6 +901,10 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 	// Fetch hidden folders in parallel with verify (decision 3A: cold start
 	// only — not refreshed on the verify timer ticks below).
 	fetchEmployeeHiddenFolders();
+	// Saved-session startup: the login-time IP check was skipped, run one
+	// now and keep re-checking hourly while the session lives.
+	_employeeIpCheck->startupCheck();
+	_employeeIpCheck->startPeriodic();
 	const auto token = _employeePermissions->token();
 	_employeeVerify->verify(
 		_employeeBackend,

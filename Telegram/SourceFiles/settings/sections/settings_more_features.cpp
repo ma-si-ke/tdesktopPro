@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "cloudmemo/cloud_memo.h"
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "intro/employee/employee_ip_check.h"
 #include "lang/lang_keys.h"
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/buttons.h"
@@ -119,6 +120,43 @@ void MoreFeatures::setupContent() {
 		CloudMemoUrlVar().value() | rpl::map([](const QString &url) {
 			return u"当前："_q + url;
 		}));
+
+	Ui::AddSkip(content);
+	Ui::AddSubsectionTitle(content, rpl::single(u"网络检测"_q));
+	const auto periodic = content->add(object_ptr<Ui::SettingsButton>(
+		content,
+		rpl::single(u"定期检测 IP 风险"_q),
+		st::settingsButtonNoIcon
+	))->toggleOn(rpl::single(Intro::Employee::PeriodicIpCheckEnabled()));
+	periodic->toggledValue(
+	) | rpl::filter([](bool checked) {
+		return checked != Intro::Employee::PeriodicIpCheckEnabled();
+	}) | rpl::on_next([](bool checked) {
+		Intro::Employee::SetPeriodicIpCheckEnabled(checked);
+	}, periodic->lifetime());
+	Ui::AddSkip(content);
+	Ui::AddDividerText(
+		content,
+		rpl::single(u"开启后每小时自动检测一次网络环境，发现风险时提醒。"_q));
+
+	Ui::AddSkip(content);
+	Ui::AddSubsectionTitle(content, rpl::single(u"调试"_q));
+	const auto debugPanel = content->add(object_ptr<Ui::SettingsButton>(
+		content,
+		rpl::single(u"IP 正常也弹出面板"_q),
+		st::settingsButtonNoIcon
+	))->toggleOn(rpl::single(Intro::Employee::DebugShowIpPanelEnabled()));
+	debugPanel->toggledValue(
+	) | rpl::filter([](bool checked) {
+		return checked != Intro::Employee::DebugShowIpPanelEnabled();
+	}) | rpl::on_next([](bool checked) {
+		Intro::Employee::SetDebugShowIpPanelEnabled(checked);
+	}, debugPanel->lifetime());
+	Ui::AddSkip(content);
+	Ui::AddDividerText(
+		content,
+		rpl::single(
+			u"开启后登录和启动时即使 IP 正常也会展示检测面板，用于验证显示效果。"_q));
 
 	Ui::ResizeFitChild(this, content);
 }

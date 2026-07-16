@@ -201,6 +201,10 @@ void EmployeeLoginStep::startLogin() {
 }
 
 void EmployeeLoginStep::runIpCheckThenLogin() {
+	if (DebugShowIpPanelEnabled()) {
+		startIpCheck();
+		return;
+	}
 	const auto cacheValid = _ipCached
 		&& ((crl::now() - _ipCachedAt) < kIpCheckCacheMs);
 	if (cacheValid) {
@@ -243,6 +247,9 @@ void EmployeeLoginStep::onIpCheckDone(IpCheckResult result) {
 	_ipRiskAccepted = false;
 	if (IsRiskyIp(info)) {
 		LOG(("Employee: ipcheck risky, pausing login"));
+		showIpBlocked();
+	} else if (DebugShowIpPanelEnabled()) {
+		LOG(("Employee: ipcheck clean, showing panel for debug"));
 		showIpBlocked();
 	} else {
 		_ipPanel->showPassed(crl::guard(this, [=] {
