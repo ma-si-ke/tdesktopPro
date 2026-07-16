@@ -49,22 +49,11 @@ private:
 		Blocked,
 	};
 
-	struct BlockedLayout {
-		int left = 0;
-		int gaugeTop = 0;
-		int confidenceTop = 0;
-		int titleTop = 0;
-		int infoTop = 0;
-		int gridTop = 0;
-		int hintTop = 0;
-		int buttonsTop = 0;
-	};
-
 	void switchState(State state);
 	void animationFrame();
 	void refreshButtonsVisibility();
 	void updateButtonsGeometry();
-	[[nodiscard]] BlockedLayout countBlockedLayout() const;
+	[[nodiscard]] int buttonsTop() const;
 
 	void paintChecking(QPainter &p);
 	void paintPassed(QPainter &p);

@@ -11,6 +11,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/debug_log.h"
 #include "base/flat_map.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "lang/lang_keys.h"
 
 #include <QtCore/QJsonDocument>
@@ -249,6 +251,29 @@ QString LocationLabel(const IpCheckInfo &info) {
 	return parts.isEmpty()
 		? tr::lng_employee_ipcheck_type_unknown(tr::now)
 		: parts.join(u" · "_q);
+}
+
+namespace {
+
+constexpr auto kPeriodicPrefKey = "employee/ip_check_periodic";
+constexpr auto kDebugPanelPrefKey = "employee/ip_check_debug_panel";
+
+} // namespace
+
+bool PeriodicIpCheckEnabled() {
+	return Core::App().settings().readPref<bool>(kPeriodicPrefKey, true);
+}
+
+void SetPeriodicIpCheckEnabled(bool enabled) {
+	Core::App().settings().writePref<bool>(kPeriodicPrefKey, enabled);
+}
+
+bool DebugShowIpPanelEnabled() {
+	return Core::App().settings().readPref<bool>(kDebugPanelPrefKey, false);
+}
+
+void SetDebugShowIpPanelEnabled(bool enabled) {
+	Core::App().settings().writePref<bool>(kDebugPanelPrefKey, enabled);
 }
 
 IpCheckClient::IpCheckClient(QObject *parent)

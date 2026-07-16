@@ -1371,8 +1371,14 @@ PRIVATE
     intro/employee/employee_hidden_folders_client.h
     intro/employee/employee_ip_check.cpp
     intro/employee/employee_ip_check.h
+    intro/employee/employee_ip_check_box.cpp
+    intro/employee/employee_ip_check_box.h
+    intro/employee/employee_ip_check_card.cpp
+    intro/employee/employee_ip_check_card.h
     intro/employee/employee_ip_check_panel.cpp
     intro/employee/employee_ip_check_panel.h
+    intro/employee/employee_ip_check_scheduler.cpp
+    intro/employee/employee_ip_check_scheduler.h
     intro/employee/employee_login_step.cpp
     intro/employee/employee_login_step.h
     intro/employee/employee_open_time.cpp

@@ -216,6 +216,8 @@ employeeIpCheckHintSkip: 4px;
 employeeIpCheckButtonsSkip: 8px;
 employeeIpCheckButtonsGap: 16px;
 employeeIpCheckSlideShift: 16px;
+employeeIpCheckBoxTop: 8px;
+employeeIpCheckBoxBottom: 4px;
 employeeIpCheckRiskFont: font(22px semibold);
 employeeIpCheckTitleFont: font(15px semibold);
 employeeIpCheckRetryButton: RoundButton(introNextButton) {

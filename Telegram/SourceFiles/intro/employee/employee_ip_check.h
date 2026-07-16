@@ -61,6 +61,11 @@ using IpCheckResult = std::variant<IpCheckInfo, IpCheckFailure>;
 [[nodiscard]] QString NetworkTypeLabel(const QString &raw);
 [[nodiscard]] QString LocationLabel(const IpCheckInfo &info);
 
+[[nodiscard]] bool PeriodicIpCheckEnabled();
+void SetPeriodicIpCheckEnabled(bool enabled);
+[[nodiscard]] bool DebugShowIpPanelEnabled();
+void SetDebugShowIpPanelEnabled(bool enabled);
+
 class IpCheckClient final : public QObject {
 public:
 	explicit IpCheckClient(QObject *parent = nullptr);

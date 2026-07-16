@@ -8594,6 +8594,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_employee_ipcheck_hint" = "当前网络存在风控风险，建议更换网络环境后重新检测";
 "lng_employee_ipcheck_retry" = "重新检测";
 "lng_employee_ipcheck_continue" = "继续登录";
+"lng_employee_ipcheck_recheck" = "再次检测";
+"lng_employee_ipcheck_confirm" = "确认";
+"lng_employee_ipcheck_failed" = "检测失败，请稍后重试";
 "lng_employee_ipcheck_type_hosting" = "机房托管";
 "lng_employee_ipcheck_type_business" = "企业专线";
 "lng_employee_ipcheck_type_residential" = "家庭宽带";
