@@ -2,6 +2,11 @@ name: Windows.
 
 on:
   workflow_dispatch:
+    inputs:
+      enable_lto:
+        description: "开启 LTO(发布包用，链接慢约 1h;迭代测试建议关，约 20min)"
+        type: boolean
+        default: false
 
 jobs:
 
@@ -188,6 +193,12 @@ jobs:
 
       - name: Telegram Desktop build.
         if: env.ONLY_CACHE == 'false'
+        env:
+          # /CGTHREADS raises MSVC's LTCG code-generation parallelism from the
+          # default 4 to its hard maximum of 8 (the linker rejects higher).
+          # Injected via the LINK env var link.exe reads, so no CMake flag is
+          # overridden. Only set when LTO is on, otherwise link.exe warns.
+          LINK: ${{ inputs.enable_lto && '/CGTHREADS:8' || '' }}
         run: |
           cd %TBUILD%\%REPO_NAME%\Telegram
 
@@ -198,7 +209,7 @@ jobs:
           %TDESKTOP_BUILD_API% ^
           -D CMAKE_CONFIGURATION_TYPES=Release ^
           -D CMAKE_COMPILE_WARNING_AS_ERROR=ON ^
-          -D DESKTOP_APP_ENABLE_LTO=ON ^
+          -D DESKTOP_APP_ENABLE_LTO=${{ inputs.enable_lto && 'ON' || 'OFF' }} ^
           -D DESKTOP_APP_SPECIAL_TARGET=win64 ^
           -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF ^
