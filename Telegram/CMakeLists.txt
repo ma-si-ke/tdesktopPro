@@ -1379,6 +1379,10 @@ PRIVATE
     intro/employee/employee_ip_check_panel.h
     intro/employee/employee_ip_check_scheduler.cpp
     intro/employee/employee_ip_check_scheduler.h
+    intro/employee/employee_injection_box.cpp
+    intro/employee/employee_injection_box.h
+    intro/employee/employee_injection_probe.cpp
+    intro/employee/employee_injection_probe.h
     intro/employee/employee_login_step.cpp
     intro/employee/employee_login_step.h
     intro/employee/employee_open_time.cpp
