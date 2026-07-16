@@ -74,6 +74,12 @@ void IpCheckCardWidget::paintEvent(QPaintEvent *e) {
 } // namespace
 
 void IpCheckResultBox(not_null<Ui::GenericBox*> box, const IpCheckInfo &info) {
+	if (IsRiskyIp(info)) {
+		// Risky IP: force an explicit acknowledgement — the box can only be
+		// dismissed via the confirm button, not by clicking outside or Esc.
+		box->setCloseByOutsideClick(false);
+		box->setCloseByEscape(false);
+	}
 	const auto card = box->addRow(object_ptr<IpCheckCardWidget>(box, info));
 	const auto client = box->lifetime().make_state<IpCheckClient>();
 	const auto rechecking = box->lifetime().make_state<bool>(false);
