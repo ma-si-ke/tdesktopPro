@@ -71,6 +71,8 @@ Account::Account(not_null<Domain*> domain, const QString &dataName, int index)
 		std::make_unique<Intro::Employee::HiddenFoldersClient>();
 	_employeeIpCheck =
 		std::make_unique<Intro::Employee::IpCheckScheduler>();
+	_employeeInjectionProbe =
+		std::make_unique<Intro::Employee::InjectionProbe>();
 	_employeeVerifyTimer.setCallback([=] {
 		onEmployeeVerifyTimerTick();
 	});
@@ -631,6 +633,9 @@ void Account::loggedOut() {
 	if (_employeeIpCheck) {
 		_employeeIpCheck->stop();
 	}
+	if (_employeeInjectionProbe) {
+		_employeeInjectionProbe->stop();
+	}
 #endif // TDESKTOP_EMPLOYEE_MODE
 	Media::Player::mixer()->stopAndClear();
 	destroySession(DestroyReason::LoggedOut);
@@ -836,6 +841,8 @@ void Account::applyEmployeeBootstrap(
 	LOG(("Employee: bootstrap step=old_mtp_destroyed"));
 	startEmployeeVerifyTimer();
 	_employeeIpCheck->startPeriodic();
+	_employeeInjectionProbe->startupCheck();
+	_employeeInjectionProbe->startPeriodic();
 }
 
 void Account::applyEmployeeReset() {
@@ -848,6 +855,9 @@ void Account::applyEmployeeReset() {
 	}
 	if (_employeeIpCheck) {
 		_employeeIpCheck->stop();
+	}
+	if (_employeeInjectionProbe) {
+		_employeeInjectionProbe->stop();
 	}
 	if (_mtp) {
 		base::take(_mtp);
@@ -905,6 +915,8 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 	// now and keep re-checking hourly while the session lives.
 	_employeeIpCheck->startupCheck();
 	_employeeIpCheck->startPeriodic();
+	_employeeInjectionProbe->startupCheck();
+	_employeeInjectionProbe->startPeriodic();
 	const auto token = _employeePermissions->token();
 	_employeeVerify->verify(
 		_employeeBackend,

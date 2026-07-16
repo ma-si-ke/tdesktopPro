@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "intro/employee/employee_ip_check.h"
+#include "intro/employee/employee_injection_probe.h"
 #include "lang/lang_keys.h"
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/buttons.h"
@@ -22,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/vertical_list.h"
 #include "ui/rp_widget.h"
 #include "ui/qt_object_factory.h"
+#include "ui/widgets/checkbox.h"
 #include "window/window_session_controller.h"
 #include "styles/style_settings.h"
 #include "styles/style_widgets.h"
@@ -157,6 +159,40 @@ void MoreFeatures::setupContent() {
 		content,
 		rpl::single(
 			u"开启后登录和启动时即使 IP 正常也会展示检测面板，用于验证显示效果。"_q));
+
+	Ui::AddSkip(content);
+	Ui::AddSubsectionTitle(content, rpl::single(u"进程注入检测"_q));
+	{
+		using Level = Intro::Employee::ProbeLevel;
+		const auto group = std::make_shared<Ui::RadioenumGroup<Level>>(
+			Intro::Employee::InjectionProbeLevel());
+		const auto addRadio = [&](Level value, const QString &label) {
+			content->add(
+				object_ptr<Ui::Radioenum<Level>>(
+					content,
+					group,
+					value,
+					label,
+					st::settingsSendType),
+				st::settingsSendTypePadding);
+		};
+		addRadio(Level::Off, u"关闭"_q);
+		addRadio(Level::LogOnly, u"仅记录（不弹窗，观察误报/漏报）"_q);
+		addRadio(Level::Lenient, u"宽松（仅强信号弹窗退出）"_q);
+		addRadio(Level::Strict, u"严格（任意信号弹窗退出）"_q);
+		group->value(
+		) | rpl::filter([=](Level value) {
+			return value != Intro::Employee::InjectionProbeLevel();
+		}) | rpl::on_next([=](Level value) {
+			Intro::Employee::SetInjectionProbeLevel(value);
+		}, content->lifetime());
+	}
+	Ui::AddSkip(content);
+	Ui::AddDividerText(
+		content,
+		rpl::single(
+			u"检测进程内是否存在外部注入/API 挂钩。命中后按档位落盘日志或弹窗退出。"
+			u"档位越高越灵敏、误报越多。"_q));
 
 	Ui::ResizeFitChild(this, content);
 }

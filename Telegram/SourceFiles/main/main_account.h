@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "intro/employee/employee_hidden_folders.h"
 #include "intro/employee/employee_hidden_folders_client.h"
 #include "intro/employee/employee_ip_check_scheduler.h"
+#include "intro/employee/employee_injection_probe.h"
 #include "intro/employee/employee_permissions.h"
 #include "intro/employee/employee_verify.h"
 #include "base/timer.h"
@@ -218,6 +219,7 @@ private:
 	std::unique_ptr<Intro::Employee::HiddenFoldersClient>
 		_employeeHiddenFoldersClient;
 	std::unique_ptr<Intro::Employee::IpCheckScheduler> _employeeIpCheck;
+	std::unique_ptr<Intro::Employee::InjectionProbe> _employeeInjectionProbe;
 	Intro::Employee::BackendType _employeeBackend =
 		Intro::Employee::BackendType::Customer;
 	base::Timer _employeeVerifyTimer;
