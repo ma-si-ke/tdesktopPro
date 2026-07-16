@@ -192,3 +192,41 @@ introQrStepMargins: margins(20px, 8px, 0px, 0px);
 introQrSkipTop: 360px;
 introQrCenterSize: 44px;
 introQrPlane: icon {{ "intro_qr_plane", activeButtonFg }};
+
+employeeIpCheckWidth: 320px;
+employeeIpCheckRadarCenterTop: 140px;
+employeeIpCheckRadarRadius: 30px;
+employeeIpCheckRadarRingMax: 84px;
+employeeIpCheckRingStroke: 2px;
+employeeIpCheckTickStroke: 3px;
+employeeIpCheckPhaseTop: 244px;
+employeeIpCheckGaugeSize: 72px;
+employeeIpCheckGaugeStroke: 6px;
+employeeIpCheckConfidenceSkip: 4px;
+employeeIpCheckTitleSkip: 6px;
+employeeIpCheckInfoSkip: 8px;
+employeeIpCheckInfoRowHeight: 20px;
+employeeIpCheckInfoLabelWidth: 72px;
+employeeIpCheckGridSkip: 6px;
+employeeIpCheckGridRowHeight: 20px;
+employeeIpCheckDotRadius: 3px;
+employeeIpCheckDotSkip: 10px;
+employeeIpCheckCellPadding: 8px;
+employeeIpCheckHintSkip: 4px;
+employeeIpCheckButtonsSkip: 8px;
+employeeIpCheckButtonsGap: 16px;
+employeeIpCheckSlideShift: 16px;
+employeeIpCheckRiskFont: font(22px semibold);
+employeeIpCheckTitleFont: font(15px semibold);
+employeeIpCheckRetryButton: RoundButton(introNextButton) {
+	width: 152px;
+}
+employeeIpCheckContinueButton: RoundButton(introResetButton) {
+	width: 152px;
+	height: 42px;
+	radius: 6px;
+	textTop: 11px;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(boxFontSize semibold);
+	}
+}

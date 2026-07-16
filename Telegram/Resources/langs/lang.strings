@@ -8573,4 +8573,34 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_employee_label_backend" = "服务器";
 "lng_employee_connecting" = "正在登录...";
 
+"lng_employee_ipcheck_phase_ip" = "正在获取网络地址...";
+"lng_employee_ipcheck_phase_quality" = "正在分析网络质量...";
+"lng_employee_ipcheck_passed" = "网络环境良好";
+"lng_employee_ipcheck_title" = "检测当前网络环境具有风险";
+"lng_employee_ipcheck_confidence" = "结果置信度：{percent}%";
+"lng_employee_ipcheck_label_ip" = "IP 地址";
+"lng_employee_ipcheck_label_location" = "位置";
+"lng_employee_ipcheck_label_provider" = "运营商";
+"lng_employee_ipcheck_label_type" = "网络类型";
+"lng_employee_ipcheck_proxy" = "代理";
+"lng_employee_ipcheck_vpn" = "VPN";
+"lng_employee_ipcheck_compromised" = "失陷主机";
+"lng_employee_ipcheck_scraper" = "爬虫";
+"lng_employee_ipcheck_tor" = "Tor 网络";
+"lng_employee_ipcheck_hosting" = "机房托管";
+"lng_employee_ipcheck_anonymous" = "匿名网络";
+"lng_employee_ipcheck_hit" = "检测到";
+"lng_employee_ipcheck_clear" = "正常";
+"lng_employee_ipcheck_hint" = "当前网络存在风控风险，建议更换网络环境后重新检测";
+"lng_employee_ipcheck_retry" = "重新检测";
+"lng_employee_ipcheck_continue" = "继续登录";
+"lng_employee_ipcheck_type_hosting" = "机房托管";
+"lng_employee_ipcheck_type_business" = "企业专线";
+"lng_employee_ipcheck_type_residential" = "家庭宽带";
+"lng_employee_ipcheck_type_wireless" = "移动网络";
+"lng_employee_ipcheck_type_education" = "教育网络";
+"lng_employee_ipcheck_type_government" = "政府网络";
+"lng_employee_ipcheck_type_commercial" = "商业宽带";
+"lng_employee_ipcheck_type_unknown" = "未知";
+
 // Keys finished
