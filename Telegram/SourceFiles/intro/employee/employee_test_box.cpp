@@ -16,11 +16,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 EMPLOYEE_TEST_API Q_NEVER_INLINE void ShowEmployeeTestBoxA() {
 	LOG(("Employee: TEST box A invoked"));
-	const auto window = Core::App().activeWindow();
-	if (!window) {
-		return;
-	}
-	window->show(Ui::MakeInformBox(u"测试弹窗A"_q));
+	// This may be called from an injected, non-GUI thread — that is exactly
+	// the probe-test scenario — so marshal the Qt UI work onto the main
+	// thread. Touching widgets from a foreign thread would crash.
+	crl::on_main([] {
+		const auto window = Core::App().activeWindow();
+		if (!window) {
+			return;
+		}
+		window->show(Ui::MakeInformBox(u"测试弹窗A"_q));
+	});
 }
 
 #endif // TDESKTOP_EMPLOYEE_MODE
