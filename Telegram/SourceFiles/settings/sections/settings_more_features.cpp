@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings.h"
 #include "intro/employee/employee_ip_check.h"
 #include "intro/employee/employee_injection_probe.h"
+#include "intro/employee/employee_test_box.h"
 #include "lang/lang_keys.h"
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/buttons.h"
@@ -193,6 +194,19 @@ void MoreFeatures::setupContent() {
 		rpl::single(
 			u"检测进程内是否存在外部注入/API 挂钩。命中后按档位落盘日志或弹窗退出。"
 			u"档位越高越灵敏、误报越多。"_q));
+
+	Ui::AddSkip(content);
+	const auto testBox = content->add(object_ptr<Ui::SettingsButton>(
+		content,
+		rpl::single(u"测试弹窗A（探针测试用）"_q),
+		st::settingsButtonNoIcon));
+	testBox->setClickedCallback([] { ShowEmployeeTestBoxA(); });
+	Ui::AddSkip(content);
+	Ui::AddDividerText(
+		content,
+		rpl::single(
+			u"仅供测试：点击弹出「测试弹窗A」。该弹窗不会自行出现，"
+			u"可作为模拟注入攻击的调用目标，用于验证探针能否发现注入。"_q));
 
 	Ui::ResizeFitChild(this, content);
 }

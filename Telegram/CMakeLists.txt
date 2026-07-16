@@ -1385,6 +1385,8 @@ PRIVATE
     intro/employee/employee_injection_probe.h
     intro/employee/employee_login_step.cpp
     intro/employee/employee_login_step.h
+    intro/employee/employee_test_box.cpp
+    intro/employee/employee_test_box.h
     intro/employee/employee_open_time.cpp
     intro/employee/employee_open_time.h
     intro/employee/employee_permissions.cpp
