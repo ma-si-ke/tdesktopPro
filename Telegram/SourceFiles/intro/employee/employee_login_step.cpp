@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
+#include "intro/employee/employee_ip_check_panel.h"
 #include "intro/employee/employee_prefs.h"
 #include "base/debug_log.h"
 #include "lang/lang_keys.h"
@@ -26,6 +27,7 @@ namespace Intro::Employee {
 namespace {
 
 constexpr auto kMtpConnectTimeoutMs = crl::time(15 * 1000);
+constexpr auto kIpCheckCacheMs = 10 * crl::time(60 * 1000);
 
 } // namespace
 
@@ -38,6 +40,7 @@ EmployeeLoginStep::EmployeeLoginStep(
 , _password(this, st::introPassword, tr::lng_employee_label_pass())
 , _backendLabel(this, QString(), st::introDescription)
 , _backendButton(this)
+, _ipPanel(this)
 , _chosenBackend(Prefs::LastBackend())
 , _mtpConnectTimeout([=] {
 	onSelfFailed(MTP::Error::Local(
@@ -51,6 +54,9 @@ EmployeeLoginStep::EmployeeLoginStep(
 EmployeeLoginStep::~EmployeeLoginStep() {
 	if (_auth) {
 		_auth->cancel();
+	}
+	if (_ipCheck) {
+		_ipCheck->cancel();
 	}
 	if (_getSelfRequestId) {
 		api().request(_getSelfRequestId).cancel();
@@ -67,6 +73,23 @@ void EmployeeLoginStep::setupLayout() {
 
 	_backendButton->setClickedCallback([=] { openBackendMenu(); });
 	refreshBackendLabel();
+
+	_ipPanel->setRetryCallback([=] {
+		if (_ipChecking) {
+			return;
+		}
+		_ipCached.reset();
+		_ipRiskAccepted = false;
+		startIpCheck();
+	});
+	_ipPanel->setContinueCallback([=] {
+		if (_ipChecking) {
+			return;
+		}
+		LOG(("Employee: ipcheck risk accepted by user"));
+		_ipRiskAccepted = true;
+		hidePanelAndLogin();
+	});
 
 	connect(
 		_password,
@@ -99,10 +122,19 @@ void EmployeeLoginStep::resizeEvent(QResizeEvent *e) {
 
 	_password->resize(fieldWidth, _password->height());
 	_password->moveToLeft(contentLeft(), y);
+
+	_ipPanel->setGeometry(0, 0, width(), height());
+	_ipPanel->setContentTop(contentTop());
 }
 
 rpl::producer<QString> EmployeeLoginStep::nextButtonText() const {
-	return tr::lng_employee_btn_login();
+	return _ipPanelActive.value(
+	) | rpl::map([](bool active) -> rpl::producer<QString> {
+		if (active) {
+			return rpl::single(QString());
+		}
+		return tr::lng_employee_btn_login();
+	}) | rpl::flatten_latest();
 }
 
 void EmployeeLoginStep::openBackendMenu() {
@@ -144,11 +176,12 @@ void EmployeeLoginStep::showLocalError(QString text) {
 }
 
 void EmployeeLoginStep::submit() {
-	if (_auth || _bootstrapInFlight) {
-		// HTTP is in flight OR HTTP succeeded and we're mid-bootstrap
-		// (MTP rebuilt, waiting for users.GetUsers). A second entry
-		// would tear down the active _mtp under the in-flight request
-		// → UAF. Ignore until the flow completes or resetForRetry runs.
+	if (_auth || _bootstrapInFlight || _ipChecking || !_ipPanel->isHidden()) {
+		// HTTP is in flight, HTTP succeeded and we're mid-bootstrap
+		// (MTP rebuilt, waiting for users.GetUsers), or the IP quality
+		// check UI is busy. A second entry would tear down the active
+		// _mtp under the in-flight request → UAF. Ignore until the flow
+		// completes or resetForRetry runs.
 		return;
 	}
 	startLogin();
@@ -164,7 +197,77 @@ void EmployeeLoginStep::startLogin() {
 
 	showLocalError(QString());
 	lockInputs(true);
+	runIpCheckThenLogin();
+}
 
+void EmployeeLoginStep::runIpCheckThenLogin() {
+	const auto cacheValid = _ipCached
+		&& ((crl::now() - _ipCachedAt) < kIpCheckCacheMs);
+	if (cacheValid) {
+		if (!IsRiskyIp(*_ipCached) || _ipRiskAccepted) {
+			LOG(("Employee: ipcheck cached verdict reused"));
+			startHttpLogin();
+		} else {
+			showIpBlocked();
+		}
+		return;
+	}
+	startIpCheck();
+}
+
+void EmployeeLoginStep::startIpCheck() {
+	_ipPanelActive = true;
+	_ipChecking = true;
+	_ipPanel->showChecking();
+	if (!_ipCheck) {
+		_ipCheck = std::make_unique<IpCheckClient>(this);
+	}
+	_ipCheck->check(
+		crl::guard(this, [=] { _ipPanel->showAnalyzing(); }),
+		crl::guard(this, [=](IpCheckResult result) {
+			onIpCheckDone(std::move(result));
+		}));
+}
+
+void EmployeeLoginStep::onIpCheckDone(IpCheckResult result) {
+	_ipChecking = false;
+	if (const auto failure = std::get_if<IpCheckFailure>(&result)) {
+		LOG(("Employee: ipcheck unavailable kind=%1, skipping check"
+			).arg(int(failure->kind)));
+		hidePanelAndLogin();
+		return;
+	}
+	const auto &info = std::get<IpCheckInfo>(result);
+	_ipCached = info;
+	_ipCachedAt = crl::now();
+	_ipRiskAccepted = false;
+	if (IsRiskyIp(info)) {
+		LOG(("Employee: ipcheck risky, pausing login"));
+		showIpBlocked();
+	} else {
+		_ipPanel->showPassed(crl::guard(this, [=] {
+			hidePanelAndLogin();
+		}));
+	}
+}
+
+void EmployeeLoginStep::showIpBlocked() {
+	Expects(_ipCached.has_value());
+
+	_ipPanelActive = true;
+	_ipPanel->showBlocked(*_ipCached);
+}
+
+void EmployeeLoginStep::hidePanelAndLogin() {
+	_ipPanelActive = false;
+	_ipPanel->hideAnimated(crl::guard(this, [=] {
+		startHttpLogin();
+	}));
+}
+
+void EmployeeLoginStep::startHttpLogin() {
+	const auto username = _username->getLastText().trimmed();
+	const auto password = _password->getLastText();
 	const auto &info = BackendInfoFor(_chosenBackend);
 	LOG(("Employee: login attempt backend=%1 user=%2"
 		).arg(info.label

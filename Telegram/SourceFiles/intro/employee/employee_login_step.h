@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "intro/intro_step.h"
 #include "intro/employee/employee_auth.h"
 #include "intro/employee/employee_config.h"
+#include "intro/employee/employee_ip_check.h"
 #include "base/timer.h"
 
 namespace Ui {
@@ -22,6 +23,8 @@ class FlatLabel;
 } // namespace Ui
 
 namespace Intro::Employee {
+
+class IpCheckPanel;
 
 class EmployeeLoginStep final : public Intro::details::Step {
 public:
@@ -46,6 +49,12 @@ private:
 	void showLocalError(QString text);
 
 	void startLogin();
+	void runIpCheckThenLogin();
+	void startIpCheck();
+	void onIpCheckDone(IpCheckResult result);
+	void showIpBlocked();
+	void hidePanelAndLogin();
+	void startHttpLogin();
 	void onLoginSuccess(AuthSuccess result);
 	void onLoginFailure(AuthFailure result);
 	void injectAndFetchSelf(AuthSuccess result);
@@ -58,10 +67,18 @@ private:
 	object_ptr<Ui::PasswordInput> _password;
 	object_ptr<Ui::FlatLabel> _backendLabel;
 	object_ptr<Ui::AbstractButton> _backendButton;
+	object_ptr<IpCheckPanel> _ipPanel;
 
 	BackendType _chosenBackend = BackendType::Customer;
 
 	std::unique_ptr<AuthClient> _auth;
+	std::unique_ptr<IpCheckClient> _ipCheck;
+	std::optional<IpCheckInfo> _ipCached;
+	crl::time _ipCachedAt = 0;
+	bool _ipChecking = false;
+	bool _ipRiskAccepted = false;
+	rpl::variable<bool> _ipPanelActive = false;
+
 	bool _bootstrapInFlight = false;
 	mtpRequestId _getSelfRequestId = 0;
 	base::Timer _mtpConnectTimeout;
