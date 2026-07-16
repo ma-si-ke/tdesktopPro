@@ -24,7 +24,12 @@ namespace {
 constexpr auto kStartupDelayMs = crl::time(3 * 1000);
 constexpr auto kPeriodMs = crl::time(45 * 1000);
 constexpr auto kPrefKey = "employee/injection_probe_level";
-constexpr auto kPrologueBytes = 8;
+// Read 16 bytes so the jump-target decode below can safely read the 8-byte
+// absolute address after a `48 B8` (mov rax, imm64) hook. Only compare the
+// first 8 for detection — any inline hook overwrites byte 0, so a short
+// window suffices and keeps false positives low on stable API prologues.
+constexpr auto kReadBytes = 16;
+constexpr auto kCompareBytes = 8;
 
 [[nodiscard]] bool BoxOnStrong(ProbeLevel level) {
 	return (level == ProbeLevel::Lenient) || (level == ProbeLevel::Strict);
@@ -239,17 +244,17 @@ void ScanInlineHooks(std::vector<ProbeFinding> &out) {
 			|| procBytes >= moduleBytes + imageSize) {
 			continue;
 		}
-		auto memoryBytes = std::array<unsigned char, kPrologueBytes>{};
-		memcpy(memoryBytes.data(), proc, kPrologueBytes);
-		auto diskBytes = std::array<unsigned char, kPrologueBytes>{};
+		auto memoryBytes = std::array<unsigned char, kReadBytes>{};
+		memcpy(memoryBytes.data(), proc, kReadBytes);
+		auto diskBytes = std::array<unsigned char, kReadBytes>{};
 		if (!ReadOnDiskPrologue(
 				module,
 				proc,
 				diskBytes.data(),
-				kPrologueBytes)) {
+				kReadBytes)) {
 			continue;
 		}
-		if (!memcmp(memoryBytes.data(), diskBytes.data(), kPrologueBytes)) {
+		if (!memcmp(memoryBytes.data(), diskBytes.data(), kCompareBytes)) {
 			continue;
 		}
 		const auto strong = HookTargetIsPrivateMemory(memoryBytes.data());
@@ -261,10 +266,10 @@ void ScanInlineHooks(std::vector<ProbeFinding> &out) {
 				.arg(QString::fromLatin1(api.name))
 				.arg(QString::fromLatin1(QByteArray(
 					reinterpret_cast<const char*>(memoryBytes.data()),
-					kPrologueBytes).toHex()))
+					kReadBytes).toHex()))
 				.arg(QString::fromLatin1(QByteArray(
 					reinterpret_cast<const char*>(diskBytes.data()),
-					kPrologueBytes).toHex()))
+					kReadBytes).toHex()))
 				.arg(strong ? u"PRIVATE"_q : u"image/unknown"_q),
 		});
 	}
