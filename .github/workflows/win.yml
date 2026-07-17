@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       enable_lto:
-        description: "开启 LTO(默认开;此代码量下关掉反而更慢，别关)"
+        description: "开启 LTO(Ninja+sccache 下默认关;关掉才能让 sccache 缓存编译，暖缓存后增量最快)"
         type: boolean
-        default: true
+        default: false
 
 jobs:
 
@@ -18,12 +18,19 @@ jobs:
       matrix:
         arch: [x64]
         qt: [qt6]
-        generator: [""]
+        # Ninja Multi-Config so CMAKE_*_COMPILER_LAUNCHER (sccache) is honored;
+        # MSBuild ignores compiler launchers. Still uses MSVC cl (loaded by
+        # msvc-dev-cmd) — Ninja only replaces the build driver.
+        generator: ["Ninja Multi-Config"]
 
     env:
       UPLOAD_ARTIFACT: "true"
       ONLY_CACHE: "false"
       PREPARE_PATH: "Telegram/build/prepare/prepare.py"
+      # Cache compilation across runs via sccache backed by the GitHub Actions
+      # cache. Pays off with LTO OFF (caches the expensive per-TU /O2 compile);
+      # the LTCG link is never cacheable, so LTO ON gets little benefit.
+      SCCACHE_GHA_ENABLED: "true"
 
     defaults:
       run:
@@ -84,6 +91,9 @@ jobs:
           arch: ${{ matrix.arch }}
           sdk: ${{ env.SDK }}
           toolset: ${{ case(matrix.arch == 'arm64', '', '14.44') }}
+
+      - name: Run sccache-cache.
+        uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: NuGet sources.
         run: |
@@ -209,6 +219,8 @@ jobs:
           %TDESKTOP_BUILD_API% ^
           -D CMAKE_CONFIGURATION_TYPES=Release ^
           -D CMAKE_COMPILE_WARNING_AS_ERROR=ON ^
+          -D CMAKE_C_COMPILER_LAUNCHER=sccache ^
+          -D CMAKE_CXX_COMPILER_LAUNCHER=sccache ^
           -D DESKTOP_APP_ENABLE_LTO=${{ inputs.enable_lto && 'ON' || 'OFF' }} ^
           -D DESKTOP_APP_SPECIAL_TARGET=win64 ^
           -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
