@@ -3,10 +3,13 @@ name: Windows.
 on:
   workflow_dispatch:
     inputs:
+      # 注意:此开关走的是 /GL 即 clang 的 FullLTO(单体、基本串行，用不满多核）。
+      # 第一步先关它，纯做 clang-cl 编译探路；等编译通过后再单独接 ThinLTO
+      # (-flto=thin + lld + llvm-lib)才能吃满 32 核。
       enable_lto:
-        description: "开启 LTO(clang-cl 下默认开，走 clang LTO / 目标 ThinLTO)"
+        description: "开启 LTO(此为 FullLTO/串行，不是 ThinLTO;探路阶段请保持关)"
         type: boolean
-        default: true
+        default: false
 
 jobs:
 
