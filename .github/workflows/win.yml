@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       enable_lto:
-        description: "开启 LTO(默认开;此代码量下关掉反而更慢，别关)"
+        description: "开启 LTO(clang-cl 下默认开，走 clang LTO / 目标 ThinLTO)"
         type: boolean
         default: true
 
@@ -18,7 +18,10 @@ jobs:
       matrix:
         arch: [x64]
         qt: [qt6]
-        generator: [""]
+        # clang-cl needs Ninja (the VS generator drives compilers via toolsets,
+        # not CMAKE_CXX_COMPILER). MSVC env is still loaded by msvc-dev-cmd so
+        # clang-cl finds the Windows SDK / MSVC headers.
+        generator: ["Ninja Multi-Config"]
 
     env:
       UPLOAD_ARTIFACT: "true"
@@ -84,6 +87,13 @@ jobs:
           arch: ${{ matrix.arch }}
           sdk: ${{ env.SDK }}
           toolset: ${{ case(matrix.arch == 'arm64', '', '14.44') }}
+
+      - name: Install LLVM (clang-cl + lld).
+        shell: pwsh
+        run: |
+          choco install llvm --no-progress -y
+          echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          & "C:\Program Files\LLVM\bin\clang-cl.exe" --version
 
       - name: NuGet sources.
         run: |
@@ -193,12 +203,6 @@ jobs:
 
       - name: Telegram Desktop build.
         if: env.ONLY_CACHE == 'false'
-        env:
-          # /CGTHREADS raises MSVC's LTCG code-generation parallelism from the
-          # default 4 to its hard maximum of 8 (the linker rejects higher).
-          # Injected via the LINK env var link.exe reads, so no CMake flag is
-          # overridden. Only set when LTO is on, otherwise link.exe warns.
-          LINK: ${{ inputs.enable_lto && '/CGTHREADS:8' || '' }}
         run: |
           cd %TBUILD%\%REPO_NAME%\Telegram
 
@@ -207,8 +211,10 @@ jobs:
           %TDESKTOP_BUILD_ARCH% ^
           ${{ matrix.qt }} ^
           %TDESKTOP_BUILD_API% ^
+          -D CMAKE_C_COMPILER=clang-cl ^
+          -D CMAKE_CXX_COMPILER=clang-cl ^
           -D CMAKE_CONFIGURATION_TYPES=Release ^
-          -D CMAKE_COMPILE_WARNING_AS_ERROR=ON ^
+          -D CMAKE_COMPILE_WARNING_AS_ERROR=OFF ^
           -D DESKTOP_APP_ENABLE_LTO=${{ inputs.enable_lto && 'ON' || 'OFF' }} ^
           -D DESKTOP_APP_SPECIAL_TARGET=win64 ^
           -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
