@@ -1269,6 +1269,26 @@ void Settings::writePrefImpl<QString>(std::string_view key, QString value) {
 	writePrefGeneric(key, value.toUtf8());
 }
 
+template <>
+std::optional<int> Settings::readPrefImpl<int>(std::string_view key) {
+	if (const auto data = readPrefGeneric(key)) {
+		if (data->size() == int(sizeof(qint32))) {
+			auto value = qint32(0);
+			memcpy(&value, data->constData(), sizeof(value));
+			return int(value);
+		}
+	}
+	return {};
+}
+
+template <>
+void Settings::writePrefImpl<int>(std::string_view key, int value) {
+	const auto raw = qint32(value);
+	writePrefGeneric(
+		key,
+		QByteArray(reinterpret_cast<const char*>(&raw), sizeof(raw)));
+}
+
 QString Settings::getSoundPath(const QString &key) const {
 	auto it = _soundOverrides.find(key);
 	if (it != _soundOverrides.end()) {

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       enable_lto:
-        description: "开启 LTO(发布包用，链接慢约 1h;迭代测试建议关，约 20min)"
+        description: "开启 LTO(默认开;此代码量下关掉反而更慢，别关)"
         type: boolean
-        default: false
+        default: true
 
 jobs:
 
