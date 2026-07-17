@@ -205,6 +205,18 @@ jobs:
           sed -i -E '/^[[:space:]]*\/WX[[:space:]]*$/d' "$OPTS"
           echo "Remaining /MP or /WX lines (expect none):"
           grep -nE '/MP\b|/WX\b' "$OPTS" || echo "  none"
+          # Downgrade clang diagnostics that are errors-by-default but benign
+          # here. c++11-narrowing: generated scheme.h emits 32-bit MTProto type
+          # IDs as signed literals used in unsigned case labels (same bits).
+          cat >> "$OPTS" <<'EOF'
+
+          # clang-cl compatibility (added by CI, not committed).
+          if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+              target_compile_options(common_options INTERFACE
+                  -Wno-c++11-narrowing
+              )
+          endif()
+          EOF
 
       - name: Provide DesktopPrivate signing keys.
         if: env.ONLY_CACHE == 'false'
