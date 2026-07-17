@@ -41,7 +41,7 @@ void InjectionDetectedBox(not_null<Ui::GenericBox*> box) {
 	auto icon = Settings::CreateLottieIcon(
 		box,
 		{
-			.name = u"ban"_q,
+			.name = u"stop"_q,
 			.sizeOverride = st::dialogsSuggestionDeniedAuthLottie,
 		},
 		st::dialogsSuggestionDeniedAuthLottieMargins);
