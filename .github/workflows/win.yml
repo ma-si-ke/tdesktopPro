@@ -193,6 +193,19 @@ jobs:
         shell: bash
         run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
 
+      - name: Patch cmake options for clang-cl.
+        shell: bash
+        run: |
+          # clang-cl has no /MP (Ninja parallelizes per-file) and a different
+          # warning set than MSVC, so tdesktop's hardcoded /MP + /WX turn benign
+          # clang warnings into errors. Drop both from the checked-out submodule
+          # working copy (not committed) — matches the Windows-MSVC.cmake sed hack.
+          OPTS="$TBUILD/$REPO_NAME/cmake/options_win.cmake"
+          sed -i -E '/^[[:space:]]*\/MP([[:space:]]|$)/d' "$OPTS"
+          sed -i -E '/^[[:space:]]*\/WX[[:space:]]*$/d' "$OPTS"
+          echo "Remaining /MP or /WX lines (expect none):"
+          grep -nE '/MP\b|/WX\b' "$OPTS" || echo "  none"
+
       - name: Provide DesktopPrivate signing keys.
         if: env.ONLY_CACHE == 'false'
         shell: bash
