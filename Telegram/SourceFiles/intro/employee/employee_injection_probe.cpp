@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <tlhelp32.h>
 #endif // Q_OS_WIN
 
 namespace Intro::Employee {
@@ -72,7 +73,56 @@ namespace {
 		|| (masked == PAGE_EXECUTE_WRITECOPY);
 }
 
+// Win32 start addresses of every thread in this process. A thread whose
+// start lands in private executable memory is a remote/injected thread —
+// the signal that distinguishes shellcode from legitimate JIT (Qt/PCRE2
+// regex JIT allocates RWX too, but is *called*, never thread-started).
+[[nodiscard]] std::vector<uintptr_t> OwnThreadStartAddresses() {
+	auto result = std::vector<uintptr_t>();
+	using Fn = LONG(NTAPI*)(HANDLE, int, PVOID, ULONG, PULONG);
+	static const auto query = reinterpret_cast<Fn>(GetProcAddress(
+		GetModuleHandleW(L"ntdll.dll"),
+		"NtQueryInformationThread"));
+	if (!query) {
+		return result;
+	}
+	const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (snapshot == INVALID_HANDLE_VALUE) {
+		return result;
+	}
+	const auto pid = GetCurrentProcessId();
+	auto entry = THREADENTRY32{ sizeof(THREADENTRY32) };
+	if (Thread32First(snapshot, &entry)) {
+		do {
+			if (entry.th32OwnerProcessID != pid) {
+				continue;
+			}
+			const auto thread = OpenThread(
+				THREAD_QUERY_INFORMATION,
+				FALSE,
+				entry.th32ThreadID);
+			if (!thread) {
+				continue;
+			}
+			auto start = PVOID(nullptr);
+			constexpr auto kThreadQuerySetWin32StartAddress = 9;
+			if (!query(
+					thread,
+					kThreadQuerySetWin32StartAddress,
+					&start,
+					sizeof(start),
+					nullptr)) {
+				result.push_back(reinterpret_cast<uintptr_t>(start));
+			}
+			CloseHandle(thread);
+		} while (Thread32Next(snapshot, &entry));
+	}
+	CloseHandle(snapshot);
+	return result;
+}
+
 void ScanPrivateExecMemory(std::vector<ProbeFinding> &out) {
+	const auto threadStarts = OwnThreadStartAddresses();
 	auto info = MEMORY_BASIC_INFORMATION{};
 	auto address = uintptr_t(0);
 	auto guard = 0;
@@ -85,16 +135,30 @@ void ScanPrivateExecMemory(std::vector<ProbeFinding> &out) {
 			&& info.Type == MEM_PRIVATE
 			&& IsExecutable(info.Protect)
 			&& !(info.Protect & PAGE_GUARD)) {
-			const auto rwx = IsWritableExecutable(info.Protect);
-			out.push_back(ProbeFinding{
-				.kind = FindingKind::PrivateExecMemory,
-				.strong = rwx,
-				.detail = u"privexec base=0x%1 size=%2 protect=0x%3 %4"_q
-					.arg(reinterpret_cast<quintptr>(info.BaseAddress), 0, 16)
-					.arg(quint64(regionSize))
-					.arg(info.Protect, 0, 16)
-					.arg(rwx ? u"RWX"_q : u"RX"_q),
-			});
+			const auto base = reinterpret_cast<uintptr_t>(info.BaseAddress);
+			const auto regionEnd = base + regionSize;
+			auto injectedThread = false;
+			for (const auto start : threadStarts) {
+				if (start >= base && start < regionEnd) {
+					injectedThread = true;
+					break;
+				}
+			}
+			// Dormant private-exec memory (JIT/trampoline pools) is left
+			// alone; only a region a thread actually *starts* in counts.
+			if (injectedThread) {
+				const auto rwx = IsWritableExecutable(info.Protect);
+				out.push_back(ProbeFinding{
+					.kind = FindingKind::PrivateExecMemory,
+					.strong = true,
+					.detail = u"privexec base=0x%1 size=%2 protect=0x%3 %4 "
+						u"thread-start"_q
+						.arg(base, 0, 16)
+						.arg(quint64(regionSize))
+						.arg(info.Protect, 0, 16)
+						.arg(rwx ? u"RWX"_q : u"RX"_q),
+				});
+			}
 		}
 		const auto next = address + (regionSize ? regionSize : 0x1000);
 		if (next <= address) {
