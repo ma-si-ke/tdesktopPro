@@ -45,9 +45,9 @@ constexpr auto kCompareBytes = 8;
 ProbeLevel InjectionProbeLevel() {
 	const auto raw = Core::App().settings().readPref<int>(
 		kPrefKey,
-		int(ProbeLevel::LogOnly));
+		int(ProbeLevel::Lenient));
 	if (raw < int(ProbeLevel::Off) || raw > int(ProbeLevel::Strict)) {
-		return ProbeLevel::LogOnly;
+		return ProbeLevel::Lenient;
 	}
 	return ProbeLevel(raw);
 }
