@@ -223,6 +223,7 @@ jobs:
           -D CMAKE_CXX_COMPILER_LAUNCHER=sccache ^
           -D DESKTOP_APP_ENABLE_LTO=${{ inputs.enable_lto && 'ON' || 'OFF' }} ^
           -D DESKTOP_APP_SPECIAL_TARGET=win64 ^
+          -D CMAKE_POLICY_DEFAULT_CMP0141=NEW ^
           -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded ^
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF ^
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF ^
