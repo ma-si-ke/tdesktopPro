@@ -78,11 +78,17 @@ void OpenServiceNotificationsBox(
 		box,
 		rpl::single(u"输入密码后将在新窗口打开官方通知（777000）会话。"_q),
 		st::boxLabel));
-	const auto field = box->addRow(object_ptr<Ui::PasswordInput>(
-		box,
+	const auto fieldWrap = box->addRow(object_ptr<Ui::RpWidget>(box));
+	const auto field = Ui::CreateChild<Ui::PasswordInput>(
+		fieldWrap,
 		st::defaultInputField,
-		rpl::single(u"密码"_q)));
+		rpl::single(u"密码"_q));
 	field->setMaxLength(64);
+	fieldWrap->resize(fieldWrap->width(), field->height());
+	fieldWrap->widthValue(
+	) | rpl::on_next([=](int width) {
+		field->resize(width, field->height());
+	}, fieldWrap->lifetime());
 	box->setFocusCallback([=] { field->setFocusFast(); });
 
 	const auto submit = [=] {
