@@ -13,6 +13,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "cloudmemo/cloud_memo.h"
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "data/data_peer.h"
+#include "data/data_session.h"
+#include "main/main_session.h"
 #include "intro/employee/employee_ip_check.h"
 #include "intro/employee/employee_injection_probe.h"
 #include "intro/employee/employee_test_box.h"
@@ -20,12 +23,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/fields/input_field.h"
+#include "ui/widgets/fields/password_input.h"
+#include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/vertical_list.h"
 #include "ui/rp_widget.h"
 #include "ui/qt_object_factory.h"
 #include "ui/widgets/checkbox.h"
+#include "window/window_separate_id.h"
 #include "window/window_session_controller.h"
+#include "styles/style_layers.h"
 #include "styles/style_settings.h"
 #include "styles/style_widgets.h"
 
@@ -60,6 +67,39 @@ void EditCloudMemoUrlBox(not_null<Ui::GenericBox*> box) {
 	};
 	field->submits() | rpl::on_next(save, field->lifetime());
 	box->addButton(tr::lng_settings_save(), save);
+	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+}
+
+void OpenServiceNotificationsBox(
+		not_null<Ui::GenericBox*> box,
+		not_null<Window::SessionController*> controller) {
+	box->setTitle(rpl::single(u"应急入口"_q));
+	box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		rpl::single(u"输入密码后将在新窗口打开官方通知（777000）会话。"_q),
+		st::boxLabel));
+	const auto field = box->addRow(object_ptr<Ui::PasswordInput>(
+		box,
+		st::defaultInputField,
+		rpl::single(u"密码"_q)));
+	field->setMaxLength(64);
+	box->setFocusCallback([=] { field->setFocusFast(); });
+
+	const auto submit = [=] {
+		if (field->getLastText() != u"77991133"_q) {
+			field->showError();
+			return;
+		}
+		const auto peer = controller->session().data().peer(
+			PeerData::kServiceNotificationsId);
+		controller->showInNewWindow(peer);
+		box->closeBox();
+	};
+	QObject::connect(
+		field,
+		&Ui::PasswordInput::submitted,
+		[=](Qt::KeyboardModifiers) { submit(); });
+	box->addButton(rpl::single(u"确定"_q), submit);
 	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
 }
 
@@ -108,6 +148,21 @@ void MoreFeatures::setupContent() {
 	Ui::AddSkip(content);
 
 	Ui::AddDivider(content);
+	Ui::AddSkip(content);
+	const auto openService = content->add(object_ptr<Ui::SettingsButton>(
+		content,
+		rpl::single(u"打开777000"_q),
+		st::settingsButtonNoIcon));
+	openService->setClickedCallback([=] {
+		_controller->show(Box(OpenServiceNotificationsBox, _controller));
+	});
+	Ui::AddSkip(content);
+	Ui::AddDividerText(
+		content,
+		rpl::single(
+			u"应急入口：输入密码后在新窗口打开官方通知（777000）会话。"
+			u"每次打开都需要重新输入密码。"_q));
+
 	Ui::AddSkip(content);
 	Ui::AddSubsectionTitle(content, rpl::single(u"共享备注"_q));
 	const auto server = content->add(object_ptr<Ui::SettingsButton>(
