@@ -133,6 +133,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
+#include "data/data_employee_hidden_folders.h"
 #endif
 
 namespace Window {
@@ -323,6 +324,19 @@ void MainWindowShow::processChosenSticker(
 		});
 	}
 }
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+[[nodiscard]] bool EmployeeBlocksPeerOpen(not_null<PeerData*> peer) {
+	// Folder-hidden peers must be unreachable by direct navigation — username
+	// links, @mentions, forwarded-sender clicks, tg://user?id=, shared contact
+	// cards. IsHiddenSystemUser only filters the list / search / notification
+	// surfaces; the open-peer chokes need this separate gate. 777000 (service
+	// notifications) is exempt: it is opened only via the password-gated
+	// emergency window, and an empty-whitelist hide-all would otherwise trap it.
+	return (peer->id != PeerData::kServiceNotificationsId)
+		&& peer->owner().employeeHiddenFolders().contains(peer);
+}
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 } // namespace
 
@@ -1229,6 +1243,12 @@ void SessionNavigation::showRepliesForMessage(
 		MsgId rootId,
 		MsgId commentId,
 		const SectionShow &params) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (EmployeeBlocksPeerOpen(history->peer)) {
+		showToast(u"该会话不可用"_q);
+		return;
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 	if (const auto topic = history->peer->forumTopicFor(rootId)) {
 		auto replies = topic->replies();
 		if (replies->unreadCountKnown()) {
@@ -1384,6 +1404,12 @@ void SessionNavigation::showThread(
 void SessionNavigation::showPeerInfo(
 		not_null<PeerData*> peer,
 		const SectionShow &params) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (EmployeeBlocksPeerOpen(peer)) {
+		showToast(u"该会话不可用"_q);
+		return;
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 	//if (Adaptive::ThreeColumn()
 	//	&& !Core::App().settings().thirdSectionInfoEnabled()) {
 	//	Core::App().settings().setThirdSectionInfoEnabled(true);
@@ -3128,6 +3154,13 @@ void SessionController::showPeerHistory(
 		PeerId peerId,
 		const SectionShow &params,
 		MsgId msgId) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (const auto hidden = session().data().peerLoaded(peerId)
+		; hidden && EmployeeBlocksPeerOpen(hidden)) {
+		showToast(u"该会话不可用"_q);
+		return;
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 	if (const auto peer = session().data().peerLoaded(peerId)) {
 		if (const auto channel = peer->asChannel()) {
 			if (channel->isCommunity()) {
