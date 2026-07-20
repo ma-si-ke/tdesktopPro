@@ -465,6 +465,90 @@ void AddForwardAction(
 	AddForwardMessageAction(menu, request, list);
 }
 
+bool AddForwardNoSourceSelectedAction(
+		not_null<Ui::PopupMenu*> menu,
+		const ContextMenuRequest &request,
+		not_null<ListWidget*> list) {
+	if (!request.overSelection || request.selectedItems.empty()) {
+		return false;
+	}
+	if (!ranges::all_of(request.selectedItems, &SelectedItem::canForward)) {
+		return false;
+	}
+
+	const auto action = menu->addAction(u"转发(无来源)"_q, [=] {
+		const auto weak = base::make_weak(list);
+		const auto callback = [=] {
+			if (const auto strong = weak.get()) {
+				strong->cancelSelection();
+			}
+		};
+		Window::ShowForwardMessagesBox(
+			request.navigation,
+			Data::ForwardDraft{
+				.ids = ExtractIdsList(request.selectedItems),
+				.options = Data::ForwardOptions::NoSenderNames,
+			},
+			callback);
+	}, &st::menuIconForward);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&request.navigation->session(),
+		Intro::Employee::PermissionKey::MsgForward,
+		action);
+#endif
+	return true;
+}
+
+bool AddForwardNoSourceMessageAction(
+		not_null<Ui::PopupMenu*> menu,
+		const ContextMenuRequest &request,
+		not_null<ListWidget*> list) {
+	const auto item = request.item;
+	if (!request.selectedItems.empty()) {
+		return false;
+	} else if (!item || !item->allowsForward()) {
+		return false;
+	}
+	const auto owner = &item->history()->owner();
+	const auto asGroup = (request.pointState != PointState::GroupPart);
+	if (asGroup) {
+		if (const auto group = owner->groups().find(item)) {
+			if (!ranges::all_of(group->items, &HistoryItem::allowsForward)) {
+				return false;
+			}
+		}
+	}
+	const auto itemId = item->fullId();
+	const auto action = menu->addAction(u"转发(无来源)"_q, [=] {
+		if (const auto item = owner->message(itemId)) {
+			Window::ShowForwardMessagesBox(
+				request.navigation,
+				Data::ForwardDraft{
+					.ids = (asGroup
+						? owner->itemOrItsGroup(item)
+						: MessageIdsList{ 1, itemId }),
+					.options = Data::ForwardOptions::NoSenderNames,
+				});
+		}
+	}, &st::menuIconForward);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	Intro::Employee::GuardAction(
+		&item->history()->session(),
+		Intro::Employee::PermissionKey::MsgForward,
+		action);
+#endif
+	return true;
+}
+
+void AddForwardNoSourceAction(
+		not_null<Ui::PopupMenu*> menu,
+		const ContextMenuRequest &request,
+		not_null<ListWidget*> list) {
+	AddForwardNoSourceSelectedAction(menu, request, list);
+	AddForwardNoSourceMessageAction(menu, request, list);
+}
+
 bool AddSendNowSelectedAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
@@ -1103,6 +1187,7 @@ void AddMessageActions(
 		not_null<ListWidget*> list) {
 	AddPostLinkAction(menu, request);
 	AddForwardAction(menu, request, list);
+	AddForwardNoSourceAction(menu, request, list);
 	AddSendNowAction(menu, request, list);
 	AddDeleteAction(menu, request, list);
 	AddDownloadFilesAction(menu, request, list);
