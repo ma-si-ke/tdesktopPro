@@ -4079,6 +4079,14 @@ void ToggleHistoryArchived(
 		std::shared_ptr<ChatHelpers::Show> show,
 		not_null<History*> history,
 		bool archived) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	// Archiving is disabled for employees. Every entry point — context menu,
+	// swipe quick-action, the ArchiveChat keyboard shortcut and the contact-
+	// status bar — routes through here, so a no-op seals them all at once.
+	(void)show;
+	(void)history;
+	(void)archived;
+#else
 	const auto callback = [=] {
 		show->showToast(Ui::Toast::Config{
 			.text = { (archived
@@ -4098,6 +4106,7 @@ void ToggleHistoryArchived(
 		history,
 		archived,
 		callback);
+#endif // TDESKTOP_EMPLOYEE_MODE
 }
 
 Fn<void()> ClearHistoryHandler(
@@ -4453,6 +4462,13 @@ bool IsArchived(not_null<History*> history) {
 }
 
 bool CanArchive(History *history, PeerData *peer) {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	// Archiving is disabled for employees: hide the affordance from the chat-
+	// list context menu and the swipe quick-action.
+	(void)history;
+	(void)peer;
+	return false;
+#else
 	if (history && history->useTopPromotion()) {
 		return false;
 	} else if (const auto channel = peer ? peer->asChannel() : nullptr
@@ -4466,6 +4482,7 @@ bool CanArchive(History *history, PeerData *peer) {
 		}
 	}
 	return true;
+#endif // TDESKTOP_EMPLOYEE_MODE
 }
 
 void PeerMenuConfirmToggleFee(

@@ -120,14 +120,16 @@ void PerformQuickDialogAction(
 				tr::lng_quick_dialog_action_toast_unread_success(tr::now));
 		}
 	} else if (action == Dialogs::Ui::QuickDialogAction::Archive) {
-		const auto isArchived = Window::IsArchived(history);
-		controller->showToast(isArchived
-			? tr::lng_quick_dialog_action_toast_unarchive_success(tr::now)
-			: tr::lng_quick_dialog_action_toast_archive_success(tr::now));
-		history->session().api().toggleHistoryArchived(
-			history,
-			!isArchived,
-			[] {});
+		if (Window::CanArchive(history, peer)) {
+			const auto isArchived = Window::IsArchived(history);
+			controller->showToast(isArchived
+				? tr::lng_quick_dialog_action_toast_unarchive_success(tr::now)
+				: tr::lng_quick_dialog_action_toast_archive_success(tr::now));
+			history->session().api().toggleHistoryArchived(
+				history,
+				!isArchived,
+				[] {});
+		}
 	} else if (action == Dialogs::Ui::QuickDialogAction::Delete) {
 		Window::DeleteAndLeaveHandler(controller, peer)();
 	}
