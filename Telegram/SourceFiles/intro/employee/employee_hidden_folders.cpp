@@ -17,34 +17,42 @@ HiddenFolders::HiddenFolders() = default;
 
 HiddenFolders::~HiddenFolders() = default;
 
-bool HiddenFolders::has(const QString &name) const {
-	return _names.current().contains(name);
+HiddenFoldersMode HiddenFolders::mode() const {
+	return _mode;
 }
 
-const QStringList &HiddenFolders::names() const {
-	return _names.current();
+bool HiddenFolders::containsFolder(const QString &name) const {
+	for (const auto &entry : _folders) {
+		if (entry.name == name) {
+			return true;
+		}
+	}
+	return false;
 }
 
-rpl::producer<QStringList> HiddenFolders::value() const {
-	return _names.value();
+bool HiddenFolders::isHideAll() const {
+	return (_mode == HiddenFoldersMode::Whitelist) && _folders.empty();
 }
 
 rpl::producer<> HiddenFolders::changes() const {
-	return _names.changes() | rpl::to_empty;
+	return _changes.events();
 }
 
-bool HiddenFolders::isHideAllSentinel() const {
-	const auto &list = _names.current();
-	return (list.size() == 1) && (list.first() == u"1"_q);
-}
-
-void HiddenFolders::apply(QStringList names) {
-	LOG(("Employee: HiddenFolders::apply count=%1").arg(names.size()));
-	_names = std::move(names);
+void HiddenFolders::apply(
+		HiddenFoldersMode mode,
+		std::vector<HiddenFolderEntry> folders) {
+	LOG(("Employee: HiddenFolders::apply mode=%1 count=%2"
+		).arg(int(mode)
+		).arg(folders.size()));
+	_mode = mode;
+	_folders = std::move(folders);
+	_changes.fire({});
 }
 
 void HiddenFolders::clear() {
-	_names = QStringList();
+	_mode = HiddenFoldersMode::Blacklist;
+	_folders.clear();
+	_changes.fire({});
 }
 
 } // namespace Intro::Employee

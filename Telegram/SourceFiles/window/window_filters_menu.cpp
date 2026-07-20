@@ -369,19 +369,20 @@ void FiltersMenu::refresh() {
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	const auto &hiddenFolders
 		= _session->session().account().employeeHiddenFolders();
+	const auto hiddenWhitelist = (hiddenFolders.mode()
+		== Intro::Employee::HiddenFoldersMode::Whitelist);
+	const auto hiddenHideAll = hiddenFolders.isHideAll();
 #endif // TDESKTOP_EMPLOYEE_MODE
 	for (const auto &filter : filters->list()) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		// Employee fork: name list is now a WHITELIST.
-		//   []        => no policy, render every tab (fail-open)
-		//   ["1"]     => hide-all sentinel, render no custom-folder tab
-		//   [...]     => render only tabs whose title is in the list
-		const auto &allowedNames = hiddenFolders.names();
-		const auto hideAll = hiddenFolders.isHideAllSentinel();
-		const auto whitelistActive = !allowedNames.isEmpty() && !hideAll;
-		if (hideAll
-			|| (whitelistActive
-				&& !allowedNames.contains(filter.title().text.text))) {
+		// Employee fork: folder tabs filtered by the server policy.
+		//   whitelist (empty) => hide every custom-folder tab (hide-all)
+		//   whitelist (names) => render only tabs whose title is in the list
+		//   blacklist         => hide tabs in the list, render the rest
+		const auto listedFolder = hiddenFolders.containsFolder(
+			filter.title().text.text);
+		if (hiddenHideAll
+			|| (hiddenWhitelist ? !listedFolder : listedFolder)) {
 			if (currentFilter == filter.id()) {
 				_session->setActiveChatsFilter(FilterId(0));
 			}

@@ -114,13 +114,15 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 		if (bytes.isEmpty()) {
 			LOG(("Employee: cold start no snapshot (first install or cleared)"));
 		} else if (auto snap = Intro::Employee::DeserializeAuthSnapshot(bytes)) {
-			LOG(("Employee: cold start snapshot tokenLen=%1 backend=%2 hiddenFolders=%3"
+			LOG(("Employee: cold start snapshot tokenLen=%1 backend=%2"
 				).arg(snap->token.size()
-				).arg(static_cast<uchar>(snap->backend)
-				).arg(snap->hiddenFolderNames.size()));
+				).arg(static_cast<uchar>(snap->backend)));
 			_employeePermissions->apply(snap->permissions, snap->token);
 			_employeeBackend = snap->backend;
-			_employeeHiddenFolders->apply(snap->hiddenFolderNames);
+			// Hidden-folders policy is intentionally NOT restored: it stays at
+			// the default (blacklist + empty = show all) until fetchEmployee-
+			// HiddenFolders() lands from kickOffEmployeeVerify* right after
+			// start(). The disk snapshot no longer carries a usable policy.
 			_employeeOpenTime = snap->openTime;
 		} else {
 			LOG(("Employee: cold start snapshot corrupted"));
@@ -746,7 +748,7 @@ void Account::persistEmployeeAuthSnapshot() {
 				return values;
 			}(),
 			.backend = _employeeBackend,
-			.hiddenFolderNames = _employeeHiddenFolders->names(),
+			.hiddenFolderNames = {}, // Policy is fetched fresh, not persisted.
 			.openTime = _employeeOpenTime,
 		}));
 }
@@ -763,18 +765,20 @@ void Account::fetchEmployeeHiddenFolders() {
 				Intro::Employee::HiddenFoldersResult result) {
 			if (const auto s = std::get_if<
 					Intro::Employee::HiddenFoldersSuccess>(&result)) {
-				LOG(("Employee: hidden-folders ok count=%1"
-					).arg(s->names.size()));
-				_employeeHiddenFolders->apply(s->names);
+				LOG(("Employee: hidden-folders ok mode=%1 count=%2"
+					).arg(int(s->mode)
+					).arg(s->folders.size()));
+				_employeeHiddenFolders->apply(s->mode, s->folders);
 				persistEmployeeAuthSnapshot();
 				return;
 			}
 			const auto f = std::get_if<
 				Intro::Employee::HiddenFoldersFailure>(&result);
 			Assert(f != nullptr);
-			LOG(("Employee: hidden-folders fetch failed kind=%1; keeping disk state"
+			LOG(("Employee: hidden-folders fetch failed kind=%1; keeping live state"
 				).arg(int(f->kind)));
-			// Fail-open: keep whatever names are already loaded from snapshot.
+			// Fail-open: keep whatever policy is already live (default show-all
+			// on a fresh cold start, or the last good fetch this session).
 			// InvalidToken does NOT force logout here — the verify endpoint
 			// is authoritative for token validity.
 		}));
@@ -820,7 +824,7 @@ void Account::applyEmployeeBootstrap(
 			.token = token,
 			.permissions = permissions,
 			.backend = backend,
-			.hiddenFolderNames = _employeeHiddenFolders->names(),
+			.hiddenFolderNames = {}, // Policy is fetched fresh, not persisted.
 			.openTime = openTime,
 		}));
 	recomputeEmployeeTimeLock();
@@ -935,8 +939,7 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 							.token = token,
 							.permissions = s->permissions,
 							.backend = _employeeBackend,
-							.hiddenFolderNames
-								= _employeeHiddenFolders->names(),
+							.hiddenFolderNames = {}, // Fetched fresh, not saved.
 							.openTime = s->openTime,
 						}));
 				startEmployeeVerifyTimer();
@@ -1020,8 +1023,7 @@ void Account::onEmployeeVerifyTimerTick() {
 							.token = token,
 							.permissions = s->permissions,
 							.backend = _employeeBackend,
-							.hiddenFolderNames
-								= _employeeHiddenFolders->names(),
+							.hiddenFolderNames = {}, // Fetched fresh, not saved.
 							.openTime = s->openTime,
 						}));
 				_employeeVerifyTimer.callOnce(kEmployeeVerifyIntervalMs);

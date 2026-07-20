@@ -48,22 +48,44 @@ HiddenFoldersResult ParseHiddenFoldersResponse(
 		return HiddenFoldersFailure{ HiddenFoldersFailure::Kind::BadJson };
 	}
 	const auto root = doc.object();
-	const auto value = root.value(u"hiddenFolderNames"_q);
-	if (!value.isArray()) {
-		LOG(("Employee: hidden-folders response missing array"));
+
+	// Mode defaults to Blacklist when absent or unrecognized: a missing or
+	// partial policy should fail open (show all) rather than hide everything,
+	// which an empty whitelist would do.
+	auto mode = HiddenFoldersMode::Blacklist;
+	const auto modeValue = root.value(u"mode"_q);
+	if (modeValue.isString()) {
+		const auto text = modeValue.toString();
+		if (text == u"whitelist"_q) {
+			mode = HiddenFoldersMode::Whitelist;
+		} else if (text != u"blacklist"_q) {
+			LOG(("Employee: hidden-folders unknown mode '%1', using blacklist"
+				).arg(text));
+		}
+	}
+
+	const auto foldersValue = root.value(u"folders"_q);
+	if (!foldersValue.isArray()) {
+		LOG(("Employee: hidden-folders response missing folders array"));
 		return HiddenFoldersFailure{ HiddenFoldersFailure::Kind::BadJson };
 	}
 
-	auto names = QStringList();
-	for (const auto &entry : value.toArray()) {
-		if (entry.isString()) {
-			const auto name = entry.toString();
-			if (!name.isEmpty()) {
-				names.push_back(name);
-			}
+	auto folders = std::vector<HiddenFolderEntry>();
+	for (const auto &entry : foldersValue.toArray()) {
+		if (!entry.isObject()) {
+			continue;
 		}
+		const auto object = entry.toObject();
+		const auto name = object.value(u"name"_q).toString();
+		if (name.isEmpty()) {
+			continue;
+		}
+		folders.push_back(HiddenFolderEntry{
+			.name = name,
+			.priority = object.value(u"priority"_q).toInt(),
+		});
 	}
-	return HiddenFoldersSuccess{ std::move(names) };
+	return HiddenFoldersSuccess{ .mode = mode, .folders = std::move(folders) };
 }
 
 HiddenFoldersClient::HiddenFoldersClient(QObject *parent)

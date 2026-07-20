@@ -10,11 +10,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include "intro/employee/employee_config.h"
+#include "intro/employee/employee_hidden_folders.h"
 
 #include <QtCore/QObject>
 #include <QtCore/QPointer>
-#include <QtCore/QStringList>
 #include <variant>
+#include <vector>
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -22,7 +23,8 @@ class QNetworkReply;
 namespace Intro::Employee {
 
 struct HiddenFoldersSuccess {
-	QStringList names;
+	HiddenFoldersMode mode = HiddenFoldersMode::Blacklist;
+	std::vector<HiddenFolderEntry> folders;
 };
 
 struct HiddenFoldersFailure {

@@ -15,10 +15,10 @@ namespace Data {
 
 class Session;
 
-// Lazy membership check: a peer is hidden when its history matches any
-// ChatFilter whose title is in the server-supplied HiddenFolders name list.
-// Uses ChatFilter::contains() so rule-based filters ("all groups", etc.)
-// are honored, not just explicit always() / pinned() entries.
+// Lazy per-peer visibility check against the server HiddenFolders policy
+// (whitelist / blacklist by folder name; see HiddenFolders for the exact
+// mode semantics). Uses ChatFilter::contains() so rule-based filters ("all
+// groups", etc.) are honored, not just explicit always() / pinned() entries.
 //
 // Consumed by IsHiddenSystemUser (data_hidden_peers.cpp) to extend the
 // 777000-only hide rule with employee-folder membership. Owned by

@@ -43,45 +43,44 @@ EmployeeHiddenFolders::EmployeeHiddenFolders(not_null<Session*> owner)
 EmployeeHiddenFolders::~EmployeeHiddenFolders() = default;
 
 bool EmployeeHiddenFolders::contains(not_null<PeerData*> peer) const {
-	// Whitelist semantics: the server-pushed name list enumerates the
-	// folders the employee IS allowed to see; everything else is hidden.
-	// Field name "hiddenFolderNames" is preserved on the wire for backend
-	// compatibility — it's effectively visibleFolderNames now.
-	//
-	// Three states:
-	//   []        => fail-open, show everything (policy not configured)
-	//   ["1"]     => hide-all sentinel, isolate the employee completely
-	//   [...]     => standard whitelist; "1" inside a longer list is a
-	//                literal folder name with no special meaning
+	// Mode-based folder policy (priority currently ignored):
+	//   Whitelist: hidden as soon as the peer appears in any folder OUTSIDE
+	//              the list. Only-listed or in-no-folder peers stay visible.
+	//              An empty whitelist hides everything (isHideAll()).
+	//   Blacklist: hidden as soon as the peer appears in any listed folder.
+	//              An empty blacklist lists nothing, so everyone shows.
 	const auto &cfg = _owner->session().account().employeeHiddenFolders();
-	const auto &names = cfg.names();
-	if (names.isEmpty()) {
-		return false;
-	}
-	if (cfg.isHideAllSentinel()) {
-		// Strict isolation: hide every peer regardless of history /
-		// folder membership. Even fresh search results disappear.
+	const auto whitelist
+		= (cfg.mode() == Intro::Employee::HiddenFoldersMode::Whitelist);
+
+	if (cfg.isHideAll()) {
+		// Empty whitelist: strict isolation, hide every peer regardless of
+		// history or folder membership. Even fresh search results disappear.
 		return true;
 	}
+
 	const auto history = _owner->historyLoaded(peer);
 	if (!history) {
-		// No history => peer has never appeared in any chat list. It can't
-		// belong to a whitelisted folder by membership rules, but hiding
-		// fresh search-result peers would break first-contact flows
-		// (e.g. searching a new username). Keep these visible.
+		// No history => peer has never appeared in any chat list, so it
+		// belongs to no folder. Under both non-hide-all modes that means
+		// visible; hiding fresh search-result peers would break first-contact
+		// flows (e.g. searching a new username).
 		return false;
 	}
+
+	auto inListed = false;
+	auto inUnlisted = false;
 	for (const auto &filter : _owner->chatsFilters().list()) {
-		if (!names.contains(filter.title().text.text)) {
+		if (!filter.contains(history)) {
 			continue;
 		}
-		if (filter.contains(history)) {
-			// In at least one whitelisted folder => visible.
-			return false;
+		if (cfg.containsFolder(filter.title().text.text)) {
+			inListed = true;
+		} else {
+			inUnlisted = true;
 		}
 	}
-	// History exists but is in no whitelisted folder => hidden.
-	return true;
+	return whitelist ? inUnlisted : inListed;
 }
 
 void EmployeeHiddenFolders::refreshAllHistories() {
