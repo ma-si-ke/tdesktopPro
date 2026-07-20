@@ -375,14 +375,18 @@ void FiltersMenu::refresh() {
 #endif // TDESKTOP_EMPLOYEE_MODE
 	for (const auto &filter : filters->list()) {
 #ifdef TDESKTOP_EMPLOYEE_MODE
-		// Employee fork: folder tabs filtered by the server policy.
+		// Employee fork: folder tabs filtered by the server policy. "All chats"
+		// (id 0) is never hidden by the policy: a peer in no folder is not
+		// hidden by contains() yet only surfaces in All chats, so dropping the
+		// tab would leave it unreachable and defeat the "no folder => show" rule.
 		//   whitelist (empty) => hide every custom-folder tab (hide-all)
 		//   whitelist (names) => render only tabs whose title is in the list
 		//   blacklist         => hide tabs in the list, render the rest
 		const auto listedFolder = hiddenFolders.containsFolder(
 			filter.title().text.text);
-		if (hiddenHideAll
-			|| (hiddenWhitelist ? !listedFolder : listedFolder)) {
+		if (filter.id() != 0
+			&& (hiddenHideAll
+				|| (hiddenWhitelist ? !listedFolder : listedFolder))) {
 			if (currentFilter == filter.id()) {
 				_session->setActiveChatsFilter(FilterId(0));
 			}
