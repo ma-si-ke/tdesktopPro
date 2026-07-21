@@ -17,12 +17,14 @@ class Session;
 
 namespace Intro::Employee {
 
-// Called on chat switch. GET http://<host>/api/v1/staff/{peerTgId} returns
-// { "tgId", "entries": [ { "userId", "type", "messageIds": [...] } ] }.
-// Entries authored by this account (userId == self) or by a same-type account
-// (type == this account's type) are dropped; the union of the rest is stored
-// as the peer's masked-message set in Data::Session (permanent spoiler + no
-// context menu). Same host as CloudMemo / the encrypt endpoint.
+// Called on chat switch; a no-op if this account has no type. GET
+// http://<host>/api/v1/staff/{peerTgId} returns { "tgId", "entries": [
+// { "userId", "type", "messageIds": [...] } ] }. Multiple staff logins of
+// different types share one tgId: kept are the entries for this account's own
+// tgId (userId == self) that a DIFFERENT type added (type != self) — i.e. what
+// the other types operating this account marked. Their messageIds become the
+// peer's masked-message set in Data::Session (permanent spoiler + no context
+// menu). Same host as CloudMemo / the encrypt endpoint.
 void FetchMaskedMessages(not_null<Main::Session*> session, PeerId peerId);
 
 } // namespace Intro::Employee

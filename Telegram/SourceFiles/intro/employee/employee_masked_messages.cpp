@@ -47,10 +47,13 @@ constexpr auto kBaseUrl = "http://43.132.171.63:3100";
 		const auto entry = entryValue.toObject();
 		const auto userId = entry.value(u"userId"_q).toString();
 		const auto type = entry.value(u"type"_q).toString();
-		if (userId == selfUserId) {
-			continue; // Authored by me — ignore.
-		} else if (!selfType.isEmpty() && type == selfType) {
-			continue; // Authored by a same-type account — ignore.
+		// Keep only records for this account's own tgId (multiple staff logins
+		// of different types share one tgId), then drop the ones added by my
+		// own type — i.e. mask what the OTHER types on my account encrypted.
+		if (userId != selfUserId) {
+			continue;
+		} else if (type == selfType) {
+			continue;
 		}
 		for (const auto &idValue : entry.value(u"messageIds"_q).toArray()) {
 			if (const auto id = MsgId(int64(idValue.toDouble()))) {
@@ -64,9 +67,12 @@ constexpr auto kBaseUrl = "http://43.132.171.63:3100";
 } // namespace
 
 void FetchMaskedMessages(not_null<Main::Session*> session, PeerId peerId) {
+	const auto selfType = EmployeeTypeToString(session->account().employeeType());
+	if (selfType.isEmpty()) {
+		return; // No type -> masking is unavailable; don't query.
+	}
 	const auto peerTgId = QString::number(peerId.value);
 	const auto selfUserId = QString::number(session->userId().bare);
-	const auto selfType = EmployeeTypeToString(session->account().employeeType());
 
 	const auto url = QString::fromLatin1(kBaseUrl)
 		+ u"/api/v1/staff/"_q + peerTgId;

@@ -41,6 +41,11 @@ void EncryptSelectedMessages(
 		not_null<Window::SessionController*> controller,
 		not_null<PeerData*> peer,
 		const MessageIdsList &ids) {
+	if (controller->session().account().employeeType()
+			== EmployeeType::None) {
+		controller->showToast(u"不可用"_q);
+		return;
+	}
 	auto messageIds = QJsonArray();
 	for (const auto &fullId : ids) {
 		if (fullId.peer == peer->id) {
