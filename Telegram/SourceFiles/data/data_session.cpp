@@ -2202,6 +2202,43 @@ rpl::producer<not_null<const HistoryItem*>> Session::itemViewRefreshRequest() co
 	return _itemViewRefreshRequest.events();
 }
 
+void Session::setMaskedMessages(PeerId peerId, base::flat_set<MsgId> ids) {
+	auto previous = base::flat_set<MsgId>();
+	const auto i = _maskedMessages.find(peerId);
+	if (i != end(_maskedMessages)) {
+		previous = std::move(i->second);
+	}
+	if (ids.empty()) {
+		if (i != end(_maskedMessages)) {
+			_maskedMessages.erase(i);
+		}
+	} else if (i != end(_maskedMessages)) {
+		i->second = ids;
+	} else {
+		_maskedMessages.emplace(peerId, ids);
+	}
+	// Rebuild every affected loaded message so the spoiler is (re)applied or
+	// dropped: the union of the old and new id sets.
+	const auto refresh = [&](MsgId msgId) {
+		if (const auto item = message(peerId, msgId)) {
+			requestItemViewRefresh(item);
+		}
+	};
+	for (const auto &msgId : previous) {
+		refresh(msgId);
+	}
+	for (const auto &msgId : ids) {
+		if (!previous.contains(msgId)) {
+			refresh(msgId);
+		}
+	}
+}
+
+bool Session::isMessageMasked(not_null<const HistoryItem*> item) const {
+	const auto i = _maskedMessages.find(item->history()->peer->id);
+	return (i != end(_maskedMessages)) && i->second.contains(item->id);
+}
+
 void Session::notifyItemDataChange(not_null<HistoryItem*> item) {
 	_itemDataChanges.fire_copy(item);
 }

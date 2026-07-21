@@ -3486,6 +3486,11 @@ void ListWidget::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				_overItemExact ? _overItemExact : _overElement->data().get(),
 				_overState));
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (overItem && overItem->history()->owner().isMessageMasked(overItem)) {
+		return;
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 	_menu = FillContextMenu(this, request);
 	if (_menu->empty()) {
 		_menu = nullptr;

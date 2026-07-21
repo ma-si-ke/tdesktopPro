@@ -133,6 +133,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
+#include "intro/employee/employee_masked_messages.h"
 #include "data/data_employee_hidden_folders.h"
 #endif
 
@@ -1599,6 +1600,15 @@ SessionController::SessionController(
 , _defaultChatTheme(std::make_shared<Ui::ChatTheme>())
 , _chatStyle(std::make_unique<Ui::ChatStyle>(session->colorIndicesValue())) {
 	init();
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	activeChatValue(
+	) | rpl::on_next([=](Dialogs::Key key) {
+		if (const auto peer = key.peer()) {
+			Intro::Employee::FetchMaskedMessages(&session(), peer->id);
+		}
+	}, lifetime());
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 	_chatStyleTheme = _defaultChatTheme;
 	_chatStyle->apply(_defaultChatTheme.get());

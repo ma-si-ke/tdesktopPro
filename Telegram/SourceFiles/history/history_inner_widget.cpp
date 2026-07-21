@@ -2729,6 +2729,12 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 	}
 
 	const auto link = ClickHandler::getActive();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_dragStateItem
+		&& session().data().isMessageMasked(_dragStateItem)) {
+		return;
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 	if (_controller->showFrozenError()) {
 		return;
 	} else if (link

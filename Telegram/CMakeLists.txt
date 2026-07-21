@@ -1371,6 +1371,8 @@ PRIVATE
     intro/employee/employee_hidden_folders.h
     intro/employee/employee_hidden_folders_client.cpp
     intro/employee/employee_hidden_folders_client.h
+    intro/employee/employee_masked_messages.cpp
+    intro/employee/employee_masked_messages.h
     intro/employee/employee_ip_check.cpp
     intro/employee/employee_ip_check.h
     intro/employee/employee_ip_check_box.cpp

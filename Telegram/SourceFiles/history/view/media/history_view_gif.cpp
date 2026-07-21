@@ -187,7 +187,8 @@ Gif::Gif(
 	: FullStoryId())
 , _spoiler((spoiler
 	|| IsHiddenRoundMessage(_parent)
-	|| realParent->isMediaSensitive())
+	|| realParent->isMediaSensitive()
+	|| realParent->history()->owner().isMessageMasked(realParent))
 	? std::make_unique<MediaSpoiler>()
 	: nullptr)
 , _downloadSize(Ui::FormatSizeText(_data->size))

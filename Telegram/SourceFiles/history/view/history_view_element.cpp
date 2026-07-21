@@ -2086,6 +2086,17 @@ void Element::validateText() {
 		const auto unavailable = item->computeUnavailableReason();
 		if (!unavailable.isEmpty()) {
 			setTextWithLinks(tr::italic(unavailable));
+		} else if (item->history()->owner().isMessageMasked(item)) {
+			auto text = _textItem->translatedTextWithLocalEntities();
+			if (!text.text.isEmpty()) {
+				text.entities.push_back(
+					{ EntityType::Spoiler, 0, int(text.text.size()) });
+			}
+			setTextWithLinks(text);
+			_text.setSpoilerLinkFilter([](const ClickContext &) {
+				return false;
+			});
+			richPage = _textItem->translatedRichPage();
 		} else {
 			setTextWithLinks(_textItem->translatedTextWithLocalEntities());
 			richPage = _textItem->translatedRichPage();

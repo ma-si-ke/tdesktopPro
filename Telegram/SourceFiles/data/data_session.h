@@ -428,6 +428,14 @@ public:
 	[[nodiscard]] rpl::producer<not_null<HistoryItem*>> itemShowHighlightRequest() const;
 	void requestItemViewRefresh(not_null<const HistoryItem*> item);
 	[[nodiscard]] rpl::producer<not_null<const HistoryItem*>> itemViewRefreshRequest() const;
+
+	// Backend-driven "masked" messages: their content is shown behind a
+	// permanent spoiler and they can't be right-clicked. Set per-peer on chat
+	// switch (Intro::Employee::FetchMaskedMessages). Empty in non-employee
+	// builds, so isMessageMasked() is always false there.
+	void setMaskedMessages(PeerId peerId, base::flat_set<MsgId> ids);
+	[[nodiscard]] bool isMessageMasked(
+		not_null<const HistoryItem*> item) const;
 	void requestItemTextRefresh(not_null<HistoryItem*> item);
 	void requestUnreadReactionsAnimation(not_null<HistoryItem*> item);
 	void notifyHistoryUnloaded(not_null<const History*> history);
@@ -1353,6 +1361,7 @@ private:
 		base::flat_map<not_null<UserData*>, bool>> _invitedToCallUsers;
 
 	base::flat_set<not_null<ViewElement*>> _shownSpoilers;
+	base::flat_map<PeerId, base::flat_set<MsgId>> _maskedMessages;
 	base::flat_map<
 		ReactionId,
 		base::flat_set<not_null<ViewElement*>>> _viewsByTag;

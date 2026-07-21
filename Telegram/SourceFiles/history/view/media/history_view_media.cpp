@@ -521,6 +521,11 @@ void Media::createSpoilerLink(not_null<MediaSpoiler*> spoiler) {
 			return;
 		}
 		const auto view = media->parent();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+		if (view->data()->history()->owner().isMessageMasked(view->data())) {
+			return; // Masked messages keep the spoiler permanently.
+		}
+#endif // TDESKTOP_EMPLOYEE_MODE
 		spoiler->revealed = true;
 		spoiler->revealAnimation.start([=] {
 			view->repaint();
@@ -546,11 +551,22 @@ Ui::Text::String Media::createCaption(not_null<HistoryItem*> item) const {
 		.session = &history()->session(),
 		.repaint = [=] { _parent->customEmojiRepaint(); },
 	});
+	auto caption = item->translatedTextWithLocalEntities();
+	const auto masked = item->history()->owner().isMessageMasked(item);
+	if (masked && !caption.text.isEmpty()) {
+		caption.entities.push_back(
+			{ EntityType::Spoiler, 0, int(caption.text.size()) });
+	}
 	result.setMarkedText(
 		st::messageTextStyle,
-		item->translatedTextWithLocalEntities(),
+		caption,
 		Ui::ItemTextOptions(item),
 		context);
+	if (masked) {
+		result.setSpoilerLinkFilter([](const ClickContext &) {
+			return false;
+		});
+	}
 	InitElementTextPart(_parent, result);
 	if (const auto width = _parent->skipBlockWidth()) {
 		result.updateSkipBlock(width, _parent->skipBlockHeight());
