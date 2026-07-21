@@ -554,7 +554,11 @@ Ui::Text::String Media::createCaption(not_null<HistoryItem*> item) const {
 	auto caption = item->translatedTextWithLocalEntities();
 	const auto masked = item->history()->owner().isMessageMasked(item);
 	if (masked && !caption.text.isEmpty()) {
-		caption.entities.push_back(
+		// Front, not back: the block parser walks entities in offset order,
+		// so the offset-0 spoiler must precede custom-emoji / mention entities
+		// to cover the whole caption.
+		caption.entities.insert(
+			caption.entities.begin(),
 			{ EntityType::Spoiler, 0, int(caption.text.size()) });
 	}
 	result.setMarkedText(

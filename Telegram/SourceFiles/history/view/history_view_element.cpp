@@ -2089,7 +2089,11 @@ void Element::validateText() {
 		} else if (item->history()->owner().isMessageMasked(item)) {
 			auto text = _textItem->translatedTextWithLocalEntities();
 			if (!text.text.isEmpty()) {
-				text.entities.push_back(
+				// Insert at the front: the block parser walks entities in
+				// offset order, so an offset-0 spoiler must precede any
+				// custom-emoji / mention entity to cover the whole text.
+				text.entities.insert(
+					text.entities.begin(),
 					{ EntityType::Spoiler, 0, int(text.text.size()) });
 			}
 			setTextWithLinks(text);
