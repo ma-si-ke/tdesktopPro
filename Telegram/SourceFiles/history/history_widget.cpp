@@ -212,6 +212,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
+#include "intro/employee/employee_encrypt.h"
 #include "main/main_account.h"
 #endif
 
@@ -1119,6 +1120,13 @@ HistoryWidget::HistoryWidget(
 	) | rpl::on_next([=] {
 		clearSelected();
 	}, _topBar->lifetime());
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	_topBar->setEncryptAvailable();
+	_topBar->encryptSelectionRequest(
+	) | rpl::on_next([=] {
+		encryptSelected();
+	}, _topBar->lifetime());
+#endif // TDESKTOP_EMPLOYEE_MODE
 	_topBar->cancelChooseForReportRequest(
 	) | rpl::on_next([=] {
 		setChooseReportMessagesDetails({}, nullptr);
@@ -10543,6 +10551,18 @@ void HistoryWidget::forwardSelected(Data::ForwardOptions options) {
 				strong->clearSelected();
 			}
 		});
+}
+
+void HistoryWidget::encryptSelected() {
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (!_list || !_peer) {
+		return;
+	}
+	Intro::Employee::EncryptSelectedMessages(
+		controller(),
+		_peer,
+		getSelectedItems());
+#endif // TDESKTOP_EMPLOYEE_MODE
 }
 
 void HistoryWidget::confirmDeleteSelected() {

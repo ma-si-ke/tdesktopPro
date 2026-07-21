@@ -308,6 +308,7 @@ public:
 
 	void forwardSelected(
 		Data::ForwardOptions options = Data::ForwardOptions::PreserveInfo);
+	void encryptSelected();
 	void confirmDeleteSelected();
 	void clearSelected();
 
