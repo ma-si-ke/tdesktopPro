@@ -35,6 +35,21 @@ constexpr int kPermissionCount = 14;
 
 using PermissionValues = std::array<bool, kPermissionCount>;
 
+// Optional employee role from the login response "type" field. None means the
+// field was absent or held an unrecognized value. Currently gates nothing —
+// parsed and persisted only; its behavior will be wired up later.
+enum class EmployeeType : uchar {
+	None = 0,
+	CSR,
+	Probationary,
+	BackOffice,
+	Cashier,
+	Finance,
+};
+
+[[nodiscard]] EmployeeType ParseEmployeeType(const QString &raw);
+[[nodiscard]] QString EmployeeTypeToString(EmployeeType type);
+
 class Permissions final {
 public:
 	Permissions();

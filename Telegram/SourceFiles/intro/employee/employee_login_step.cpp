@@ -352,7 +352,8 @@ void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
 		result.token,
 		result.permissions,
 		_chosenBackend,
-		result.openTime);
+		result.openTime,
+		result.type);
 	LOG(("Employee: step=after_applyBootstrap"));
 
 	// Watch for the first main-session emission: signals that MTP is up

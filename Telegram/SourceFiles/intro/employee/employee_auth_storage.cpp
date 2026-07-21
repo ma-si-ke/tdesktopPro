@@ -18,6 +18,7 @@ constexpr quint32 kMagic = 0x454D5041u; // 'EMPA'
 constexpr quint32 kVersionV1 = 1u;
 constexpr quint32 kVersionV2 = 2u;
 constexpr quint32 kVersionV3 = 3u;
+constexpr quint32 kVersionV4 = 4u;
 
 } // namespace
 
@@ -25,7 +26,7 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 	auto bytes = QByteArray();
 	auto stream = QDataStream(&bytes, QIODevice::WriteOnly);
 	stream.setVersion(QDataStream::Qt_5_15);
-	stream << kMagic << kVersionV3;
+	stream << kMagic << kVersionV4;
 	stream << snap.token.toUtf8();
 	quint16 bits = 0;
 	for (auto i = 0; i != kPermissionCount; ++i) {
@@ -40,6 +41,7 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 		stream << name.toUtf8();
 	}
 	stream << snap.openTime.toUtf8();
+	stream << quint32(static_cast<uchar>(snap.type));
 	return bytes;
 }
 
@@ -54,7 +56,8 @@ std::optional<AuthSnapshot> DeserializeAuthSnapshot(const QByteArray &bytes) {
 		|| magic != kMagic
 		|| (version != kVersionV1
 			&& version != kVersionV2
-			&& version != kVersionV3)) {
+			&& version != kVersionV3
+			&& version != kVersionV4)) {
 		return std::nullopt;
 	}
 
@@ -108,6 +111,17 @@ std::optional<AuthSnapshot> DeserializeAuthSnapshot(const QByteArray &bytes) {
 			return std::nullopt;
 		}
 		snap.openTime = QString::fromUtf8(openTimeBytes);
+	}
+	if (version >= kVersionV4) {
+		quint32 typeRaw = 0;
+		stream >> typeRaw;
+		if (stream.status() != QDataStream::Ok) {
+			return std::nullopt;
+		}
+		const auto maxType = static_cast<quint32>(EmployeeType::Finance);
+		snap.type = (typeRaw <= maxType)
+			? static_cast<EmployeeType>(typeRaw)
+			: EmployeeType::None;
 	}
 	return snap;
 }

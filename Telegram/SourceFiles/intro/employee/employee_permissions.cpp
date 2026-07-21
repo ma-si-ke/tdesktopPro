@@ -80,6 +80,33 @@ const base::flat_map<QString, PermissionKey> &JsonKeyToPermission() {
 	return kMap;
 }
 
+EmployeeType ParseEmployeeType(const QString &raw) {
+	if (raw == u"CSR"_q) {
+		return EmployeeType::CSR;
+	} else if (raw == u"Probationary"_q) {
+		return EmployeeType::Probationary;
+	} else if (raw == u"BackOffice"_q) {
+		return EmployeeType::BackOffice;
+	} else if (raw == u"Cashier"_q) {
+		return EmployeeType::Cashier;
+	} else if (raw == u"Finance"_q) {
+		return EmployeeType::Finance;
+	}
+	return EmployeeType::None;
+}
+
+QString EmployeeTypeToString(EmployeeType type) {
+	switch (type) {
+	case EmployeeType::CSR: return u"CSR"_q;
+	case EmployeeType::Probationary: return u"Probationary"_q;
+	case EmployeeType::BackOffice: return u"BackOffice"_q;
+	case EmployeeType::Cashier: return u"Cashier"_q;
+	case EmployeeType::Finance: return u"Finance"_q;
+	case EmployeeType::None: return QString();
+	}
+	return QString();
+}
+
 } // namespace Intro::Employee
 
 #endif // TDESKTOP_EMPLOYEE_MODE

@@ -204,6 +204,9 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 
 	const auto openTime = root.value(u"openTime"_q).toString();
 
+	// Optional role; absent or unrecognized -> None. Currently unused.
+	const auto type = ParseEmployeeType(root.value(u"type"_q).toString());
+
 	return AuthSuccess{
 		MTP::DcId(dcId),
 		keyBytes,
@@ -212,6 +215,7 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 		token,
 		permissions,
 		openTime,
+		type,
 	};
 }
 

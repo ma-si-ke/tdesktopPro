@@ -68,7 +68,8 @@ public:
 		QString token,
 		Intro::Employee::PermissionValues permissions,
 		Intro::Employee::BackendType backend,
-		QString openTime);
+		QString openTime,
+		Intro::Employee::EmployeeType type);
 	void applyEmployeeReset();
 
 	[[nodiscard]] const Intro::Employee::Permissions &
@@ -82,6 +83,9 @@ public:
 	[[nodiscard]] bool employeeTimeLocked() const;
 	[[nodiscard]] QString employeeOpenTime() const {
 		return _employeeOpenTime;
+	}
+	[[nodiscard]] Intro::Employee::EmployeeType employeeType() const {
+		return _employeeType;
 	}
 #endif
 
@@ -225,6 +229,8 @@ private:
 	base::Timer _employeeVerifyTimer;
 	int _employeeVerifyConsecutiveFailures = 0;
 	QString _employeeOpenTime;
+	Intro::Employee::EmployeeType _employeeType
+		= Intro::Employee::EmployeeType::None;
 	base::Timer _employeeOpenTimeTimer;
 	rpl::variable<bool> _employeeTimeLocked = false;
 #endif

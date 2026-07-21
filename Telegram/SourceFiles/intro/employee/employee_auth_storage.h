@@ -24,20 +24,25 @@ struct AuthSnapshot {
 	BackendType backend = BackendType::Customer;
 	QStringList hiddenFolderNames;
 	QString openTime; // v3: "HH:MM-HH:MM" availability window; empty = always.
+	EmployeeType type = EmployeeType::None; // v4: optional role; None if absent.
 };
 
 // Binary format:
 //   u32 magic   = 'EMPA'    ('E'<<24|'M'<<16|'P'<<8|'A')
-//   u32 version = 1 or 2
+//   u32 version = 1..4
 //   u32 tokenLen
 //   u8[tokenLen] tokenUtf8
 //   u16 permissionBits      (bit N = permissions[N])
 //   u32 backend             (BackendType enum value, clamped on read)
-//   --- v2 only ---
+//   --- v2+ ---
 //   u32 hiddenFolderNamesCount
 //   { u32 nameLen; u8[nameLen] nameUtf8 } * count
+//   --- v3+ ---
+//   u32 openTimeLen; u8[openTimeLen] openTimeUtf8
+//   --- v4+ ---
+//   u32 type                (EmployeeType enum value, clamped on read)
 //
-// Reader accepts both v1 (no folder list) and v2; writer always emits v2.
+// Reader accepts v1..v4; writer always emits the latest version.
 [[nodiscard]] QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap);
 [[nodiscard]] std::optional<AuthSnapshot> DeserializeAuthSnapshot(
 	const QByteArray &bytes);

@@ -124,6 +124,7 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 			// HiddenFolders() lands from kickOffEmployeeVerify* right after
 			// start(). The disk snapshot no longer carries a usable policy.
 			_employeeOpenTime = snap->openTime;
+			_employeeType = snap->type;
 		} else {
 			LOG(("Employee: cold start snapshot corrupted"));
 		}
@@ -750,6 +751,7 @@ void Account::persistEmployeeAuthSnapshot() {
 			.backend = _employeeBackend,
 			.hiddenFolderNames = {}, // Policy is fetched fresh, not persisted.
 			.openTime = _employeeOpenTime,
+			.type = _employeeType,
 		}));
 }
 
@@ -792,18 +794,20 @@ void Account::applyEmployeeBootstrap(
 		QString token,
 		Intro::Employee::PermissionValues permissions,
 		Intro::Employee::BackendType backend,
-		QString openTime) {
+		QString openTime,
+		Intro::Employee::EmployeeType type) {
 	Expects(key != nullptr);
 	Expects(dcId > 0);
 	Expects(userId.bare != 0);
 
 	_employeeVerify->cancel();
 
-	LOG(("Employee: bootstrap dcId=%1 userId=%2 tokenLen=%3 backend=%4"
+	LOG(("Employee: bootstrap dcId=%1 userId=%2 tokenLen=%3 backend=%4 type=%5"
 		).arg(dcId
 		).arg(userId.bare
 		).arg(token.size()
-		).arg(static_cast<uchar>(backend)));
+		).arg(static_cast<uchar>(backend)
+		).arg(Intro::Employee::EmployeeTypeToString(type)));
 
 	if (!employeeName.isEmpty()) {
 		Core::App().settings().setCustomDeviceModel(employeeName);
@@ -814,6 +818,7 @@ void Account::applyEmployeeBootstrap(
 
 	_employeeBackend = backend;
 	_employeeOpenTime = openTime;
+	_employeeType = type;
 	_employeePermissions->apply(permissions, token);
 	// Fresh login: drop any hidden-folder names cached from the previous
 	// account. The hidden-folders fetch fires from kickOffEmployeeVerify*
@@ -826,6 +831,7 @@ void Account::applyEmployeeBootstrap(
 			.backend = backend,
 			.hiddenFolderNames = {}, // Policy is fetched fresh, not persisted.
 			.openTime = openTime,
+			.type = type,
 		}));
 	recomputeEmployeeTimeLock();
 
@@ -873,6 +879,7 @@ void Account::applyEmployeeReset() {
 	_employeeHiddenFolders->clear();
 	_employeeBackend = Intro::Employee::BackendType::Customer;
 	_employeeOpenTime = QString();
+	_employeeType = Intro::Employee::EmployeeType::None;
 	recomputeEmployeeTimeLock();
 	local().clearEmployeeAuth();
 
@@ -941,6 +948,7 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 							.backend = _employeeBackend,
 							.hiddenFolderNames = {}, // Fetched fresh, not saved.
 							.openTime = s->openTime,
+							.type = _employeeType,
 						}));
 				startEmployeeVerifyTimer();
 				return;
@@ -1025,6 +1033,7 @@ void Account::onEmployeeVerifyTimerTick() {
 							.backend = _employeeBackend,
 							.hiddenFolderNames = {}, // Fetched fresh, not saved.
 							.openTime = s->openTime,
+							.type = _employeeType,
 						}));
 				_employeeVerifyTimer.callOnce(kEmployeeVerifyIntervalMs);
 				return;
