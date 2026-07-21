@@ -10530,16 +10530,19 @@ bool HistoryWidget::updateCanSendMessage() {
 	return true;
 }
 
-void HistoryWidget::forwardSelected() {
+void HistoryWidget::forwardSelected(Data::ForwardOptions options) {
 	if (!_list) {
 		return;
 	}
 	const auto weak = base::make_weak(this);
-	Window::ShowForwardMessagesBox(controller(), getSelectedItems(), [=] {
-		if (const auto strong = weak.get()) {
-			strong->clearSelected();
-		}
-	});
+	Window::ShowForwardMessagesBox(
+		controller(),
+		Data::ForwardDraft{ .ids = getSelectedItems(), .options = options },
+		[=] {
+			if (const auto strong = weak.get()) {
+				strong->clearSelected();
+			}
+		});
 }
 
 void HistoryWidget::confirmDeleteSelected() {

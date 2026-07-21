@@ -131,6 +131,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
+#include "intro/employee/employee_encrypt.h"
 #endif
 
 #include <QtGui/QClipboard>
@@ -3360,6 +3361,24 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 					action);
 #endif
 			}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (selectedState.count > 0
+				&& selectedState.canForwardCount == selectedState.count) {
+				const auto actionNs = _menu->addAction(u"转发所选(无来源)"_q, [=] {
+					_widget->forwardSelected(Data::ForwardOptions::NoSenderNames);
+				}, &st::menuIconForward);
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgForward,
+					actionNs);
+			}
+			if (selectedState.count > 0) {
+				const auto ids = getSelectedItems();
+				_menu->addAction(u"加密"_q, [=] {
+					Intro::Employee::EncryptSelectedMessages(_controller, _peer, ids);
+				}, &st::menuIconLock);
+			}
+#endif
 			if (selectedState.count > 0 && selectedState.canDeleteCount == selectedState.count) {
 				const auto deleteSelectedAction1 = _menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
 					_widget->confirmDeleteSelected();
@@ -3394,8 +3413,23 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						session,
 						Intro::Employee::PermissionKey::MsgForward,
 						action);
+					const auto actionNs = _menu->addAction(u"转发(无来源)"_q, [=] {
+						forwardItem(itemId, Data::ForwardOptions::NoSenderNames);
+					}, &st::menuIconForward);
+					Intro::Employee::GuardAction(
+						session,
+						Intro::Employee::PermissionKey::MsgForward,
+						actionNs);
 #endif
 				}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				_menu->addAction(u"加密"_q, [=] {
+					Intro::Employee::EncryptSelectedMessages(
+						_controller,
+						_peer,
+						{ itemId });
+				}, &st::menuIconLock);
+#endif
 				if (HistoryView::CanAddOfferToMessage(item)) {
 					_menu->addAction(tr::lng_context_add_offer(tr::now), [=] {
 						Api::AddOfferToMessage(_controller->uiShow(), itemId);
@@ -3689,6 +3723,24 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 					action);
 #endif
 			}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+			if (selectedState.count > 0
+				&& selectedState.count == selectedState.canForwardCount) {
+				const auto actionNs = _menu->addAction(u"转发所选(无来源)"_q, [=] {
+					_widget->forwardSelected(Data::ForwardOptions::NoSenderNames);
+				}, &st::menuIconForward);
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgForward,
+					actionNs);
+			}
+			if (selectedState.count > 0) {
+				const auto ids = getSelectedItems();
+				_menu->addAction(u"加密"_q, [=] {
+					Intro::Employee::EncryptSelectedMessages(_controller, _peer, ids);
+				}, &st::menuIconLock);
+			}
+#endif
 			if (selectedState.count > 0 && selectedState.count == selectedState.canDeleteCount) {
 				const auto deleteSelectedAction2 = _menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
 					_widget->confirmDeleteSelected();
@@ -3724,8 +3776,23 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						session,
 						Intro::Employee::PermissionKey::MsgForward,
 						action);
+					const auto actionNs = _menu->addAction(u"转发(无来源)"_q, [=] {
+						forwardAsGroup(itemId, Data::ForwardOptions::NoSenderNames);
+					}, &st::menuIconForward);
+					Intro::Employee::GuardAction(
+						session,
+						Intro::Employee::PermissionKey::MsgForward,
+						actionNs);
 #endif
 				}
+#ifdef TDESKTOP_EMPLOYEE_MODE
+				_menu->addAction(u"加密"_q, [=] {
+					Intro::Employee::EncryptSelectedMessages(
+						_controller,
+						_peer,
+						{ itemId });
+				}, &st::menuIconLock);
+#endif
 				if (HistoryView::CanAddOfferToMessage(item)) {
 					_menu->addAction(tr::lng_context_add_offer(tr::now), [=] {
 						Api::AddOfferToMessage(_controller->uiShow(), itemId);
@@ -6111,15 +6178,22 @@ void HistoryInner::playPauseFocusedMedia() {
 	}
 }
 
-void HistoryInner::forwardItem(FullMsgId itemId) {
-	Window::ShowForwardMessagesBox(_controller, { 1, itemId });
+void HistoryInner::forwardItem(FullMsgId itemId, Data::ForwardOptions options) {
+	Window::ShowForwardMessagesBox(
+		_controller,
+		Data::ForwardDraft{ .ids = { 1, itemId }, .options = options });
 }
 
-void HistoryInner::forwardAsGroup(FullMsgId itemId) {
+void HistoryInner::forwardAsGroup(
+		FullMsgId itemId,
+		Data::ForwardOptions options) {
 	if (const auto item = session().data().message(itemId)) {
 		Window::ShowForwardMessagesBox(
 			_controller,
-			session().data().itemOrItsGroup(item));
+			Data::ForwardDraft{
+				.ids = session().data().itemOrItsGroup(item),
+				.options = options,
+			});
 	}
 }
 

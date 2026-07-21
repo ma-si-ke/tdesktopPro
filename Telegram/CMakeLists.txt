@@ -1365,6 +1365,8 @@ PRIVATE
     intro/employee/employee_auth_storage.h
     intro/employee/employee_config.cpp
     intro/employee/employee_config.h
+    intro/employee/employee_encrypt.cpp
+    intro/employee/employee_encrypt.h
     intro/employee/employee_hidden_folders.cpp
     intro/employee/employee_hidden_folders.h
     intro/employee/employee_hidden_folders_client.cpp

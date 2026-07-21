@@ -111,6 +111,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
+#include "intro/employee/employee_encrypt.h"
 #endif
 
 #include <QtGui/QGuiApplication>
@@ -548,6 +549,33 @@ void AddForwardNoSourceAction(
 	AddForwardNoSourceSelectedAction(menu, request, list);
 	AddForwardNoSourceMessageAction(menu, request, list);
 }
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+void AddEncryptAction(
+		not_null<Ui::PopupMenu*> menu,
+		const ContextMenuRequest &request,
+		not_null<ListWidget*> list) {
+	const auto item = request.item;
+	auto ids = !request.selectedItems.empty()
+		? ExtractIdsList(request.selectedItems)
+		: item
+		? MessageIdsList{ item->fullId() }
+		: MessageIdsList();
+	if (ids.empty()) {
+		return;
+	}
+	const auto peer = item
+		? (PeerData*)item->history()->peer
+		: list->controller()->session().data().peerLoaded(ids.front().peer);
+	if (!peer) {
+		return;
+	}
+	const auto controller = list->controller();
+	menu->addAction(u"加密"_q, [=] {
+		Intro::Employee::EncryptSelectedMessages(controller, peer, ids);
+	}, &st::menuIconLock);
+}
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 bool AddSendNowSelectedAction(
 		not_null<Ui::PopupMenu*> menu,
@@ -1188,6 +1216,9 @@ void AddMessageActions(
 	AddPostLinkAction(menu, request);
 	AddForwardAction(menu, request, list);
 	AddForwardNoSourceAction(menu, request, list);
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	AddEncryptAction(menu, request, list);
+#endif
 	AddSendNowAction(menu, request, list);
 	AddDeleteAction(menu, request, list);
 	AddDownloadFilesAction(menu, request, list);
