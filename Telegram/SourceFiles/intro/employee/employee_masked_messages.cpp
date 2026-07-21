@@ -71,7 +71,7 @@ void FetchMaskedMessages(not_null<Main::Session*> session, PeerId peerId) {
 	const auto url = QString::fromLatin1(kBaseUrl)
 		+ u"/api/v1/staff/"_q + peerTgId;
 	const auto reply = Network()->get(QNetworkRequest(QUrl(url)));
-	const auto apply = crl::guard(session, [=](const QByteArray &body) {
+	const auto apply = crl::guard(session.get(), [=](const QByteArray &body) {
 		auto ids = ParseMaskedIds(body, selfUserId, selfType);
 		LOG(("Employee: masked-messages peer=%1 count=%2"
 			).arg(peerTgId).arg(ids.size()));
