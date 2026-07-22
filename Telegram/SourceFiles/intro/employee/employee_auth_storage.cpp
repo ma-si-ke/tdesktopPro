@@ -28,6 +28,9 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 	stream.setVersion(QDataStream::Qt_5_15);
 	stream << kMagic << kVersionV4;
 	stream << snap.token.toUtf8();
+	// Permissions are packed into a 16-bit mask; adding a 17th permission
+	// requires widening `bits` (and a snapshot version bump).
+	static_assert(kPermissionCount <= 16);
 	quint16 bits = 0;
 	for (auto i = 0; i != kPermissionCount; ++i) {
 		if (snap.permissions[i]) {

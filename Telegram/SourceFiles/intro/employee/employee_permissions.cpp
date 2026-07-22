@@ -66,6 +66,7 @@ const base::flat_map<QString, PermissionKey> &JsonKeyToPermission() {
 		{ u"msg.edit"_q,                   PermissionKey::MsgEdit },
 		{ u"msg.delete"_q,                 PermissionKey::MsgDelete },
 		{ u"msg.forward"_q,                PermissionKey::MsgForward },
+		{ u"msg.encrypt"_q,                PermissionKey::MsgEncrypt },
 		{ u"group.create"_q,               PermissionKey::GroupCreate },
 		{ u"group.delete"_q,               PermissionKey::GroupDelete },
 		{ u"group.addMember"_q,            PermissionKey::GroupAddMember },

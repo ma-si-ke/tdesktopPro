@@ -176,7 +176,7 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 		"send=%1 edit=%2 delete=%3 forward=%4 "
 		"gCreate=%5 gDelete=%6 gAdd=%7 gRemove=%8 "
 		"cAdd=%9 cBlock=%10 cNote=%11 "
-		"fEdit=%12 fAdd=%13 noMention=%14"
+		"fEdit=%12 fAdd=%13 noMention=%14 encrypt=%15"
 		).arg(permissions[int(PermissionKey::MsgSend)]
 		).arg(permissions[int(PermissionKey::MsgEdit)]
 		).arg(permissions[int(PermissionKey::MsgDelete)]
@@ -190,7 +190,8 @@ AuthResult ParseAuthResponse(int httpStatus, const QByteArray &body) {
 		).arg(permissions[int(PermissionKey::ContactEditNote)]
 		).arg(permissions[int(PermissionKey::FolderEdit)]
 		).arg(permissions[int(PermissionKey::FolderAddChat)]
-		).arg(permissions[int(PermissionKey::UiDisableMentionTooltip)]));
+		).arg(permissions[int(PermissionKey::UiDisableMentionTooltip)]
+		).arg(permissions[int(PermissionKey::MsgEncrypt)]));
 
 	const auto userId = UserId(userIdRaw.toVariant().toLongLong());
 	if (!userId.bare) {

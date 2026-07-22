@@ -182,6 +182,20 @@ TopBarWidget::TopBarWidget(
 #endif // TDESKTOP_EMPLOYEE_MODE
 	_encrypt->setClickedCallback([=] { _encryptSelection.fire({}); });
 	_encrypt->setWidthChangedCallback([=] { updateControlsGeometry(); });
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	session().account().employeePermissions().value(
+		Intro::Employee::PermissionKey::MsgEncrypt
+	) | rpl::on_next([raw = _encrypt.data()](bool allowed) {
+		raw->setDisabled(!allowed);
+		raw->setAttribute(Qt::WA_TransparentForMouseEvents, !allowed);
+		raw->setBrushOverride(allowed
+			? std::optional<QBrush>()
+			: std::optional<QBrush>(st::windowBgOver->b));
+		raw->setTextFgOverride(allowed
+			? std::optional<QColor>()
+			: std::optional<QColor>(st::windowSubTextFg->c));
+	}, _encrypt->lifetime());
+#endif // TDESKTOP_EMPLOYEE_MODE
 	_clear->setClickedCallback([=] { _clearSelection.fire({}); });
 	_call->setClickedCallback([=] { call({}); });
 	_call->setAcceptBoth(true, true);

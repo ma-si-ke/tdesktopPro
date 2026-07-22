@@ -571,9 +571,13 @@ void AddEncryptAction(
 		return;
 	}
 	const auto controller = list->controller();
-	menu->addAction(u"加密"_q, [=] {
+	const auto action = menu->addAction(u"加密"_q, [=] {
 		Intro::Employee::EncryptSelectedMessages(controller, peer, ids);
 	}, &st::menuIconLock);
+	Intro::Employee::GuardAction(
+		&controller->session(),
+		Intro::Employee::PermissionKey::MsgEncrypt,
+		action);
 }
 #endif // TDESKTOP_EMPLOYEE_MODE
 

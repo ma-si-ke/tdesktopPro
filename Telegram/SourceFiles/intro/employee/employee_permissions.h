@@ -30,8 +30,11 @@ enum class PermissionKey : int {
 	FolderEdit,
 	FolderAddChat,
 	UiDisableMentionTooltip,
+	// Appended at the end to keep serialized bit positions stable for
+	// existing AuthSnapshots (bit 14 defaults to false for old data).
+	MsgEncrypt,
 };
-constexpr int kPermissionCount = 14;
+constexpr int kPermissionCount = 15;
 
 using PermissionValues = std::array<bool, kPermissionCount>;
 

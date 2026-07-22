@@ -41,6 +41,13 @@ void EncryptSelectedMessages(
 		not_null<Window::SessionController*> controller,
 		not_null<PeerData*> peer,
 		const MessageIdsList &ids) {
+	// Backstop: the encrypt UI (top-bar button, context-menu items) is already
+	// disabled when this permission is off, so this is defense-in-depth. Silent
+	// return because a disabled control can't legitimately reach here.
+	if (!controller->session().account().employeePermissions().has(
+			PermissionKey::MsgEncrypt)) {
+		return;
+	}
 	if (controller->session().account().employeeType()
 			== EmployeeType::None) {
 		controller->showToast(u"不可用"_q);

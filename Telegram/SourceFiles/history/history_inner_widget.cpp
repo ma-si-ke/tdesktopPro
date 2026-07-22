@@ -3381,9 +3381,13 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}
 			if (selectedState.count > 0) {
 				const auto ids = getSelectedItems();
-				_menu->addAction(u"加密"_q, [=] {
+				const auto encryptAction = _menu->addAction(u"加密"_q, [=] {
 					Intro::Employee::EncryptSelectedMessages(_controller, _peer, ids);
 				}, &st::menuIconLock);
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgEncrypt,
+					encryptAction);
 			}
 #endif
 			if (selectedState.count > 0 && selectedState.canDeleteCount == selectedState.count) {
@@ -3430,12 +3434,16 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 #endif
 				}
 #ifdef TDESKTOP_EMPLOYEE_MODE
-				_menu->addAction(u"加密"_q, [=] {
+				const auto encryptAction = _menu->addAction(u"加密"_q, [=] {
 					Intro::Employee::EncryptSelectedMessages(
 						_controller,
 						_peer,
 						{ itemId });
 				}, &st::menuIconLock);
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgEncrypt,
+					encryptAction);
 #endif
 				if (HistoryView::CanAddOfferToMessage(item)) {
 					_menu->addAction(tr::lng_context_add_offer(tr::now), [=] {
@@ -3743,9 +3751,13 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}
 			if (selectedState.count > 0) {
 				const auto ids = getSelectedItems();
-				_menu->addAction(u"加密"_q, [=] {
+				const auto encryptAction = _menu->addAction(u"加密"_q, [=] {
 					Intro::Employee::EncryptSelectedMessages(_controller, _peer, ids);
 				}, &st::menuIconLock);
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgEncrypt,
+					encryptAction);
 			}
 #endif
 			if (selectedState.count > 0 && selectedState.count == selectedState.canDeleteCount) {
@@ -3793,12 +3805,16 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 #endif
 				}
 #ifdef TDESKTOP_EMPLOYEE_MODE
-				_menu->addAction(u"加密"_q, [=] {
+				const auto encryptAction = _menu->addAction(u"加密"_q, [=] {
 					Intro::Employee::EncryptSelectedMessages(
 						_controller,
 						_peer,
 						{ itemId });
 				}, &st::menuIconLock);
+				Intro::Employee::GuardAction(
+					session,
+					Intro::Employee::PermissionKey::MsgEncrypt,
+					encryptAction);
 #endif
 				if (HistoryView::CanAddOfferToMessage(item)) {
 					_menu->addAction(tr::lng_context_add_offer(tr::now), [=] {
