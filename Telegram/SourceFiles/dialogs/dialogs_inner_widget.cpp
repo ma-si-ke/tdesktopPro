@@ -248,6 +248,44 @@ constexpr auto kPreviewPostsLimit = 3;
 	Unexpected("Chat type filter in search results.");
 }
 
+[[nodiscard]] BareId ParseExactIdDigits(QStringView digits) {
+	if (digits.isEmpty()) {
+		return 0;
+	}
+	for (const auto ch : digits) {
+		if (ch < QChar('0') || ch > QChar('9')) {
+			return 0;
+		}
+	}
+	auto ok = false;
+	const auto value = digits.toULongLong(&ok);
+	return (ok && value <= PeerId::kChatTypeMask) ? value : 0;
+}
+
+[[nodiscard]] std::vector<not_null<PeerData*>> PeersByExactId(
+		not_null<Data::Session*> owner,
+		const QString &digits) {
+	const auto bare = ParseExactIdDigits(digits);
+	if (!bare) {
+		return {};
+	}
+	auto result = std::vector<not_null<PeerData*>>();
+	const auto append = [&](PeerId id) {
+		if (const auto peer = owner->peerLoaded(id)) {
+			result.push_back(peer);
+		}
+	};
+	append(peerFromUser(bare));
+	append(peerFromChat(bare));
+	append(peerFromChannel(bare));
+	if (digits.startsWith(u"100"_q) && digits.size() > 3) {
+		if (const auto channelBare = ParseExactIdDigits(digits.mid(3))) {
+			append(peerFromChannel(channelBare));
+		}
+	}
+	return result;
+}
+
 } // namespace
 
 struct InnerWidget::CollapsedRow {
@@ -4275,6 +4313,14 @@ void InnerWidget::refreshFilterResults() {
 				append(add->chatsList()->indexed());
 			}
 			append(owner->contactsNoChatsList());
+			if (words.size() == 1 && !mentionsSearch) {
+				for (const auto peer : PeersByExactId(owner, words.front())) {
+					if (Data::IsHiddenSystemUser(peer)) {
+						continue;
+					}
+					appendToFiltered(owner->history(peer));
+				}
+			}
 		}
 	}
 	for (const auto &[key, row] : _filterResultsGlobal) {
