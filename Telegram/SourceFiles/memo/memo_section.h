@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/section_widget.h"
 
 namespace Ui {
+struct PreparedList;
 class ElasticScroll;
 class PlainShadow;
 class SubTabs;
@@ -99,10 +100,11 @@ public:
 		const FullMsgId &context) override;
 	void listHandleViaClick(not_null<UserData*> bot) override;
 	not_null<Ui::ChatTheme*> listChatTheme() override;
-	CopyRestrictionType listCopyRestrictionType(HistoryItem *item) override;
-	CopyRestrictionType listCopyMediaRestrictionType(
+	HistoryView::CopyRestrictionType listCopyRestrictionType(
+		HistoryItem *item) override;
+	HistoryView::CopyRestrictionType listCopyMediaRestrictionType(
 		not_null<HistoryItem*> item) override;
-	CopyRestrictionType listSelectRestrictionType() override;
+	HistoryView::CopyRestrictionType listSelectRestrictionType() override;
 	auto listAllowedReactionsValue()
 		-> rpl::producer<Data::AllowedReactions> override;
 	void listShowPremiumToast(not_null<DocumentData*> document) override;

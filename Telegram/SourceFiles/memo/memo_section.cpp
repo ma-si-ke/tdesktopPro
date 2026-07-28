@@ -42,9 +42,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_memo.h"
 
 namespace Memo {
-namespace {
 
 using namespace HistoryView;
+
+namespace {
 
 [[nodiscard]] QString FolderTabId(uint64 folderId) {
 	return QString::number(folderId, 16);
