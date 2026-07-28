@@ -17,6 +17,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/fields/input_field.h"
+#include "ui/widgets/menu/menu_action.h"
+#include "ui/widgets/menu/menu_common.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
@@ -106,25 +108,26 @@ void MemoFolders::showRowMenu(uint64 folderId) {
 				close();
 			})));
 	}, &st::menuIconEdit);
-	menu->addAction({
-		.text = tr::lng_memo_folder_delete(tr::now),
-		.handler = [=] {
-			_controller->show(Ui::MakeConfirmBox({
-				.text = tr::lng_memo_folder_delete_sure(
-					tr::now,
-					lt_name,
-					name),
-				.confirmed = [=](Fn<void()> close) {
-					memo->removeFolder(folderId);
-					close();
-				},
-				.confirmText = tr::lng_box_delete(),
-				.confirmStyle = &st::attentionBoxButton,
-			}));
-		},
-		.icon = &st::menuIconDeleteAttention,
-		.isAttention = true,
-	});
+	const auto remove = [=] {
+		_controller->show(Ui::MakeConfirmBox({
+			.text = tr::lng_memo_folder_delete_sure(tr::now, lt_name, name),
+			.confirmed = [=](Fn<void()> close) {
+				memo->removeFolder(folderId);
+				close();
+			},
+			.confirmText = tr::lng_box_delete(),
+			.confirmStyle = &st::attentionBoxButton,
+		}));
+	};
+	menu->addAction(base::make_unique_q<Ui::Menu::Action>(
+		menu->menu(),
+		st::menuWithIconsAttention,
+		Ui::Menu::CreateAction(
+			menu->menu().get(),
+			tr::lng_memo_folder_delete(tr::now),
+			remove),
+		&st::menuIconDeleteAttention,
+		&st::menuIconDeleteAttention));
 	menu->popup(QCursor::pos());
 }
 
