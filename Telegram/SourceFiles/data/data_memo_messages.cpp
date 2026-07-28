@@ -185,7 +185,7 @@ void MemoMessages::removeFolder(uint64 folderId) {
 	_removingFolder = folderId;
 	auto list = _data.find(folderId);
 	while (list != end(_data) && !list->second.items.empty()) {
-		list->second.items.front()->destroy();
+		list->second.items.begin()->second->destroy();
 		list = _data.find(folderId);
 	}
 	_removingFolder = 0;
@@ -232,7 +232,11 @@ rpl::producer<> MemoMessages::updates(uint64 folderId) {
 	}) | rpl::to_empty;
 }
 
-MessagesSlice MemoMessages::list(uint64 folderId) {
+MessagesSlice MemoMessages::list(
+		uint64 folderId,
+		MessagePosition aroundId,
+		int limitBefore,
+		int limitAfter) {
 	ensureLoaded(folderId);
 
 	auto result = MessagesSlice();
@@ -242,13 +246,58 @@ MessagesSlice MemoMessages::list(uint64 folderId) {
 		result.fullCount = 0;
 		return result;
 	}
-	const auto &items = i->second.items;
-	result.fullCount = int(items.size());
-	result.ids = ranges::views::all(
-		items
-	) | ranges::views::transform([](const OwnedItem &item) {
-		return item->fullId();
-	}) | ranges::to_vector;
+	auto &list = i->second;
+	const auto &messages = list.manifest.messages;
+	result.fullCount = int(messages.size());
+	if (messages.empty()) {
+		return result;
+	}
+
+	// Messages are sorted by their memo id, which grows with time, so the
+	// oldest one is at the front. The list widget counts "before" towards
+	// the older side, the same way the replies list does.
+	const auto around = aroundId.fullId.msg;
+	const auto position = [&] {
+		if (!around) {
+			return int(messages.size());
+		}
+		const auto item = _owner->message(_history->peer->id, around);
+		const auto messageIt = item
+			? _itemToMessage.find(item)
+			: end(_itemToMessage);
+		if (messageIt == end(_itemToMessage)) {
+			return int(messages.size());
+		}
+		const auto j = ranges::lower_bound(
+			messages,
+			messageIt->second,
+			ranges::less(),
+			&MemoMessage::id);
+		return int(j - begin(messages));
+	}();
+
+	const auto availableBefore = position;
+	const auto availableAfter = int(messages.size()) - position;
+	const auto useBefore = std::min(availableBefore, limitBefore + 1);
+	const auto useAfter = std::min(availableAfter, limitAfter);
+	result.skippedBefore = availableBefore - useBefore;
+	result.skippedAfter = availableAfter - useAfter;
+
+	const auto from = begin(messages) + (position - useBefore);
+	const auto till = begin(messages) + (position + useAfter);
+	result.ids.reserve(useBefore + useAfter);
+	auto nearest = FullMsgId();
+	for (auto j = from; j != till; ++j) {
+		const auto item = materialize(folderId, *j);
+		if (!item) {
+			continue;
+		}
+		result.ids.push_back(item->fullId());
+		if (!nearest || (j - from) < useBefore) {
+			nearest = item->fullId();
+		}
+	}
+	result.nearestToAround = nearest;
 	return result;
 }
 
@@ -262,24 +311,22 @@ void MemoMessages::ensureLoaded(uint64 folderId) {
 	}
 	list.loaded = true;
 	list.manifest = ReadMemoManifest(_session, folderId);
-	auto messages = list.manifest.messages;
-	for (const auto &message : messages) {
-		restoreMessage(folderId, message);
-	}
-	sort(_data[folderId]);
 }
 
-void MemoMessages::restoreMessage(
+HistoryItem *MemoMessages::materialize(
 		uint64 folderId,
 		const MemoMessage &message) {
-	if (!message.media) {
-		createItem(folderId, message, MTP_messageMediaEmpty());
-		return;
+	auto &list = _data[folderId];
+	const auto already = list.items.find(message.id);
+	if (already != end(list.items)) {
+		return already->second.get();
+	} else if (!message.media) {
+		return createItem(folderId, message, MTP_messageMediaEmpty());
 	}
 	const auto &media = *message.media;
 	const auto path = MemoFilePath(_session, folderId, media.file);
 	if (!QFileInfo::exists(path)) {
-		return;
+		return nullptr;
 	}
 	const auto to = FileLoadTo(_history->peer->id, {}, FullReplyTo(), MsgId());
 	auto task = std::optional<FileLoadTask>();
@@ -289,7 +336,7 @@ void MemoMessages::restoreMessage(
 			? file.readAll()
 			: QByteArray();
 		if (content.isEmpty()) {
-			return;
+			return nullptr;
 		}
 		task.emplace(FileLoadTask::VoiceArgs{
 			.session = _session,
@@ -311,10 +358,13 @@ void MemoMessages::restoreMessage(
 	task->process({ .generateGoodThumbnail = false });
 	const auto &result = task->peekResult();
 	if (!result || !result->filesize) {
-		return;
+		return nullptr;
 	}
 	registerMedia(*result, path);
-	createItem(folderId, message, PrepareMediaData(*result, media.spoiler));
+	return createItem(
+		folderId,
+		message,
+		PrepareMediaData(*result, media.spoiler));
 }
 
 void MemoMessages::registerMedia(
@@ -392,7 +442,7 @@ not_null<HistoryItem*> MemoMessages::createItem(
 		},
 		media);
 	auto &list = _data[folderId];
-	list.items.push_back(OwnedItem(item));
+	list.items.emplace(message.id, OwnedItem(item));
 	_itemToFolder.emplace(item, folderId);
 	_itemToMessage.emplace(item, message.id);
 	return item;
@@ -420,7 +470,6 @@ void MemoMessages::sendText(uint64 folderId, TextWithTags text) {
 	};
 	createItem(folderId, message, MTP_messageMediaEmpty());
 	list.manifest.messages.push_back(std::move(message));
-	sort(_data[folderId]);
 	save(folderId);
 	notify(folderId);
 }
@@ -489,7 +538,6 @@ void MemoMessages::sendFiles(
 				PrepareMediaData(*result, file.spoiler));
 		}
 	}
-	sort(_data[folderId]);
 	save(folderId);
 	notify(folderId);
 }
@@ -540,7 +588,6 @@ void MemoMessages::sendVoice(
 	registerMedia(*result, path);
 	createItem(folderId, *message, PrepareMediaData(*result, false));
 
-	sort(_data[folderId]);
 	save(folderId);
 	notify(folderId);
 }
@@ -614,9 +661,9 @@ void MemoMessages::remove(not_null<const HistoryItem*> item) {
 	_itemToMessage.remove(item);
 
 	auto &list = _data[folderId];
-	const auto k = ranges::find(list.items, item.get(), &OwnedItem::get);
-	if (k != end(list.items)) {
-		k->release();
+	const auto k = list.items.find(messageId);
+	if (k != end(list.items) && k->second.get() == item.get()) {
+		k->second.release();
 		list.items.erase(k);
 	}
 	if (_removingFolder == folderId) {
@@ -634,12 +681,6 @@ void MemoMessages::remove(not_null<const HistoryItem*> item) {
 	}
 	save(folderId);
 	notify(folderId);
-}
-
-void MemoMessages::sort(List &list) {
-	ranges::sort(list.items, ranges::less(), [](const OwnedItem &item) {
-		return item->id;
-	});
 }
 
 void MemoMessages::save(uint64 folderId) {

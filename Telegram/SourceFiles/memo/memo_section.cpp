@@ -590,7 +590,7 @@ rpl::producer<Data::MessagesSlice> MemoSection::listSource(
 		) | rpl::then(
 			memo->updates(folderId)
 		) | rpl::map([=] {
-			return memo->list(folderId);
+			return memo->list(folderId, aroundId, limitBefore, limitAfter);
 		});
 	}) | rpl::flatten_latest();
 }

@@ -50,7 +50,11 @@ public:
 	void applyFolderOrder(const std::vector<uint64> &order);
 
 	[[nodiscard]] rpl::producer<> updates(uint64 folderId);
-	[[nodiscard]] MessagesSlice list(uint64 folderId);
+	[[nodiscard]] MessagesSlice list(
+		uint64 folderId,
+		MessagePosition aroundId,
+		int limitBefore,
+		int limitAfter);
 
 	void sendText(uint64 folderId, TextWithTags text);
 	void sendFiles(
@@ -70,14 +74,20 @@ public:
 private:
 	using OwnedItem = std::unique_ptr<HistoryItem, HistoryItem::Destroyer>;
 
+	// The manifest of a folder is fully kept in memory, it is only a list
+	// of small structs. History items are built lazily, for the window of
+	// messages that the list widget asks for, and are kept in `items` by
+	// their memo message id once built.
 	struct List {
 		MemoManifest manifest;
-		std::vector<OwnedItem> items;
+		base::flat_map<uint64, OwnedItem> items;
 		bool loaded = false;
 	};
 
 	void ensureLoaded(uint64 folderId);
-	void restoreMessage(uint64 folderId, const MemoMessage &message);
+	[[nodiscard]] HistoryItem *materialize(
+		uint64 folderId,
+		const MemoMessage &message);
 	void registerMedia(
 		const FilePrepareResult &result,
 		const QString &path);
@@ -98,7 +108,6 @@ private:
 	[[nodiscard]] MsgId nextItemId();
 	void save(uint64 folderId);
 	void remove(not_null<const HistoryItem*> item);
-	void sort(List &list);
 	void notify(uint64 folderId);
 	void saveFolders();
 

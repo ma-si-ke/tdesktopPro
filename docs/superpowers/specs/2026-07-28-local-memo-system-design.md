@@ -163,7 +163,7 @@ rpl::event_stream<uint64> _updates;
 另需 `base::flat_map<not_null<HistoryItem*>, uint64> _itemToFolder` 反查表，供按 item 定位所属文件夹（编辑/删除时改写对应 manifest）使用。
 
 - 宿主 History：`owner->history(session->userPeerId())`（收藏夹），与快捷回复同法；消息因带 `FakeHistoryItem` 而不进入任何会话
-- `listSource()` 忽略 `aroundId`/`limit`，每次吐全量 `MessagesSlice`（`skippedBefore/After = 0`）
+- **窗口化加载**（照 `Data::RepliesList::buildFromData`，见 §3.5）：manifest 全量常驻内存，`HistoryItem` 只为 `listSource()` 请求的窗口按需构造
 - item 构造照抄 `EphemeralMessages::applyNew` 的 `history->addNewLocalMessage(...)` 范式，id 取自备忘录号段（§3.1），flags = `FakeHistoryItem | Local | Outgoing | HasFromId` → `isRegular()` 为 false → 转发等服务端动作入口自动禁用，同时渲染为右侧发出气泡
 - 运行时 MsgId 与持久化 id 分离：manifest 存稳定的 `MemoMessage.id`，加载时映射到号段内的运行时 MsgId，保证云同步 id 不依赖运行时状态
 
@@ -175,6 +175,24 @@ rpl::event_stream<uint64> _updates;
 - **照片**：照片在 tdesktop 里是「缓存字节」而非独立文件，需把字节注入媒体缓存，或统一按 document-as-image 处理
 
 > 实现时必须先做小实验验证渲染路径，再铺开。
+
+### 3.5 窗口化切片（必须遵守官方模式）
+
+`HistoryView::ListWidget` 自身就是按可视区域驱动的，数据源只需老实按参数返回窗口：
+
+- `ListWidget` 按可视高度算出 `_idsLimit`（`kPreloadedScreensCount = 4`，上下各 4 屏，合计 9 屏），调用 `listSource(_aroundPosition, _idsLimit, _idsLimit)`；滚动时 `_idsLimit` 增大即 `refreshViewer()` 重新订阅
+- `refreshRows()`（`history_view_list_widget.cpp:730/768`）用 `std::swap(_views, _viewsCapacity)` + 末尾 `_viewsCapacity.clear()`，**自动销毁窗口外的 view**，重内容随之释放 —— 只要返回窗口化切片，这一层是白送的
+
+`MemoMessages::list(folderId, aroundId, limitBefore, limitAfter)` 照 `Data::RepliesList::buildFromData`（`data_replies_list.cpp`）实现：`lower_bound` 定位 → `useBefore = min(available, limitBefore + 1)` / `useAfter = min(available, limitAfter)` → 填 `skippedBefore`/`skippedAfter`/`nearestToAround`/`fullCount`，并**只对窗口内的消息调用 `materialize()`**。
+
+与官方的两点差异（均为简化，非偏离）：
+
+1. 官方 `_list` 为降序（新→旧），备忘录 manifest 为升序（旧→新，按 `MemoMessage.id`），因此 `availableBefore = position`、`availableAfter = size - position`；官方最后要 `ranges::reverse`，我们升序遍历天然得到"旧在前"的顺序
+2. 备忘录没有服务器，manifest 永远是完整的，因此不需要官方的 `loadAround`/`loadBefore`/`loadAfter` 补数据逻辑，只算窗口边界
+
+`aroundId` 落不到任何备忘录消息时（如 `MaxMessagePosition` 或 `ShowAtUnreadMsgId`）取 `position = size`，即窗口落在末尾 —— 打开面板默认显示最新消息。
+
+> ⚠️ 反面教材：初版 `listSource` 忽略三个参数、返回全量、`skipped` 恒为 0，等于告诉 `ListWidget`「两端没有更多了」，上述三层机制全部失效 —— 开销随文件夹总条数增长而非屏幕大小。**自持消息列表的 section 一律照 `buildFromData` 来。**
 
 ### 3.4 删除
 
