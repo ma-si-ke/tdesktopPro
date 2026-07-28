@@ -137,6 +137,7 @@ private:
 	void updateInnerVisibleArea();
 	void showAtEnd();
 	void chooseAttach(std::optional<bool> overrideCompress);
+	bool confirmSendingFiles(not_null<const QMimeData*> data);
 	void confirmSendingFiles(
 		Ui::PreparedList &&list,
 		const QString &insertTextOnCancel = QString());

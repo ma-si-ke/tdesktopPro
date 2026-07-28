@@ -204,7 +204,9 @@ void MemoSection::refreshTabs() {
 		.id = QString(kNewFolderTabId),
 		.text = { u"+"_q },
 	});
-	_tabs->setPinnedInterval(int(folders.size()), 1);
+	const auto newFolderIndex = int(folders.size());
+	_tabs->clearPinnedIntervals();
+	_tabs->setPinnedInterval(newFolderIndex, newFolderIndex + 1);
 	_tabs->setTabs(std::move(tabs));
 
 	if (!memo->folder(_folderId.current()) && !folders.empty()) {
@@ -337,11 +339,6 @@ void MemoSection::setupComposeControls() {
 			[=] { chooseAttach(overrideCompress); });
 	}, lifetime());
 
-	_composeControls->fileChosen(
-	) | rpl::on_next([=](ChatHelpers::FileChosen &&chosen) {
-		_show->showToast(tr::lng_memo_empty(tr::now));
-	}, lifetime());
-
 	_composeControls->height(
 	) | rpl::on_next([=] {
 		updateControlsGeometry();
@@ -360,16 +357,7 @@ void MemoSection::setupComposeControls() {
 		if (action == Ui::InputField::MimeAction::Check) {
 			return Core::CanSendFiles(data);
 		} else if (action == Ui::InputField::MimeAction::Insert) {
-			auto list = Core::ReadMimeFiles(data);
-			if (list.empty()) {
-				return false;
-			}
-			confirmSendingFiles(
-				Storage::PrepareMediaList(
-					list,
-					st::sendMediaPreviewSize,
-					session().premium()));
-			return true;
+			return confirmSendingFiles(data);
 		}
 		Unexpected("Action in MimeData hook.");
 	});
@@ -442,6 +430,29 @@ void MemoSection::chooseAttach(std::optional<bool> overrideCompress) {
 		}
 		confirmSendingFiles(std::move(list));
 	}, nullptr);
+}
+
+bool MemoSection::confirmSendingFiles(not_null<const QMimeData*> data) {
+	const auto premium = session().premium();
+	if (const auto urls = Core::ReadMimeUrls(data); !urls.empty()) {
+		auto list = Storage::PrepareMediaList(
+			urls,
+			st::sendMediaPreviewSize,
+			premium);
+		if (list.error == Ui::PreparedList::Error::None) {
+			confirmSendingFiles(std::move(list));
+			return true;
+		}
+	}
+	if (auto read = Core::ReadMimeImage(data)) {
+		auto list = Storage::PrepareMediaFromImage(
+			std::move(read.image),
+			std::move(read.content),
+			st::sendMediaPreviewSize);
+		confirmSendingFiles(std::move(list));
+		return true;
+	}
+	return false;
 }
 
 void MemoSection::confirmSendingFiles(
