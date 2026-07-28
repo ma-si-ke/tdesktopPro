@@ -211,6 +211,9 @@ public:
 	virtual Ui::ElasticScroll *listScrollArea() const { return nullptr; }
 	virtual bool listThanosEffectEnabled() const { return true; }
 	virtual AboutView *listAboutView() { return nullptr; }
+	virtual bool listDoubleClicked(not_null<HistoryItem*> item) {
+		return false;
+	}
 };
 
 class WindowListDelegate : public ListDelegate {

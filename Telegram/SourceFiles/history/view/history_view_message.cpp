@@ -3766,6 +3766,7 @@ bool Message::hasFromPhoto() const {
 	} break;
 	case Context::ContactPreview:
 	case Context::ShortcutMessages:
+	case Context::LocalMemo:
 		return false;
 	}
 	Unexpected("Context in Message::hasFromPhoto.");
@@ -5562,6 +5563,7 @@ bool Message::hasFromName() const {
 	} break;
 	case Context::ContactPreview:
 	case Context::ShortcutMessages:
+	case Context::LocalMemo:
 		return false;
 	}
 	Unexpected("Context in Message::hasFromName.");

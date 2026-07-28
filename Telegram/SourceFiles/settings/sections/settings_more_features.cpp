@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include "settings/settings_common_session.h"
+#include "settings/sections/settings_memo_folders.h"
 #include "cloudmemo/cloud_memo.h"
 #include "core/application.h"
 #include "core/core_settings.h"
@@ -151,6 +152,17 @@ void MoreFeatures::setupContent() {
 	}) | rpl::on_next([](bool checked) {
 		SetQuickCopyUserIds(checked);
 	}, button->lifetime());
+	Ui::AddSkip(content);
+
+	Ui::AddDivider(content);
+	Ui::AddSkip(content);
+	const auto memo = content->add(object_ptr<Ui::SettingsButton>(
+		content,
+		tr::lng_memo_manage(),
+		st::settingsButtonNoIcon));
+	memo->setClickedCallback([=] {
+		showOther(MemoFoldersId());
+	});
 	Ui::AddSkip(content);
 
 	Ui::AddDivider(content);

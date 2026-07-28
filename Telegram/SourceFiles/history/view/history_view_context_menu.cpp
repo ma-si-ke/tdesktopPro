@@ -138,6 +138,7 @@ bool HasEditMessageAction(
 			&& context != Context::Replies
 			&& context != Context::ShortcutMessages
 			&& context != Context::ScheduledTopic
+			&& context != Context::LocalMemo
 			&& context != Context::Monoforum)) {
 		return false;
 	}

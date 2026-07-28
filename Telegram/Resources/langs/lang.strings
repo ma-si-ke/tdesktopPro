@@ -8610,4 +8610,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_employee_ipcheck_type_commercial" = "商业宽带";
 "lng_employee_ipcheck_type_unknown" = "未知";
 
+"lng_memo_title" = "备忘录";
+"lng_memo_folder_default" = "默认";
+"lng_memo_placeholder" = "记录一条备忘…";
+"lng_memo_empty" = "这里还没有内容，发送文字、图片或文件试试。";
+"lng_memo_folder_new" = "新建文件夹";
+"lng_memo_folder_name" = "文件夹名称";
+"lng_memo_folder_rename" = "重命名文件夹";
+"lng_memo_folder_delete" = "删除文件夹";
+"lng_memo_folder_delete_sure" = "确定要删除文件夹「{name}」及其中的全部内容吗？";
+"lng_memo_manage" = "备忘录管理";
+"lng_memo_manage_folders" = "文件夹管理";
+"lng_memo_manage_about" = "备忘录只保存在本机，不会上传到服务器。";
+"lng_memo_fill_voice_sure" = "把这条语音发送到当前聊天？";
+"lng_memo_fill_no_chat" = "请先打开一个聊天。";
+
 // Keys finished

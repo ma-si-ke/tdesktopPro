@@ -85,6 +85,14 @@ constexpr auto EndStoryMsgId = MsgId(StartStoryMsgId.bare + StoryMsgIds);
 constexpr auto ServerMaxMsgId = MsgId(1LL << 56);
 constexpr auto ScheduledMaxMsgId = MsgId(ServerMaxMsgId + (1LL << 32));
 constexpr auto ShortcutMaxMsgId = MsgId(ScheduledMaxMsgId + (1LL << 32));
+
+// Local memo messages live in their own id range. The range starts far
+// above ShortcutMaxMsgId because Data::Session::nextNonHistoryEntryId()
+// hands out ids growing upwards from ShortcutMaxMsgId without any bound,
+// so a large gap keeps the two allocators from ever meeting.
+constexpr auto MemoMinMsgId = MsgId(ShortcutMaxMsgId + (1LL << 40));
+constexpr auto MemoMaxMsgId = MsgId(MemoMinMsgId + (1LL << 32));
+
 constexpr auto ShowAtUnreadMsgId = MsgId(0);
 
 constexpr auto SpecialMsgIdShift = EndStoryMsgId.bare;
@@ -128,6 +136,10 @@ static_assert(-(SpecialMsgIdShift + 0xFF) > ServerMaxMsgId);
 
 [[nodiscard]] constexpr inline bool IsServerMsgId(MsgId id) noexcept {
 	return (id > 0 && id < ServerMaxMsgId);
+}
+
+[[nodiscard]] constexpr inline bool IsMemoMsgId(MsgId id) noexcept {
+	return (id >= MemoMinMsgId) && (id < MemoMaxMsgId);
 }
 
 struct MsgRange {

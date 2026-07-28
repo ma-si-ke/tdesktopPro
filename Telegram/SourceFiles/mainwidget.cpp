@@ -50,6 +50,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "chat_helpers/tabbed_selector.h" // TabbedSelector::refreshStickers
 #include "chat_helpers/message_field.h"
 #include "info/info_memento.h"
+#include "memo/memo_section.h"
 #include "apiwrap.h"
 #include "dialogs/dialogs_widget.h"
 #include "history/history_widget.h"
@@ -2415,7 +2416,11 @@ void MainWidget::updateControlsGeometry() {
 				anim::type::instant,
 				anim::activation::background);
 			const auto active = _controller->activeChatCurrent();
-			if (const auto thread = active.thread()) {
+			if (Core::App().settings().thirdSectionMemoEnabled()) {
+				_controller->showSection(
+					std::make_shared<Memo::MemoMemento>(),
+					params.withThirdColumn());
+			} else if (const auto thread = active.thread()) {
 				if (Core::App().settings().tabbedSelectorSectionEnabled()) {
 					if (_mainSection) {
 						_mainSection->pushTabbedSelectorToThirdSection(
@@ -2715,6 +2720,9 @@ auto MainWidget::thirdSectionForCurrentMainSection(
 void MainWidget::updateThirdColumnToCurrentChat(
 		Dialogs::Key key,
 		bool canWrite) {
+	if (Core::App().settings().thirdSectionMemoEnabled()) {
+		return;
+	}
 	auto saveOldThirdSection = [&] {
 		if (saveThirdSectionToStackBack()) {
 			_stack.back()->setThirdSectionMemento(

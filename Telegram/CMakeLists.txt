@@ -721,6 +721,10 @@ PRIVATE
     data/data_media_rotation.h
     data/data_media_types.cpp
     data/data_media_types.h
+    data/data_memo_messages.cpp
+    data/data_memo_messages.h
+    data/data_memo_storage.cpp
+    data/data_memo_storage.h
     # data/data_messages.cpp
     # data/data_messages.h
     data/data_message_reaction_id.cpp
@@ -1584,6 +1588,10 @@ PRIVATE
     media/view/media_view_video_stream.h
     media/system_media_controls_manager.h
     media/system_media_controls_manager.cpp
+    memo/memo_fill.cpp
+    memo/memo_fill.h
+    memo/memo_section.cpp
+    memo/memo_section.h
     menu/menu_antispam_validator.cpp
     menu/menu_antispam_validator.h
     menu/menu_dock.cpp
@@ -1851,6 +1859,8 @@ PRIVATE
     settings/sections/settings_local_storage.h
     settings/sections/settings_main.cpp
     settings/sections/settings_main.h
+    settings/sections/settings_memo_folders.cpp
+    settings/sections/settings_memo_folders.h
     settings/sections/settings_more_features.cpp
     settings/sections/settings_more_features.h
     settings/settings_recent_searches.cpp

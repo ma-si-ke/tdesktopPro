@@ -3271,6 +3271,12 @@ auto ListWidget::scrollKeyEvents() const
 
 void ListWidget::mouseDoubleClickEvent(QMouseEvent *e) {
 	registerReadMetricsActivity();
+	if (_overElement
+		&& !ClickHandler::getActive()
+		&& _delegate->listDoubleClicked(_overElement->data())) {
+		mouseActionCancel();
+		return;
+	}
 	mouseActionStart(e->globalPos(), e->button());
 	trySwitchToWordSelection();
 	if (!ClickHandler::getActive()

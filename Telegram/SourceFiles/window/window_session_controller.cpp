@@ -2651,7 +2651,8 @@ auto SessionController::computeColumnLayout() const -> ColumnLayout {
 			return true;
 		}
 		if (!Core::App().settings().tabbedSelectorSectionEnabled()
-			&& !Core::App().settings().thirdSectionInfoEnabled()) {
+			&& !Core::App().settings().thirdSectionInfoEnabled()
+			&& !Core::App().settings().thirdSectionMemoEnabled()) {
 			return true;
 		}
 		return false;
@@ -2751,8 +2752,11 @@ void SessionController::resizeForThirdSection() {
 		= settings.tabbedSelectorSectionEnabled();
 	auto thirdSectionInfoEnabled
 		= settings.thirdSectionInfoEnabled();
+	auto thirdSectionMemoEnabled
+		= settings.thirdSectionMemoEnabled();
 	settings.setTabbedSelectorSectionEnabled(false);
 	settings.setThirdSectionInfoEnabled(false);
+	settings.setThirdSectionMemoEnabled(false);
 
 	auto wanted = countThirdColumnWidthFromRatio(layout.bodyWidth);
 	auto minimal = st::columnMinimalWidthThird;
@@ -2790,6 +2794,8 @@ void SessionController::resizeForThirdSection() {
 		tabbedSelectorSectionEnabled);
 	settings.setThirdSectionInfoEnabled(
 		thirdSectionInfoEnabled);
+	settings.setThirdSectionMemoEnabled(
+		thirdSectionMemoEnabled);
 }
 
 void SessionController::closeThirdSection() {
@@ -2817,6 +2823,7 @@ void SessionController::closeThirdSection() {
 	}
 	settings.setTabbedSelectorSectionEnabled(false);
 	settings.setThirdSectionInfoEnabled(false);
+	settings.setThirdSectionMemoEnabled(false);
 	Core::App().saveSettingsDelayed();
 	if (widget()->size() != newWindowSize) {
 		widget()->resize(newWindowSize);

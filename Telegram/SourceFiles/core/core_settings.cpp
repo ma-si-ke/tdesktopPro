@@ -1301,8 +1301,25 @@ void Settings::setTabbedSelectorSectionEnabled(bool enabled) {
 	_tabbedSelectorSectionEnabled = enabled;
 	if (enabled) {
 		setThirdSectionInfoEnabled(false);
+		setThirdSectionMemoEnabled(false);
 	}
 	setTabbedReplacedWithInfo(false);
+}
+
+void Settings::setThirdSectionMemoEnabled(bool enabled) {
+	if (_thirdSectionMemoEnabled != enabled) {
+		_thirdSectionMemoEnabled = enabled;
+		if (enabled) {
+			setTabbedSelectorSectionEnabled(false);
+			setThirdSectionInfoEnabled(false);
+		}
+		_thirdSectionMemoEnabledValue.fire_copy(enabled);
+	}
+}
+
+rpl::producer<bool> Settings::thirdSectionMemoEnabledValue() const {
+	return _thirdSectionMemoEnabledValue.events_starting_with(
+		thirdSectionMemoEnabled());
 }
 
 rpl::producer<bool> Settings::tabbedReplacedWithInfoValue() const {
@@ -1315,6 +1332,7 @@ void Settings::setThirdSectionInfoEnabled(bool enabled) {
 		_thirdSectionInfoEnabled = enabled;
 		if (enabled) {
 			setTabbedSelectorSectionEnabled(false);
+			setThirdSectionMemoEnabled(false);
 		}
 		setTabbedReplacedWithInfo(false);
 		_thirdSectionInfoEnabledValue.fire_copy(enabled);

@@ -665,6 +665,11 @@ public:
 	}
 	void setThirdSectionInfoEnabled(bool enabled);
 	[[nodiscard]] rpl::producer<bool> thirdSectionInfoEnabledValue() const;
+	[[nodiscard]] bool thirdSectionMemoEnabled() const {
+		return _thirdSectionMemoEnabled;
+	}
+	void setThirdSectionMemoEnabled(bool enabled);
+	[[nodiscard]] rpl::producer<bool> thirdSectionMemoEnabledValue() const;
 	[[nodiscard]] int thirdSectionExtendedBy() const {
 		return _thirdSectionExtendedBy;
 	}
@@ -1149,6 +1154,8 @@ private:
 	RectPart _floatPlayerCorner = RectPart(); // per-window
 	bool _thirdSectionInfoEnabled = true; // per-window
 	rpl::event_stream<bool> _thirdSectionInfoEnabledValue; // per-window
+	bool _thirdSectionMemoEnabled = false; // per-window, not saved
+	rpl::event_stream<bool> _thirdSectionMemoEnabledValue; // per-window
 	int _thirdSectionExtendedBy = -1; // per-window
 	rpl::variable<float64> _dialogsWithChatWidthRatio; // per-window
 	rpl::variable<float64> _dialogsNoChatWidthRatio; // per-window

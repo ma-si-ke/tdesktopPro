@@ -45,6 +45,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/business/data_business_chatbots.h"
 #include "data/business/data_business_info.h"
 #include "data/business/data_shortcut_messages.h"
+#include "data/data_memo_messages.h"
 #include "data/components/scheduled_messages.h"
 #include "data/components/sponsored_messages.h"
 #include "data/stickers/data_stickers.h"
@@ -272,7 +273,8 @@ Session::Session(not_null<Main::Session*> session)
 , _savedMessages(std::make_unique<SavedMessages>(this))
 , _chatbots(std::make_unique<Chatbots>(this))
 , _businessInfo(std::make_unique<BusinessInfo>(this))
-, _shortcutMessages(std::make_unique<ShortcutMessages>(this)) {
+, _shortcutMessages(std::make_unique<ShortcutMessages>(this))
+, _memoMessages(std::make_unique<MemoMessages>(this)) {
 	_cache->open(_session->local().cacheKey());
 	_bigFileCache->open(_session->local().cacheBigFileKey());
 
@@ -449,6 +451,7 @@ void Session::clear() {
 	_sendActionManager->clear();
 
 	_histories->unloadAll();
+	_memoMessages = nullptr;
 	_shortcutMessages = nullptr;
 	_session->scheduledMessages().clear();
 	_session->sponsoredMessages().clear();

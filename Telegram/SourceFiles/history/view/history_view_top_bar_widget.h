@@ -161,6 +161,7 @@ private:
 	void showGroupCallMenu(not_null<PeerData*> peer);
 	void showCallMenu();
 	void toggleInfoSection();
+	void toggleMemoSection();
 
 	[[nodiscard]] bool createMenu(
 		not_null<Ui::IconButton*> button,
@@ -251,6 +252,7 @@ private:
 	object_ptr<Ui::IconButton> _call;
 	object_ptr<Ui::IconButton> _groupCall;
 	object_ptr<Ui::IconButton> _search;
+	object_ptr<Ui::IconButton> _memoToggle;
 	object_ptr<Ui::IconButton> _infoToggle;
 	object_ptr<Ui::IconButton> _menuToggle;
 	base::unique_qptr<Ui::PopupMenu> _menu;

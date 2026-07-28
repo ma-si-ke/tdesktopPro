@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/add_contact_box.h"
 #include "ui/boxes/confirm_box.h"
 #include "info/info_memento.h"
+#include "memo/memo_section.h"
 #include "info/info_controller.h"
 #include "info/profile/info_profile_values.h"
 #include "storage/storage_media_prepare.h"
@@ -71,6 +72,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_info.h"
 #include "styles/style_menu_icons.h"
+#include "styles/style_memo.h"
 
 #include <QtGui/QWindow>
 
@@ -129,6 +131,7 @@ TopBarWidget::TopBarWidget(
 , _call(this, st::topBarCall)
 , _groupCall(this, st::topBarGroupCall)
 , _search(this, st::topBarSearch)
+, _memoToggle(this, st::topBarMemo)
 , _infoToggle(this, st::topBarInfo)
 , _menuToggle(this, st::topBarMenuToggle)
 , _titlePeerText(st::windowMinWidth / 3)
@@ -208,6 +211,7 @@ TopBarWidget::TopBarWidget(
 	_menuToggle->addClickHandler([=](auto) { showPeerMenu(); });
 	_menuToggle->setAcceptBoth(true, true);
 	_infoToggle->setClickedCallback([=] { toggleInfoSection(); });
+	_memoToggle->setClickedCallback([=] { toggleMemoSection(); });
 	_back->setAcceptBoth();
 	_back->addClickHandler([=](Qt::MouseButton) {
 		InvokeQueued(_back.data(), [=] { backClicked(); });
@@ -310,6 +314,7 @@ TopBarWidget::TopBarWidget(
 	_groupCall->setAccessibleName(tr::lng_group_call_title(tr::now));
 	_search->setAccessibleName(tr::lng_shortcuts_search(tr::now));
 	_infoToggle->setAccessibleName(tr::lng_settings_section_info(tr::now));
+	_memoToggle->setAccessibleName(tr::lng_memo_title(tr::now));
 	_menuToggle->setAccessibleName(tr::lng_chat_menu(tr::now));
 	_back->setAccessibleName(tr::lng_go_back(tr::now));
 	_cancelChoose->setAccessibleName(tr::lng_cancel(tr::now));
@@ -519,6 +524,26 @@ void TopBarWidget::toggleInfoSection() {
 		}
 	} else {
 		updateControlsVisibility();
+	}
+}
+
+void TopBarWidget::toggleMemoSection() {
+	const auto isThreeColumn = _controller->adaptive().isThreeColumn();
+	if (isThreeColumn && Core::App().settings().thirdSectionMemoEnabled()) {
+		_controller->closeThirdSection();
+		return;
+	} else if (!_controller->canShowThirdSection()) {
+		return;
+	}
+	Core::App().settings().setThirdSectionMemoEnabled(true);
+	Core::App().saveSettingsDelayed();
+	if (isThreeColumn) {
+		_controller->showSection(
+			std::make_shared<Memo::MemoMemento>(),
+			Window::SectionShow().withThirdColumn());
+	} else {
+		_controller->resizeForThirdSection();
+		_controller->updateColumnLayout();
 	}
 }
 
@@ -1289,6 +1314,10 @@ void TopBarWidget::updateControlsGeometry() {
 		_infoToggle->moveToRight(_rightTaken, otherButtonsTop);
 		_rightTaken += _infoToggle->width();
 	}
+	if (!_memoToggle->isHidden()) {
+		_memoToggle->moveToRight(_rightTaken, otherButtonsTop);
+		_rightTaken += _memoToggle->width();
+	}
 	if (!_call->isHidden() || !_groupCall->isHidden()) {
 		_call->moveToRight(_rightTaken, otherButtonsTop);
 		_groupCall->moveToRight(_rightTaken, otherButtonsTop);
@@ -1405,6 +1434,9 @@ void TopBarWidget::updateControlsVisibility() {
 		&& (_narrowRatio < 1.));
 	_infoToggle->setVisible(hasInfo
 		&& !isOneColumn
+		&& _controller->canShowThirdSection()
+		&& !_chooseForReportReason);
+	_memoToggle->setVisible(!isOneColumn
 		&& _controller->canShowThirdSection()
 		&& !_chooseForReportReason);
 	const auto callsEnabled = [&] {

@@ -34,6 +34,7 @@ set(style_files
     iv/iv.style
     media/player/media_player.style
     media/stories/media_stories.style
+    memo/memo.style
     passport/passport.style
     payments/ui/payments.style
     profile/profile.style

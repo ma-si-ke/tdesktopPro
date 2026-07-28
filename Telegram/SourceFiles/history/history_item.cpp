@@ -2124,6 +2124,10 @@ bool HistoryItem::isBusinessShortcut() const {
 	return _shortcutId != 0;
 }
 
+bool HistoryItem::isLocalMemo() const {
+	return IsMemoMsgId(id);
+}
+
 void HistoryItem::setRealShortcutId(BusinessShortcutId id) {
 	_shortcutId = id;
 }
@@ -3020,7 +3024,10 @@ bool HistoryItem::allowsEditMedia() const {
 }
 
 bool HistoryItem::canBeEdited() const {
-	if ((!isRegular() && !isScheduled() && !isBusinessShortcut())
+	if ((!isRegular()
+			&& !isScheduled()
+			&& !isBusinessShortcut()
+			&& !isLocalMemo())
 		|| Has<HistoryMessageVia>()
 		|| Has<HistoryMessageForwarded>()) {
 		return false;
@@ -3077,7 +3084,8 @@ bool HistoryItem::canDelete() const {
 		return false;
 	} else if (!isHistoryEntry()
 		&& !isScheduled()
-		&& !isBusinessShortcut()) {
+		&& !isBusinessShortcut()
+		&& !isLocalMemo()) {
 		return false;
 	}
 	auto channel = _history->peer->asChannel();

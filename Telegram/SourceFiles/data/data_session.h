@@ -55,6 +55,7 @@ class Folder;
 class LocationPoint;
 class WallPaper;
 class ShortcutMessages;
+class MemoMessages;
 class SendActionManager;
 class Reactions;
 class EmojiStatuses;
@@ -202,6 +203,9 @@ public:
 #endif // TDESKTOP_EMPLOYEE_MODE
 	[[nodiscard]] ShortcutMessages &shortcutMessages() const {
 		return *_shortcutMessages;
+	}
+	[[nodiscard]] MemoMessages &memoMessages() const {
+		return *_memoMessages;
 	}
 	[[nodiscard]] SendActionManager &sendActionManager() const {
 		return *_sendActionManager;
@@ -1426,6 +1430,7 @@ private:
 	const std::unique_ptr<Chatbots> _chatbots;
 	const std::unique_ptr<BusinessInfo> _businessInfo;
 	std::unique_ptr<ShortcutMessages> _shortcutMessages;
+	std::unique_ptr<MemoMessages> _memoMessages;
 
 	MsgId _nonHistoryEntryId = ShortcutMaxMsgId;
 
