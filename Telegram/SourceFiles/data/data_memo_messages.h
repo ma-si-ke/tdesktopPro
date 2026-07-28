@@ -66,6 +66,7 @@ public:
 		VoiceWaveform waveform,
 		crl::time duration);
 	void editText(not_null<HistoryItem*> item, TextWithTags text);
+	void deleteMessage(not_null<const HistoryItem*> item);
 
 	[[nodiscard]] uint64 lookupFolder(not_null<const HistoryItem*> item) const;
 	[[nodiscard]] const MemoMessage *lookupMessage(

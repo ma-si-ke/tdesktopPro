@@ -34,6 +34,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtCore/QFile>
 
+#include <cstring>
+
 namespace Memo {
 namespace {
 
@@ -57,7 +59,7 @@ void SetDraft(not_null<Data::Thread*> thread, TextWithTags textWithTags) {
 		Data::WebPageDraft()));
 	history->clearLocalEditDraft(topicRootId, monoforumPeerId);
 	history->session().changes().entryUpdated(
-		history,
+		thread,
 		Data::EntryUpdate::Flag::LocalDraftSet);
 }
 

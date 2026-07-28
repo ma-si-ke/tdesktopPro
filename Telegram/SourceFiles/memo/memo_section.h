@@ -128,6 +128,11 @@ public:
 	bool listDoubleClicked(not_null<HistoryItem*> item) override;
 
 protected:
+	void showAnimatedHook(
+		const Window::SectionSlideParams &params) override;
+	void showFinishedHook() override;
+	void doSetInnerFocus() override;
+	void checkActivation() override;
 	void resizeEvent(QResizeEvent *e) override;
 	void paintEvent(QPaintEvent *e) override;
 
@@ -139,7 +144,7 @@ private:
 	void updateInnerVisibleArea();
 	void showAtEnd();
 	void chooseAttach(std::optional<bool> overrideCompress);
-	bool confirmSendingFiles(not_null<const QMimeData*> data);
+	bool confirmSendingFiles(not_null<const QMimeData*> data) override;
 	void confirmSendingFiles(
 		Ui::PreparedList &&list,
 		const QString &insertTextOnCancel = QString());

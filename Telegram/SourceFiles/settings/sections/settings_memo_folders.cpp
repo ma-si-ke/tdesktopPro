@@ -69,6 +69,7 @@ public:
 
 private:
 	void setupContent();
+	void promptRename(uint64 folderId);
 	void showRowMenu(uint64 folderId);
 
 	const not_null<Window::SessionController*> _controller;
@@ -87,6 +88,23 @@ rpl::producer<QString> MemoFolders::title() {
 	return tr::lng_memo_manage_folders();
 }
 
+void MemoFolders::promptRename(uint64 folderId) {
+	const auto memo = &_controller->session().data().memoMessages();
+	const auto folder = memo->folder(folderId);
+	if (!folder) {
+		return;
+	}
+	_controller->show(Box(
+		EditNameBox,
+		folder->title,
+		Fn<void(QString, Fn<void()>)>([=](
+				QString value,
+				Fn<void()> close) {
+			memo->renameFolder(folderId, value);
+			close();
+		})));
+}
+
 void MemoFolders::showRowMenu(uint64 folderId) {
 	const auto memo = &_controller->session().data().memoMessages();
 	const auto folder = memo->folder(folderId);
@@ -98,15 +116,7 @@ void MemoFolders::showRowMenu(uint64 folderId) {
 		this,
 		st::popupMenuWithIcons);
 	menu->addAction(tr::lng_memo_folder_rename(tr::now), [=] {
-		_controller->show(Box(
-			EditNameBox,
-			name,
-			Fn<void(QString, Fn<void()>)>([=](
-					QString value,
-					Fn<void()> close) {
-				memo->renameFolder(folderId, value);
-				close();
-			})));
+		promptRename(folderId);
 	}, &st::menuIconEdit);
 	const auto remove = [=] {
 		_controller->show(Ui::MakeConfirmBox({
@@ -164,9 +174,7 @@ void MemoFolders::setupContent() {
 	const auto inner = content->add(
 		object_ptr<Ui::VerticalLayout>(content));
 	const auto rebuild = [=] {
-		while (inner->count()) {
-			delete inner->widgetAt(0);
-		}
+		inner->clear();
 		for (const auto &folder : memo->folders()) {
 			const auto id = folder.id;
 			const auto row = inner->add(object_ptr<Ui::SettingsButton>(
@@ -175,10 +183,16 @@ void MemoFolders::setupContent() {
 				st::settingsButtonNoIcon));
 			row->setAcceptBoth(true);
 			row->addClickHandler([=](Qt::MouseButton button) {
-				showRowMenu(id);
+				if (button == Qt::RightButton) {
+					showRowMenu(id);
+				} else {
+					promptRename(id);
+				}
 			});
 		}
-		inner->resizeToWidth(content->width());
+		if (const auto width = content->width()) {
+			inner->resizeToWidth(width);
+		}
 	};
 	memo->foldersChanged(
 	) | rpl::on_next(rebuild, content->lifetime());

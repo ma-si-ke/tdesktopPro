@@ -26,6 +26,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/storage_media_prepare.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/chat/chat_style.h"
+#include "ui/chat/chat_theme.h"
 #include "ui/controls/sub_tabs.h"
 #include "ui/effects/message_sending_animation_controller.h"
 #include "ui/layers/generic_box.h"
@@ -518,6 +519,24 @@ bool MemoSection::floatPlayerHandleWheelEvent(QEvent *e) {
 
 QRect MemoSection::floatPlayerAvailableRect() {
 	return mapToGlobal(_scroll->geometry());
+}
+
+void MemoSection::showAnimatedHook(
+		const Window::SectionSlideParams &params) {
+	_composeControls->showStarted();
+}
+
+void MemoSection::showFinishedHook() {
+	_composeControls->showFinished();
+	_inner->showFinished();
+}
+
+void MemoSection::doSetInnerFocus() {
+	_composeControls->focus();
+}
+
+void MemoSection::checkActivation() {
+	_inner->checkActivation();
 }
 
 void MemoSection::resizeEvent(QResizeEvent *e) {

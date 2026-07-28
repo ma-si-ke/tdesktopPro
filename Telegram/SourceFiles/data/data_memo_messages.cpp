@@ -25,6 +25,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 
+#include <cstring>
+
 namespace Data {
 namespace {
 
@@ -183,10 +185,10 @@ void MemoMessages::removeFolder(uint64 folderId) {
 	}
 
 	_removingFolder = folderId;
-	auto list = _data.find(folderId);
-	while (list != end(_data) && !list->second.items.empty()) {
-		list->second.items.begin()->second->destroy();
-		list = _data.find(folderId);
+	if (const auto list = _data.find(folderId); list != end(_data)) {
+		for (auto &[messageId, item] : base::take(list->second.items)) {
+			item->destroy();
+		}
 	}
 	_removingFolder = 0;
 	_data.remove(folderId);
@@ -357,7 +359,7 @@ HistoryItem *MemoMessages::materialize(
 	}
 	task->process({ .generateGoodThumbnail = false });
 	const auto &result = task->peekResult();
-	if (!result || !result->filesize) {
+	if (!result || result->filesize <= 0) {
 		return nullptr;
 	}
 	registerMedia(*result, path);
@@ -517,7 +519,7 @@ void MemoMessages::sendFiles(
 			});
 			task.process({ .generateGoodThumbnail = false });
 			const auto &result = task.peekResult();
-			if (!result || !result->filesize) {
+			if (!result || result->filesize <= 0) {
 				RemoveMemoFile(_session, folderId, name);
 				continue;
 			}
@@ -571,7 +573,7 @@ void MemoMessages::sendVoice(
 	});
 	task.process({ .generateGoodThumbnail = false });
 	const auto &result = task.peekResult();
-	if (!result || !result->filesize) {
+	if (!result || result->filesize <= 0) {
 		RemoveMemoFile(_session, folderId, name);
 		return;
 	}
@@ -599,11 +601,12 @@ void MemoMessages::editText(
 	if (!folderId) {
 		return;
 	}
-	auto &list = _data[folderId];
 	const auto messageIt = _itemToMessage.find(item);
-	if (messageIt == end(_itemToMessage)) {
+	const auto i = _data.find(folderId);
+	if (messageIt == end(_itemToMessage) || i == end(_data)) {
 		return;
 	}
+	auto &list = i->second;
 	const auto i = ranges::find(
 		list.manifest.messages,
 		messageIt->second,
@@ -648,6 +651,31 @@ const MemoMessage *MemoMessages::lookupMessage(
 	return (i != end(list->second.manifest.messages)) ? &*i : nullptr;
 }
 
+void MemoMessages::deleteMessage(not_null<const HistoryItem*> item) {
+	const auto folderId = lookupFolder(item);
+	const auto messageIt = _itemToMessage.find(item);
+	if (!folderId || messageIt == end(_itemToMessage)) {
+		return;
+	}
+	const auto i = _data.find(folderId);
+	if (i == end(_data)) {
+		return;
+	}
+	auto &list = i->second;
+	const auto j = ranges::find(
+		list.manifest.messages,
+		messageIt->second,
+		&MemoMessage::id);
+	if (j == end(list.manifest.messages)) {
+		return;
+	}
+	if (j->media) {
+		RemoveMemoFile(_session, folderId, j->media->file);
+	}
+	list.manifest.messages.erase(j);
+	save(folderId);
+}
+
 void MemoMessages::remove(not_null<const HistoryItem*> item) {
 	const auto folderId = lookupFolder(item);
 	if (!folderId) {
@@ -660,27 +688,19 @@ void MemoMessages::remove(not_null<const HistoryItem*> item) {
 	_itemToFolder.remove(item);
 	_itemToMessage.remove(item);
 
-	auto &list = _data[folderId];
+	const auto i = _data.find(folderId);
+	if (i == end(_data)) {
+		return;
+	}
+	auto &list = i->second;
 	const auto k = list.items.find(messageId);
 	if (k != end(list.items) && k->second.get() == item.get()) {
 		k->second.release();
 		list.items.erase(k);
 	}
-	if (_removingFolder == folderId) {
-		return;
+	if (_removingFolder != folderId) {
+		notify(folderId);
 	}
-	const auto j = ranges::find(
-		list.manifest.messages,
-		messageId,
-		&MemoMessage::id);
-	if (j != end(list.manifest.messages)) {
-		if (j->media) {
-			RemoveMemoFile(_session, folderId, j->media->file);
-		}
-		list.manifest.messages.erase(j);
-	}
-	save(folderId);
-	notify(folderId);
 }
 
 void MemoMessages::save(uint64 folderId) {

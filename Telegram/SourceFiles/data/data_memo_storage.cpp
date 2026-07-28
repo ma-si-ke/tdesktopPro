@@ -17,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QSaveFile>
 
 namespace Data {
 namespace {
@@ -155,20 +156,22 @@ constexpr auto kFormatVersion = 1;
 
 bool WriteFileContent(const QString &path, const QByteArray &content) {
 	if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
+		LOG(("Memo Error: Could not create '%1'.").arg(path));
 		return false;
 	}
-	const auto temporary = path + u".tmp"_q;
-	auto file = QFile(temporary);
+	auto file = QSaveFile(path);
 	if (!file.open(QIODevice::WriteOnly)) {
+		LOG(("Memo Error: Could not open '%1'.").arg(path));
 		return false;
 	} else if (file.write(content) != content.size()) {
-		file.close();
-		QFile::remove(temporary);
+		file.cancelWriting();
+		LOG(("Memo Error: Could not write '%1'.").arg(path));
+		return false;
+	} else if (!file.commit()) {
+		LOG(("Memo Error: Could not commit '%1'.").arg(path));
 		return false;
 	}
-	file.close();
-	QFile::remove(path);
-	return QFile::rename(temporary, path);
+	return true;
 }
 
 [[nodiscard]] QString FilesDir(
@@ -199,6 +202,12 @@ QString MemoFilePath(
 		not_null<Main::Session*> session,
 		uint64 folderId,
 		const QString &name) {
+	// The name comes from the manifest, which is a plain file on disk, so
+	// a corrupted or tampered one could otherwise point anywhere outside
+	// of the folder and have us read or even remove an unrelated file.
+	if (name.isEmpty() || QFileInfo(name).fileName() != name) {
+		return QString();
+	}
 	return FilesDir(session, folderId) + name;
 }
 
@@ -213,7 +222,8 @@ std::vector<MemoFolder> ReadMemoFolders(not_null<Main::Session*> session) {
 		return {};
 	}
 	auto result = std::vector<MemoFolder>();
-	const auto list = document.object()[u"folders"_q].toArray();
+	const auto root = document.object();
+	const auto list = root[u"folders"_q].toArray();
 	result.reserve(list.size());
 	for (const auto entry : list) {
 		const auto object = entry.toObject();
@@ -231,7 +241,7 @@ std::vector<MemoFolder> ReadMemoFolders(not_null<Main::Session*> session) {
 			.cloudId = object[u"cloudId"_q].toString(),
 		});
 	}
-	ranges::sort(result, ranges::less(), &MemoFolder::order);
+	ranges::stable_sort(result, ranges::less(), &MemoFolder::order);
 	return result;
 }
 
