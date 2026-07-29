@@ -8631,6 +8631,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_memo_import_title" = "导入文件夹…";
 "lng_memo_import_done#one" = "已导入 {count} 个文件夹";
 "lng_memo_import_done#other" = "已导入 {count} 个文件夹";
+"lng_memo_double_click_sends" = "双击直接发送";
+"lng_memo_double_click_sends_about" = "开启后，双击备忘录会直接把内容发送到当前聊天，不再放入输入框或二次确认。";
 "lng_memo_manage" = "备忘录管理";
 "lng_memo_manage_folders" = "文件夹管理";
 "lng_memo_manage_about" = "备忘录只保存在本机，不会上传到服务器。";

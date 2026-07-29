@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "memo/memo_fill.h"
 
 #include "api/api_common.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "apiwrap.h"
 #include "boxes/send_files_box.h"
 #include "chat_helpers/message_field.h"
@@ -38,6 +40,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Memo {
 namespace {
+
+constexpr auto kPrefKey = "memo/double_click_sends";
+
+[[nodiscard]] rpl::variable<bool> &DoubleClickVar() {
+	static auto result = rpl::variable<bool>(
+		Core::App().settings().readPref<bool>(kPrefKey, false));
+	return result;
+}
+
 
 void SetDraft(not_null<Data::Thread*> thread, TextWithTags textWithTags) {
 	const auto history = thread->owningHistory();
@@ -127,6 +138,11 @@ void FillWithMedia(
 		}
 	}
 
+	if (DoubleClickSends()) {
+		SendFilesNow(thread, std::move(list), boxCaption);
+		return;
+	}
+
 	const auto show = controller->uiShow();
 	const auto weak = base::make_weak(thread);
 	auto box = Box<SendFilesBox>(SendFilesBoxDescriptor{
@@ -167,6 +183,63 @@ void FillWithMedia(
 	show->show(std::move(box));
 }
 
+void SendText(
+		not_null<Data::Thread*> thread,
+		const TextWithTags &text) {
+	auto message = Api::MessageToSend(Api::SendAction(thread));
+	message.textWithTags = text;
+	message.action.clearDraft = false;
+	thread->session().api().sendMessage(std::move(message));
+}
+
+void SendVoiceNow(
+		not_null<Data::Thread*> thread,
+		const QString &path,
+		const QByteArray &packed,
+		crl::time duration) {
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return;
+	}
+	auto waveform = VoiceWaveform();
+	waveform.resize(packed.size());
+	memcpy(waveform.data(), packed.constData(), packed.size());
+	thread->session().api().sendVoiceMessage(
+		file.readAll(),
+		std::move(waveform),
+		duration,
+		false,
+		Api::SendAction(thread));
+}
+
+void SendFilesNow(
+		not_null<Data::Thread*> thread,
+		Ui::PreparedList &&list,
+		const TextWithTags &caption) {
+	auto groups = Ui::DivideByGroups(
+		std::move(list),
+		Ui::SendFilesWay(),
+		false);
+	auto action = Api::SendAction(thread);
+	action.clearDraft = false;
+	auto &api = thread->session().api();
+	auto first = true;
+	for (auto &group : groups) {
+		if (first && !caption.text.isEmpty() && !group.list.files.empty()) {
+			group.list.files.front().caption = caption;
+		}
+		first = false;
+		const auto album = (group.type != Ui::AlbumType::None)
+			? std::make_shared<SendingAlbum>()
+			: nullptr;
+		api.sendFiles(
+			std::move(group.list),
+			SendMediaType::Photo,
+			album,
+			action);
+	}
+}
+
 void FillWithVoice(
 		not_null<Window::SessionController*> controller,
 		not_null<Data::Thread*> thread,
@@ -183,6 +256,11 @@ void FillWithVoice(
 		message->media->file);
 	const auto duration = message->media->duration;
 	const auto packed = message->media->waveform;
+	if (DoubleClickSends()) {
+		SendVoiceNow(thread, path, packed, duration);
+		return;
+	}
+
 	const auto weak = base::make_weak(thread);
 	controller->uiShow()->show(Ui::MakeConfirmBox({
 		.text = tr::lng_memo_fill_voice_sure(tr::now),
@@ -211,6 +289,22 @@ void FillWithVoice(
 
 } // namespace
 
+bool DoubleClickSends() {
+	return DoubleClickVar().current();
+}
+
+void SetDoubleClickSends(bool value) {
+	if (DoubleClickVar().current() == value) {
+		return;
+	}
+	Core::App().settings().writePref<bool>(kPrefKey, value);
+	DoubleClickVar() = value;
+}
+
+rpl::producer<bool> DoubleClickSendsValue() {
+	return DoubleClickVar().value();
+}
+
 void FillCurrentChat(
 		not_null<Window::SessionController*> controller,
 		not_null<HistoryItem*> item) {
@@ -224,7 +318,11 @@ void FillCurrentChat(
 	if (!message) {
 		return;
 	} else if (!message->media) {
-		SetDraft(thread, message->text);
+		if (DoubleClickSends()) {
+			SendText(thread, message->text);
+		} else {
+			SetDraft(thread, message->text);
+		}
 		return;
 	} else if (message->media->type == Data::MemoMedia::Type::Voice) {
 		FillWithVoice(controller, thread, item);

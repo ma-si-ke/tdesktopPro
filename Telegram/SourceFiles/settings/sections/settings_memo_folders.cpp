@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_memo_storage.h"
 #include "info/channel_statistics/boosts/giveaway/boost_badge.h"
 #include "memo/memo_archive.h"
+#include "memo/memo_fill.h"
 #include "data/data_session.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
@@ -297,6 +298,21 @@ void MemoFolders::setupContent() {
 
 	Ui::AddSkip(content);
 	Ui::AddDividerText(content, tr::lng_memo_manage_about());
+	Ui::AddSkip(content);
+
+	const auto sends = content->add(object_ptr<Ui::SettingsButton>(
+		content,
+		tr::lng_memo_double_click_sends(),
+		st::settingsButtonNoIcon
+	))->toggleOn(Memo::DoubleClickSendsValue());
+	sends->toggledValue(
+	) | rpl::filter([](bool checked) {
+		return (checked != Memo::DoubleClickSends());
+	}) | rpl::on_next([](bool checked) {
+		Memo::SetDoubleClickSends(checked);
+	}, sends->lifetime());
+	Ui::AddSkip(content);
+	Ui::AddDividerText(content, tr::lng_memo_double_click_sends_about());
 	Ui::AddSkip(content);
 
 	const auto addWrap = content->add(

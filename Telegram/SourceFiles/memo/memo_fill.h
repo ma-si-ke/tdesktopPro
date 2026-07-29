@@ -9,6 +9,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 class HistoryItem;
 
+#include <rpl/producer.h>
+
 namespace Window {
 class SessionController;
 } // namespace Window
@@ -23,5 +25,11 @@ namespace Memo {
 void FillCurrentChat(
 	not_null<Window::SessionController*> controller,
 	not_null<HistoryItem*> item);
+
+// When this is on a double click sends the memo to the current chat at
+// once, instead of putting it into the compose field or asking first.
+[[nodiscard]] bool DoubleClickSends();
+void SetDoubleClickSends(bool value);
+[[nodiscard]] rpl::producer<bool> DoubleClickSendsValue();
 
 } // namespace Memo
