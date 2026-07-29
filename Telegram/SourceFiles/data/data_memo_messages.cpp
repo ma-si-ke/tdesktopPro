@@ -602,11 +602,11 @@ void MemoMessages::editText(
 		return;
 	}
 	const auto messageIt = _itemToMessage.find(item);
-	const auto i = _data.find(folderId);
-	if (messageIt == end(_itemToMessage) || i == end(_data)) {
+	const auto listIt = _data.find(folderId);
+	if (messageIt == end(_itemToMessage) || listIt == end(_data)) {
 		return;
 	}
-	auto &list = i->second;
+	auto &list = listIt->second;
 	const auto i = ranges::find(
 		list.manifest.messages,
 		messageIt->second,
