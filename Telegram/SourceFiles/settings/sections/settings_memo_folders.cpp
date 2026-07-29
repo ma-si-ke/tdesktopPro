@@ -194,11 +194,17 @@ void MemoFolders::promptExport() {
 		box->setTitle(tr::lng_memo_export_title());
 		for (const auto &folder : memo->folders()) {
 			const auto id = folder.id;
-			const auto row = box->addRow(object_ptr<Ui::Checkbox>(
-				box,
-				folder.title,
-				true,
-				st::defaultBoxCheckbox));
+			const auto row = box->addRow(
+				object_ptr<Ui::Checkbox>(
+					box,
+					folder.title,
+					true,
+					st::defaultBoxCheckbox),
+				style::margins(
+					st::boxRowPadding.left(),
+					st::boxLittleSkip,
+					st::boxRowPadding.right(),
+					st::boxLittleSkip));
 			row->checkedChanges() | rpl::on_next([=](bool checked) {
 				if (checked) {
 					selected->emplace(id);
