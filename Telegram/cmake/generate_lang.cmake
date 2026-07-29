@@ -70,5 +70,11 @@ function(generate_lang target_name lang_file src_loc)
     )
     add_custom_target(${target_name}_lang_subsets DEPENDS ${subsets_timestamp})
     init_target_folder(${target_name}_lang_subsets "(gen)")
+
+    # The keys header is only a byproduct of the first command, which is not
+    # enough for the Visual Studio generator to order the two projects, so
+    # they may run at the same time and the subsets read a missing file.
+    add_dependencies(${target_name}_lang_subsets ${target_name}_lang)
+
     add_dependencies(${target_name} ${target_name}_lang_subsets)
 endfunction()
