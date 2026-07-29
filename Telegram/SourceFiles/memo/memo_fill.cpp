@@ -87,6 +87,63 @@ void SetDraft(not_null<Data::Thread*> thread, TextWithTags textWithTags) {
 	return result;
 }
 
+void SendText(
+		not_null<Data::Thread*> thread,
+		const TextWithTags &text) {
+	auto message = Api::MessageToSend(Api::SendAction(thread));
+	message.textWithTags = text;
+	message.action.clearDraft = false;
+	thread->session().api().sendMessage(std::move(message));
+}
+
+void SendVoiceNow(
+		not_null<Data::Thread*> thread,
+		const QString &path,
+		const QByteArray &packed,
+		crl::time duration) {
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return;
+	}
+	auto waveform = VoiceWaveform();
+	waveform.resize(packed.size());
+	memcpy(waveform.data(), packed.constData(), packed.size());
+	thread->session().api().sendVoiceMessage(
+		file.readAll(),
+		std::move(waveform),
+		duration,
+		false,
+		Api::SendAction(thread));
+}
+
+void SendFilesNow(
+		not_null<Data::Thread*> thread,
+		Ui::PreparedList &&list,
+		const TextWithTags &caption) {
+	auto groups = Ui::DivideByGroups(
+		std::move(list),
+		Ui::SendFilesWay(),
+		false);
+	auto action = Api::SendAction(thread);
+	action.clearDraft = false;
+	auto &api = thread->session().api();
+	auto first = true;
+	for (auto &group : groups) {
+		if (first && !caption.text.isEmpty() && !group.list.files.empty()) {
+			group.list.files.front().caption = caption;
+		}
+		first = false;
+		const auto album = (group.type != Ui::AlbumType::None)
+			? std::make_shared<SendingAlbum>()
+			: nullptr;
+		api.sendFiles(
+			std::move(group.list),
+			SendMediaType::Photo,
+			album,
+			action);
+	}
+}
+
 void FillWithMedia(
 		not_null<Window::SessionController*> controller,
 		not_null<Data::Thread*> thread,
@@ -181,63 +238,6 @@ void FillWithMedia(
 		},
 	});
 	show->show(std::move(box));
-}
-
-void SendText(
-		not_null<Data::Thread*> thread,
-		const TextWithTags &text) {
-	auto message = Api::MessageToSend(Api::SendAction(thread));
-	message.textWithTags = text;
-	message.action.clearDraft = false;
-	thread->session().api().sendMessage(std::move(message));
-}
-
-void SendVoiceNow(
-		not_null<Data::Thread*> thread,
-		const QString &path,
-		const QByteArray &packed,
-		crl::time duration) {
-	auto file = QFile(path);
-	if (!file.open(QIODevice::ReadOnly)) {
-		return;
-	}
-	auto waveform = VoiceWaveform();
-	waveform.resize(packed.size());
-	memcpy(waveform.data(), packed.constData(), packed.size());
-	thread->session().api().sendVoiceMessage(
-		file.readAll(),
-		std::move(waveform),
-		duration,
-		false,
-		Api::SendAction(thread));
-}
-
-void SendFilesNow(
-		not_null<Data::Thread*> thread,
-		Ui::PreparedList &&list,
-		const TextWithTags &caption) {
-	auto groups = Ui::DivideByGroups(
-		std::move(list),
-		Ui::SendFilesWay(),
-		false);
-	auto action = Api::SendAction(thread);
-	action.clearDraft = false;
-	auto &api = thread->session().api();
-	auto first = true;
-	for (auto &group : groups) {
-		if (first && !caption.text.isEmpty() && !group.list.files.empty()) {
-			group.list.files.front().caption = caption;
-		}
-		first = false;
-		const auto album = (group.type != Ui::AlbumType::None)
-			? std::make_shared<SendingAlbum>()
-			: nullptr;
-		api.sendFiles(
-			std::move(group.list),
-			SendMediaType::Photo,
-			album,
-			action);
-	}
 }
 
 void FillWithVoice(
