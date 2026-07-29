@@ -8623,6 +8623,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_memo_folder_reorder_done" = "完成调整";
 "lng_memo_send" = "发送到当前聊天";
 "lng_memo_open" = "打开";
+"lng_memo_archive_error" = "处理压缩包时出错，请重试。";
+"lng_memo_archive_empty" = "压缩包里没有可导入的备忘录文件夹。";
+"lng_memo_export_title" = "导出文件夹…";
+"lng_memo_export_confirm" = "导出";
+"lng_memo_export_done" = "导出完成";
+"lng_memo_import_title" = "导入文件夹…";
+"lng_memo_import_done#one" = "已导入 {count} 个文件夹";
+"lng_memo_import_done#other" = "已导入 {count} 个文件夹";
 "lng_memo_manage" = "备忘录管理";
 "lng_memo_manage_folders" = "文件夹管理";
 "lng_memo_manage_about" = "备忘录只保存在本机，不会上传到服务器。";

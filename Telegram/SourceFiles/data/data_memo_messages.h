@@ -18,6 +18,11 @@ namespace Ui {
 struct PreparedBundle;
 } // namespace Ui
 
+namespace Memo {
+struct ArchiveFolder;
+struct UnpackedFolder;
+} // namespace Memo
+
 namespace Main {
 class Session;
 } // namespace Main
@@ -66,7 +71,11 @@ public:
 		VoiceWaveform waveform,
 		crl::time duration);
 	void editText(not_null<HistoryItem*> item, TextWithTags text);
-	void deleteMessage(not_null<const HistoryItem*> item);
+	void deleteMessage(not_null<const HistoryItem*> item);
+
+	[[nodiscard]] std::vector<Memo::ArchiveFolder> collectForArchive(
+		const std::vector<uint64> &folderIds);
+	uint64 importFolder(const Memo::UnpackedFolder &unpacked);
 
 	[[nodiscard]] uint64 lookupFolder(not_null<const HistoryItem*> item) const;
 	[[nodiscard]] const MemoMessage *lookupMessage(

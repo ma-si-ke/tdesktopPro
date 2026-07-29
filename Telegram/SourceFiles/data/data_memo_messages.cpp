@@ -20,8 +20,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "storage/localimageloader.h"
 #include "ui/chat/attach/attach_prepare.h"
+#include "memo/memo_archive.h"
 #include "ui/image/image_location_factory.h"
 
+#include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 
@@ -218,6 +220,81 @@ void MemoMessages::applyFolderOrder(const std::vector<uint64> &order) {
 	}
 	_folders = std::move(sorted);
 	saveFolders();
+}
+
+std::vector<Memo::ArchiveFolder> MemoMessages::collectForArchive(
+		const std::vector<uint64> &folderIds) {
+	auto result = std::vector<Memo::ArchiveFolder>();
+	auto used = base::flat_set<QString>();
+	for (const auto folderId : folderIds) {
+		const auto folder = this->folder(folderId);
+		if (!folder) {
+			continue;
+		}
+		ensureLoaded(folderId);
+		const auto i = _data.find(folderId);
+		if (i == end(_data)) {
+			continue;
+		}
+		const auto title = UniqueArchiveTitle(folder->title, used);
+		used.emplace(title);
+
+		auto entry = Memo::ArchiveFolder{
+			.title = title,
+			.folder = SerializeMemoFolder(*folder),
+			.manifest = SerializeMemoManifest(folderId, i->second.manifest),
+		};
+		auto names = base::flat_set<QString>();
+		for (const auto &message : i->second.manifest.messages) {
+			if (!message.media || names.contains(message.media->file)) {
+				continue;
+			}
+			const auto path = MemoFilePath(
+				_session,
+				folderId,
+				message.media->file);
+			if (path.isEmpty() || !QFileInfo::exists(path)) {
+				continue;
+			}
+			names.emplace(message.media->file);
+			entry.files.push_back({ message.media->file, path });
+		}
+		result.push_back(std::move(entry));
+	}
+	return result;
+}
+
+uint64 MemoMessages::importFolder(const Memo::UnpackedFolder &unpacked) {
+	auto manifest = ParseMemoManifest(unpacked.manifest);
+	if (manifest.messages.empty()) {
+		return 0;
+	}
+	const auto title = ParseMemoFolderTitle(unpacked.folder, unpacked.title);
+	const auto folderId = createFolder(title);
+	auto &list = _data[folderId];
+	list.loaded = true;
+
+	if (!unpacked.directory.isEmpty()) {
+		const auto from = QDir(unpacked.directory);
+		for (const auto &name : from.entryList(QDir::Files)) {
+			const auto target = MemoFilePath(_session, folderId, name);
+			if (!target.isEmpty()
+				&& QDir().mkpath(QFileInfo(target).absolutePath())) {
+				QFile::rename(from.absoluteFilePath(name), target);
+			}
+		}
+	}
+	for (auto &message : manifest.messages) {
+		if (message.media
+			&& !QFileInfo::exists(
+				MemoFilePath(_session, folderId, message.media->file))) {
+			message.media = std::nullopt;
+		}
+	}
+	list.manifest = std::move(manifest);
+	save(folderId);
+	notify(folderId);
+	return folderId;
 }
 
 void MemoMessages::saveFolders() {

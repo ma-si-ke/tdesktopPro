@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/file_utilities.h"
 #include "core/mime_type.h"
 #include "data/data_memo_messages.h"
+#include "data/data_memo_storage.h"
 #include "data/data_media_types.h"
 #include "data/data_session.h"
 #include "history/history.h"
@@ -232,7 +233,7 @@ void MemoSection::refreshTabs() {
 void MemoSection::promptNewFolder() {
 	const auto submit = [=](QString name, Fn<void()> close) {
 		name = name.trimmed();
-		if (name.isEmpty()) {
+		if (!Data::GoodMemoFolderTitle(name)) {
 			return;
 		}
 		const auto id = session().data().memoMessages().createFolder(name);
@@ -251,6 +252,13 @@ void MemoSection::promptNewFolder() {
 		box->setFocusCallback([=] {
 			field->setFocusFast();
 		});
+		field->changes() | rpl::on_next([=] {
+			const auto was = field->getLastText();
+			const auto now = Data::FilterMemoFolderTitle(was);
+			if (now != was) {
+				field->setText(now);
+			}
+		}, field->lifetime());
 		const auto save = [=] {
 			submit(field->getLastText(), [=] { box->closeBox(); });
 		};
@@ -292,11 +300,20 @@ void MemoSection::showFolderMenu(uint64 folderId) {
 				field->setFocusFast();
 				field->selectAll();
 			});
+			field->changes() | rpl::on_next([=] {
+				const auto was = field->getLastText();
+				const auto now = Data::FilterMemoFolderTitle(was);
+				if (now != was) {
+					field->setText(now);
+				}
+			}, field->lifetime());
 			const auto save = [=] {
 				const auto value = field->getLastText().trimmed();
-				if (!value.isEmpty()) {
-					memo->renameFolder(folderId, value);
+				if (!Data::GoodMemoFolderTitle(value)) {
+					field->showError();
+					return;
 				}
+				memo->renameFolder(folderId, value);
 				box->closeBox();
 			};
 			field->submits() | rpl::on_next(save, field->lifetime());

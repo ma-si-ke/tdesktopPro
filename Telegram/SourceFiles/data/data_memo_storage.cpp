@@ -24,6 +24,7 @@ namespace Data {
 namespace {
 
 constexpr auto kFormatVersion = 1;
+constexpr auto kMaxFolderTitle = 64;
 
 [[nodiscard]] QString IdToString(uint64 id) {
 	return QString::number(id, 16);
@@ -317,6 +318,49 @@ MemoManifest ReadMemoManifest(
 	if (content.isEmpty()) {
 		return {};
 	}
+	return ParseMemoManifest(content);
+}
+
+QByteArray SerializeMemoManifest(
+		uint64 folderId,
+		const MemoManifest &manifest) {
+	auto list = QJsonArray();
+	for (const auto &message : manifest.messages) {
+		list.append(SerializeMessage(message));
+	}
+	return QJsonDocument(QJsonObject{
+		{ u"version"_q, kFormatVersion },
+		{ u"folder"_q, IdToString(folderId) },
+		{ u"nextMessageId"_q, IdToString(manifest.nextMessageId) },
+		{ u"messages"_q, list },
+	}).toJson(QJsonDocument::Compact);
+}
+
+QByteArray SerializeMemoFolder(const MemoFolder &folder) {
+	return QJsonDocument(QJsonObject{
+		{ u"version"_q, kFormatVersion },
+		{ u"title"_q, folder.title },
+		{ u"created"_q, double(folder.created) },
+		{ u"updated"_q, double(folder.updated) },
+	}).toJson(QJsonDocument::Compact);
+}
+
+QString ParseMemoFolderTitle(
+		const QByteArray &content,
+		const QString &fallback) {
+	const auto document = QJsonDocument::fromJson(content);
+	const auto title = document.isObject()
+		? document.object()[u"title"_q].toString()
+		: QString();
+	const auto filtered = FilterMemoFolderTitle(title).trimmed();
+	if (GoodMemoFolderTitle(filtered)) {
+		return filtered;
+	}
+	const auto second = FilterMemoFolderTitle(fallback).trimmed();
+	return GoodMemoFolderTitle(second) ? second : u"memo"_q;
+}
+
+MemoManifest ParseMemoManifest(const QByteArray &content) {
 	const auto document = QJsonDocument::fromJson(content);
 	if (!document.isObject()) {
 		return {};
@@ -344,19 +388,9 @@ void WriteMemoManifest(
 		not_null<Main::Session*> session,
 		uint64 folderId,
 		const MemoManifest &manifest) {
-	auto list = QJsonArray();
-	for (const auto &message : manifest.messages) {
-		list.append(SerializeMessage(message));
-	}
-	const auto document = QJsonDocument(QJsonObject{
-		{ u"version"_q, kFormatVersion },
-		{ u"folder"_q, IdToString(folderId) },
-		{ u"nextMessageId"_q, IdToString(manifest.nextMessageId) },
-		{ u"messages"_q, list },
-	});
 	WriteFileContent(
 		MemoFolderDir(session, folderId) + u"manifest.json"_q,
-		document.toJson(QJsonDocument::Compact));
+		SerializeMemoManifest(folderId, manifest));
 }
 
 QString CopyMemoFile(
@@ -407,6 +441,52 @@ void RemoveMemoFolderData(
 		not_null<Main::Session*> session,
 		uint64 folderId) {
 	QDir(MemoFolderDir(session, folderId)).removeRecursively();
+}
+
+QString FilterMemoFolderTitle(const QString &title) {
+	static const auto forbidden = QString(u"\/:*?\"<>|"_q);
+	auto result = QString();
+	result.reserve(title.size());
+	for (const auto ch : title) {
+		if (!forbidden.contains(ch) && ch.unicode() >= ' ') {
+			result.append(ch);
+		}
+	}
+	return result.left(kMaxFolderTitle);
+}
+
+bool GoodMemoFolderTitle(const QString &title) {
+	static const auto reserved = base::flat_set<QString>{
+		u"con"_q, u"prn"_q, u"aux"_q, u"nul"_q,
+		u"com1"_q, u"com2"_q, u"com3"_q, u"com4"_q, u"com5"_q,
+		u"com6"_q, u"com7"_q, u"com8"_q, u"com9"_q,
+		u"lpt1"_q, u"lpt2"_q, u"lpt3"_q, u"lpt4"_q, u"lpt5"_q,
+		u"lpt6"_q, u"lpt7"_q, u"lpt8"_q, u"lpt9"_q,
+	};
+	const auto trimmed = title.trimmed();
+	return !trimmed.isEmpty()
+		&& (trimmed == FilterMemoFolderTitle(trimmed))
+		&& !trimmed.endsWith('.')
+		&& !reserved.contains(trimmed.toLower());
+}
+
+QString UniqueArchiveTitle(
+		const QString &title,
+		const base::flat_set<QString> &used) {
+	const auto filtered = FilterMemoFolderTitle(title).trimmed();
+	const auto base = (filtered.isEmpty() || !GoodMemoFolderTitle(filtered))
+		? u"memo"_q
+		: filtered;
+	if (!used.contains(base)) {
+		return base;
+	}
+	for (auto index = 2; index != 1000; ++index) {
+		const auto candidate = base + u" ("_q + QString::number(index) + ')';
+		if (!used.contains(candidate)) {
+			return candidate;
+		}
+	}
+	return base + '-' + QString::number(GenerateMemoId(), 16);
 }
 
 uint64 GenerateMemoId() {

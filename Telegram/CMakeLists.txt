@@ -1588,6 +1588,8 @@ PRIVATE
     media/view/media_view_video_stream.h
     media/system_media_controls_manager.h
     media/system_media_controls_manager.cpp
+    memo/memo_archive.cpp
+    memo/memo_archive.h
     memo/memo_fill.cpp
     memo/memo_fill.h
     memo/memo_section.cpp

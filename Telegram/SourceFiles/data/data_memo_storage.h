@@ -85,6 +85,15 @@ void WriteMemoFolders(
 	not_null<Main::Session*> session,
 	const std::vector<MemoFolder> &folders);
 
+[[nodiscard]] QByteArray SerializeMemoManifest(
+	uint64 folderId,
+	const MemoManifest &manifest);
+[[nodiscard]] QByteArray SerializeMemoFolder(const MemoFolder &folder);
+[[nodiscard]] MemoManifest ParseMemoManifest(const QByteArray &content);
+[[nodiscard]] QString ParseMemoFolderTitle(
+	const QByteArray &content,
+	const QString &fallback);
+
 [[nodiscard]] MemoManifest ReadMemoManifest(
 	not_null<Main::Session*> session,
 	uint64 folderId);
@@ -110,6 +119,15 @@ void RemoveMemoFolderData(
 	not_null<Main::Session*> session,
 	uint64 folderId);
 
-[[nodiscard]] uint64 GenerateMemoId();
+[[nodiscard]] uint64 GenerateMemoId();
+
+// Folder titles end up as directory names inside an exported archive,
+// so the characters that no file system accepts are rejected already
+// while the name is typed.
+[[nodiscard]] QString FilterMemoFolderTitle(const QString &title);
+[[nodiscard]] bool GoodMemoFolderTitle(const QString &title);
+[[nodiscard]] QString UniqueArchiveTitle(
+	const QString &title,
+	const base::flat_set<QString> &used);
 
 } // namespace Data
