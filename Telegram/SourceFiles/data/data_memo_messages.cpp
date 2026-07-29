@@ -689,10 +689,18 @@ void MemoMessages::deleteMessage(not_null<const HistoryItem*> item) {
 	if (j == end(list.manifest.messages)) {
 		return;
 	}
-	if (j->media) {
-		RemoveMemoFile(_session, folderId, j->media->file);
-	}
+	const auto file = j->media ? j->media->file : QString();
 	list.manifest.messages.erase(j);
+	if (!file.isEmpty()) {
+		const auto stillUsed = ranges::any_of(
+			list.manifest.messages,
+			[&](const MemoMessage &message) {
+				return message.media && (message.media->file == file);
+			});
+		if (!stillUsed) {
+			RemoveMemoFile(_session, folderId, file);
+		}
+	}
 	save(folderId);
 }
 

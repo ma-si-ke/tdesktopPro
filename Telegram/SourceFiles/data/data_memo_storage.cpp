@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_memo_storage.h"
 
 #include "base/random.h"
+#include "base/openssl_help.h"
 #include "main/main_session.h"
 #include "settings.h"
 
@@ -180,9 +181,45 @@ bool WriteFileContent(const QString &path, const QByteArray &content) {
 	return MemoFolderDir(session, folderId) + u"files/"_q;
 }
 
-[[nodiscard]] QString GenerateFileName(const QString &extension) {
-	const auto stem = QString::number(GenerateMemoId(), 16);
+[[nodiscard]] QString NameFromHash(
+		const QByteArray &digest,
+		const QString &extension) {
+	const auto stem = QString::fromLatin1(digest.toHex());
 	return extension.isEmpty() ? stem : (stem + '.' + extension);
+}
+
+// Media files are named by the hash of their content, so the same file
+// stored twice in one folder takes one slot and keeps working when only
+// one of the messages using it is removed.
+[[nodiscard]] QByteArray HashContent(const QByteArray &content) {
+	const auto hash = openssl::Sha256(bytes::make_span(content));
+	return QByteArray(
+		reinterpret_cast<const char*>(hash.data()),
+		hash.size());
+}
+
+[[nodiscard]] QByteArray HashFile(const QString &path) {
+	constexpr auto kChunk = 512 * 1024;
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return QByteArray();
+	}
+	auto context = SHA256_CTX();
+	if (!SHA256_Init(&context)) {
+		return QByteArray();
+	}
+	while (!file.atEnd()) {
+		const auto chunk = file.read(kChunk);
+		if (chunk.isEmpty()) {
+			break;
+		}
+		SHA256_Update(&context, chunk.constData(), chunk.size());
+	}
+	auto digest = QByteArray(SHA256_DIGEST_LENGTH, Qt::Uninitialized);
+	SHA256_Final(
+		reinterpret_cast<unsigned char*>(digest.data()),
+		&context);
+	return digest;
 }
 
 } // namespace
@@ -330,7 +367,14 @@ QString CopyMemoFile(
 	if (sourcePath.isEmpty() || !QDir().mkpath(directory)) {
 		return QString();
 	}
-	const auto name = GenerateFileName(QFileInfo(sourcePath).suffix());
+	const auto digest = HashFile(sourcePath);
+	if (digest.isEmpty()) {
+		return QString();
+	}
+	const auto name = NameFromHash(digest, QFileInfo(sourcePath).suffix());
+	if (QFile::exists(directory + name)) {
+		return name;
+	}
 	return QFile::copy(sourcePath, directory + name) ? name : QString();
 }
 
@@ -343,7 +387,10 @@ QString SaveMemoFileContent(
 	if (content.isEmpty() || !QDir().mkpath(directory)) {
 		return QString();
 	}
-	const auto name = GenerateFileName(extension);
+	const auto name = NameFromHash(HashContent(content), extension);
+	if (QFile::exists(directory + name)) {
+		return name;
+	}
 	return WriteFileContent(directory + name, content) ? name : QString();
 }
 
