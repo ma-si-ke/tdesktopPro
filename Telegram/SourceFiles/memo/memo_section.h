@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Ui {
 struct PreparedList;
+class PopupMenu;
 class ElasticScroll;
 class PlainShadow;
 class SubTabs;
@@ -126,6 +127,9 @@ public:
 	void listAddTranslatedItems(
 		not_null<HistoryView::TranslateTracker*> tracker) override;
 	bool listDoubleClicked(not_null<HistoryItem*> item) override;
+	bool listFillContextMenu(
+		not_null<Ui::PopupMenu*> menu,
+		HistoryItem *item) override;
 
 protected:
 	void showAnimatedHook(

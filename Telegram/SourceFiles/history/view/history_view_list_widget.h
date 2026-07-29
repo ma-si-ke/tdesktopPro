@@ -214,6 +214,11 @@ public:
 	virtual bool listDoubleClicked(not_null<HistoryItem*> item) {
 		return false;
 	}
+	virtual bool listFillContextMenu(
+			not_null<Ui::PopupMenu*> menu,
+			HistoryItem *item) {
+		return false;
+	}
 };
 
 class WindowListDelegate : public ListDelegate {

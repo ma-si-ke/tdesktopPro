@@ -3272,7 +3272,6 @@ auto ListWidget::scrollKeyEvents() const
 void ListWidget::mouseDoubleClickEvent(QMouseEvent *e) {
 	registerReadMetricsActivity();
 	if (_overElement
-		&& !ClickHandler::getActive()
 		&& _delegate->listDoubleClicked(_overElement->data())) {
 		mouseActionCancel();
 		return;
@@ -3497,7 +3496,12 @@ void ListWidget::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		return;
 	}
 #endif // TDESKTOP_EMPLOYEE_MODE
-	_menu = FillContextMenu(this, request);
+	_menu = base::make_unique_q<Ui::PopupMenu>(
+		this,
+		st::popupMenuWithIcons);
+	if (!_delegate->listFillContextMenu(_menu.get(), overItem)) {
+		_menu = FillContextMenu(this, request);
+	}
 	if (_menu->empty()) {
 		_menu = nullptr;
 		return;

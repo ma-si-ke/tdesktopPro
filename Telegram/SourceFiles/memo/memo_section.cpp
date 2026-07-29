@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "memo/memo_section.h"
 
 #include "base/call_delayed.h"
+#include "base/unixtime.h"
 #include "boxes/delete_messages_box.h"
 #include "boxes/send_files_box.h"
 #include "chat_helpers/compose/compose_show.h"
@@ -740,14 +741,48 @@ void MemoSection::listShowPremiumToast(not_null<DocumentData*> document) {
 void MemoSection::listOpenPhoto(
 		not_null<PhotoData*> photo,
 		FullMsgId context) {
-	controller()->openPhoto(photo, { context });
 }
 
 void MemoSection::listOpenDocument(
 		not_null<DocumentData*> document,
 		FullMsgId context,
 		bool showInMediaView) {
-	controller()->openDocument(document, showInMediaView, { context });
+}
+
+bool MemoSection::listFillContextMenu(
+		not_null<Ui::PopupMenu*> menu,
+		HistoryItem *item) {
+	if (!item || !session().data().memoMessages().lookupFolder(item)) {
+		return false;
+	}
+	const auto id = item->fullId();
+	menu->addAction(tr::lng_memo_send(tr::now), [=] {
+		if (const auto strong = session().data().message(id)) {
+			FillCurrentChat(controller(), strong);
+		}
+	}, &st::menuIconSend);
+	if (item->allowsEdit(base::unixtime::now())) {
+		menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
+			if (const auto strong = session().data().message(id)) {
+				edit(strong);
+			}
+		}, &st::menuIconEdit);
+	}
+	const auto remove = [=] {
+		if (const auto strong = session().data().message(id)) {
+			_show->show(Box<DeleteMessagesBox>(strong));
+		}
+	};
+	menu->addAction(base::make_unique_q<Ui::Menu::Action>(
+		menu->menu(),
+		st::menuWithIconsAttention,
+		Ui::Menu::CreateAction(
+			menu->menu().get(),
+			tr::lng_box_delete(tr::now),
+			remove),
+		&st::menuIconDeleteAttention,
+		&st::menuIconDeleteAttention));
+	return true;
 }
 
 void MemoSection::listPaintEmpty(
