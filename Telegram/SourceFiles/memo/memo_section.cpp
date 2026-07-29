@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/file_utilities.h"
 #include "core/mime_type.h"
 #include "data/data_memo_messages.h"
+#include "data/data_media_types.h"
 #include "data/data_session.h"
 #include "history/history.h"
 #include "history/history_item.h"
@@ -761,6 +762,20 @@ bool MemoSection::listFillContextMenu(
 			FillCurrentChat(controller(), strong);
 		}
 	}, &st::menuIconSend);
+	const auto media = item->media();
+	const auto document = media ? media->document() : nullptr;
+	const auto photo = media ? media->photo() : nullptr;
+	if (document || photo) {
+		menu->addAction(tr::lng_memo_open(tr::now), [=] {
+			if (!session().data().message(id)) {
+				return;
+			} else if (document) {
+				controller()->openDocument(document, true, { id });
+			} else {
+				controller()->openPhoto(photo, { id });
+			}
+		}, &st::menuIconFile);
+	}
 	if (item->allowsEdit(base::unixtime::now())) {
 		menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
 			if (const auto strong = session().data().message(id)) {
