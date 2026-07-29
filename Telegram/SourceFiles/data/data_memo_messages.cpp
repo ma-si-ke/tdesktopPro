@@ -186,9 +186,18 @@ void MemoMessages::removeFolder(uint64 folderId) {
 		folder.order = order++;
 	}
 
+	// Ownership is dropped before destroying, so that the removal handler
+	// does not have to find the item and the loop always moves forward.
 	_removingFolder = folderId;
-	if (const auto list = _data.find(folderId); list != end(_data)) {
-		for (auto &[messageId, item] : base::take(list->second.items)) {
+	while (true) {
+		const auto list = _data.find(folderId);
+		if (list == end(_data) || list->second.items.empty()) {
+			break;
+		}
+		const auto j = list->second.items.begin();
+		const auto item = j->second.release();
+		list->second.items.erase(j);
+		if (item) {
 			item->destroy();
 		}
 	}
