@@ -444,7 +444,7 @@ void RemoveMemoFolderData(
 }
 
 QString FilterMemoFolderTitle(const QString &title) {
-	static const auto forbidden = QString(u"\/:*?\"<>|"_q);
+	static const auto forbidden = QString(u"\\/:*?\"<>|"_q);
 	auto result = QString();
 	result.reserve(title.size());
 	for (const auto ch : title) {
