@@ -29,6 +29,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/chat/chat_theme.h"
 #include "ui/controls/sub_tabs.h"
 #include "ui/effects/message_sending_animation_controller.h"
+#include "ui/image/image_prepare.h"
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/elastic_scroll.h"
 #include "ui/widgets/fields/input_field.h"
@@ -173,7 +174,6 @@ void MemoSection::setupTabs() {
 		}
 	}, _tabs->lifetime());
 
-	_tabs->setReorderEnabled(true);
 	_tabs->reorderUpdates(
 	) | rpl::filter([](const Ui::SubTabsReorderUpdate &update) {
 		return (update.state == Ui::SubTabsReorderUpdate::State::Applied);
@@ -267,6 +267,16 @@ void MemoSection::showFolderMenu(uint64 folderId) {
 	const auto menu = Ui::CreateChild<Ui::PopupMenu>(
 		_tabs.data(),
 		st::popupMenuWithIcons);
+	const auto tabs = _tabs.data();
+	if (tabs->reorderEnabled()) {
+		menu->addAction(tr::lng_memo_folder_reorder_done(tr::now), [=] {
+			tabs->setReorderEnabled(false);
+		}, &st::menuIconReorder);
+	} else {
+		menu->addAction(tr::lng_memo_folder_reorder(tr::now), [=] {
+			tabs->setReorderEnabled(true);
+		}, &st::menuIconReorder);
+	}
 	menu->addAction(tr::lng_memo_folder_rename(tr::now), [=] {
 		_show->show(Box([=](not_null<Ui::GenericBox*> box) {
 			box->setTitle(tr::lng_memo_folder_rename());
@@ -418,29 +428,33 @@ void MemoSection::edit(not_null<HistoryItem*> item) {
 void MemoSection::chooseAttach(std::optional<bool> overrideCompress) {
 	_choosingAttach = false;
 
-	const auto premium = session().premium();
-	FileDialog::GetOpenPaths(this, tr::lng_choose_files(tr::now), QString(), [=](
+	const auto filter = (overrideCompress == true)
+		? FileDialog::PhotoVideoFilesFilter()
+		: FileDialog::AllOrImagesFilter();
+	FileDialog::GetOpenPaths(this, tr::lng_choose_files(tr::now), filter, crl::guard(this, [=](
 			FileDialog::OpenResult &&result) {
 		if (result.paths.isEmpty() && result.remoteContent.isEmpty()) {
 			return;
 		}
 		if (!result.remoteContent.isEmpty()) {
-			auto list = Storage::PrepareMediaFromImage(
-				QImage(),
-				std::move(result.remoteContent),
-				st::sendMediaPreviewSize);
+			auto read = Images::Read({ .content = result.remoteContent });
+			auto list = read.image.isNull()
+				? Ui::PreparedList()
+				: Storage::PrepareMediaFromImage(
+					std::move(read.image),
+					std::move(result.remoteContent),
+					st::sendMediaPreviewSize);
+			list.overrideSendImagesAsPhotos = overrideCompress;
 			confirmSendingFiles(std::move(list));
 			return;
 		}
 		auto list = Storage::PrepareMediaList(
 			result.paths,
 			st::sendMediaPreviewSize,
-			premium);
-		if (overrideCompress) {
-			list.overrideSendImagesAsPhotos = *overrideCompress;
-		}
+			session().premium());
+		list.overrideSendImagesAsPhotos = overrideCompress;
 		confirmSendingFiles(std::move(list));
-	}, nullptr);
+	}), nullptr);
 }
 
 bool MemoSection::confirmSendingFiles(not_null<const QMimeData*> data) {

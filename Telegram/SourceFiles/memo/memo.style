@@ -14,6 +14,7 @@ using "info/info.style";
 topBarMemo: IconButton(topBarSearch) {
 	icon: icon {{ "menu/saved_messages", menuIconFg }};
 	iconOver: icon {{ "menu/saved_messages", menuIconFgOver }};
+	iconPosition: point(8px, 15px);
 }
 topBarMemoActive: icon {{ "menu/saved_messages", windowActiveTextFg }};
 
