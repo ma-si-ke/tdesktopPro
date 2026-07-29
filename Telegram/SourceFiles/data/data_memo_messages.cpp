@@ -369,6 +369,29 @@ HistoryItem *MemoMessages::materialize(
 		PrepareMediaData(*result, media.spoiler));
 }
 
+QString MemoMessages::saveResultFile(
+		uint64 folderId,
+		const FilePrepareResult &result) {
+	const auto extension = QFileInfo(result.filename).suffix();
+	if (!result.fileparts.empty()) {
+		auto bytes = QByteArray();
+		bytes.reserve(result.partssize);
+		for (const auto &part : result.fileparts) {
+			bytes.append(part);
+		}
+		return SaveMemoFileContent(_session, folderId, bytes, extension);
+	} else if (!result.content.isEmpty()) {
+		return SaveMemoFileContent(
+			_session,
+			folderId,
+			result.content,
+			extension);
+	} else if (!result.filepath.isEmpty()) {
+		return CopyMemoFile(_session, folderId, result.filepath);
+	}
+	return QString();
+}
+
 void MemoMessages::registerMedia(
 		const FilePrepareResult &result,
 		const QString &path) {
@@ -493,36 +516,33 @@ void MemoMessages::sendFiles(
 		for (auto &file : group.list.files) {
 			const auto photo = compress
 				&& (file.type == Ui::PreparedFile::Type::Photo);
-			const auto originalName = file.displayName.isEmpty()
-				? QFileInfo(file.path).fileName()
-				: file.displayName;
-			const auto name = file.path.isEmpty()
-				? SaveMemoFileContent(
-					_session,
-					folderId,
-					file.content,
-					QFileInfo(originalName).suffix())
-				: CopyMemoFile(_session, folderId, file.path);
-			if (name.isEmpty()) {
-				continue;
-			}
-			const auto path = MemoFilePath(_session, folderId, name);
 			auto task = FileLoadTask(FileLoadTask::Args{
 				.session = _session,
-				.filepath = path,
+				.filepath = file.path,
+				.content = file.content,
+				.information = std::move(file.information),
 				.type = photo ? SendMediaType::Photo : SendMediaType::File,
 				.to = to,
 				.caption = file.caption,
 				.spoiler = file.spoiler,
 				.forceFile = !photo,
-				.displayName = originalName,
+				.displayName = file.displayName,
 			});
 			task.process({ .generateGoodThumbnail = false });
 			const auto &result = task.peekResult();
 			if (!result || result->filesize <= 0) {
-				RemoveMemoFile(_session, folderId, name);
 				continue;
 			}
+			const auto name = saveResultFile(folderId, *result);
+			if (name.isEmpty()) {
+				continue;
+			}
+			const auto path = MemoFilePath(_session, folderId, name);
+			const auto originalName = !file.displayName.isEmpty()
+				? file.displayName
+				: !result->filename.isEmpty()
+				? result->filename
+				: QFileInfo(file.path).fileName();
 			const auto message = appendMessage(
 				folderId,
 				name,

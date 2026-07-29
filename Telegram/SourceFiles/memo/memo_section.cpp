@@ -164,6 +164,7 @@ void MemoSection::setupTabs() {
 		}
 		const auto folderId = FolderFromTabId(id);
 		if (folderId && folderId != _folderId.current()) {
+			_tabs->setActiveTab(id);
 			_folderId = folderId;
 			showAtEnd();
 		}

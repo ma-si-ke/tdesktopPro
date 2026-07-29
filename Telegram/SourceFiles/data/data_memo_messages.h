@@ -89,6 +89,9 @@ private:
 	[[nodiscard]] HistoryItem *materialize(
 		uint64 folderId,
 		const MemoMessage &message);
+	[[nodiscard]] QString saveResultFile(
+		uint64 folderId,
+		const FilePrepareResult &result);
 	void registerMedia(
 		const FilePrepareResult &result,
 		const QString &path);
