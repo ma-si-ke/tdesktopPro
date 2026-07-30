@@ -17,9 +17,11 @@ namespace Plugins {
 Loader::Loader(const QString &name) {
 #ifdef Q_OS_WIN
 	// Absolute path only, the system library search path must never be
-	// used here - the process may be running elevated.
+	// used here - the process may be running elevated. The plugins
+	// folder next to the binary may be missing entirely, that simply
+	// means no plugins are installed.
 	const auto path = QCoreApplication::applicationDirPath()
-		+ u"/"_q
+		+ u"/plugins/"_q
 		+ name
 		+ u".dll"_q;
 	if (!QFileInfo::exists(path)) {

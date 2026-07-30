@@ -98,7 +98,7 @@ void MemCleanSettings::setupContent() {
 			? u"立即清理（%1 秒后可用）"_q.arg(left)
 			: u"立即清理"_q;
 		state->statusText = !available
-			? u"未检测到 memclean.dll，请将其放入程序目录后重启。"_q
+			? u"未检测到 memclean.dll，请将其放入程序目录的 plugins 文件夹后重启。"_q
 			: !elevated
 			? u"需要以管理员身份运行本程序才能清理内存。"_q
 			: u"当前内存占用：%1%。清理期间 CPU 占用较高，"
