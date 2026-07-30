@@ -1785,6 +1785,10 @@ PRIVATE
     plugins/memclean/memclean_plugin.h
     plugins/plugin_loader.cpp
     plugins/plugin_loader.h
+    plugins/plugin_market.cpp
+    plugins/plugin_market.h
+    plugins/plugin_registry.cpp
+    plugins/plugin_registry.h
     profile/profile_block_widget.cpp
     profile/profile_block_widget.h
     profile/profile_cover_drop_area.cpp
@@ -1873,6 +1877,8 @@ PRIVATE
     settings/sections/settings_memo_folders.h
     settings/sections/settings_more_features.cpp
     settings/sections/settings_more_features.h
+    settings/sections/settings_plugins.cpp
+    settings/sections/settings_plugins.h
     settings/settings_recent_searches.cpp
     settings/settings_recent_searches.h
     settings/settings_search.cpp

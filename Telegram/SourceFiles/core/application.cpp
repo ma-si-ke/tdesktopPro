@@ -38,6 +38,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/platform/base_platform_info.h"
 #include "core/announcements.h"
 #include "plugins/memclean/memclean_plugin.h"
+#include "plugins/plugin_registry.h"
 #include "platform/platform_specific.h"
 #include "platform/platform_integration.h"
 #include "history/history.h"
@@ -562,6 +563,9 @@ void Application::startMediaView() {
 }
 
 void Application::startTray() {
+	// Deferred installs, updates and removals have to be applied while
+	// no plugin library is loaded yet and the files are not locked.
+	Plugins::ApplyPendingOperations();
 	Plugins::MemClean::Start();
 	Announcements::Start();
 #ifdef Q_OS_MAC

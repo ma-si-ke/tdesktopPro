@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/settings_common_session.h"
 #include "settings/sections/settings_memclean.h"
 #include "settings/sections/settings_memo_folders.h"
+#include "settings/sections/settings_plugins.h"
 #include "cloudmemo/cloud_memo.h"
 #include "core/application.h"
 #include "core/core_settings.h"
@@ -164,6 +165,17 @@ void MoreFeatures::setupContent() {
 		st::settingsButtonNoIcon));
 	memo->setClickedCallback([=] {
 		showOther(MemoFoldersId());
+	});
+	Ui::AddSkip(content);
+
+	Ui::AddDivider(content);
+	Ui::AddSkip(content);
+	const auto plugins = content->add(object_ptr<Ui::SettingsButton>(
+		content,
+		rpl::single(u"插件管理"_q),
+		st::settingsButtonNoIcon));
+	plugins->setClickedCallback([=] {
+		showOther(PluginsId());
 	});
 	Ui::AddSkip(content);
 
