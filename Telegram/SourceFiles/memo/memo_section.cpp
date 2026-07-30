@@ -713,7 +713,9 @@ rpl::producer<Data::MessagesSlice> MemoSection::listSource(
 }
 
 bool MemoSection::listAllowsMultiSelect() {
-	return true;
+	// Pressing next to the text would start selecting the message, which
+	// gets in the way of the double click and has no use here anyway.
+	return false;
 }
 
 bool MemoSection::listIsItemGoodForSelection(not_null<HistoryItem*> item) {
