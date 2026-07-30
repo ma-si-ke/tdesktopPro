@@ -554,7 +554,7 @@ const QString &readAutoupdatePrefixRaw() {
 			return AutoupdatePrefix(value);
 		}
 	}
-	return AutoupdatePrefix("https://raw.githubusercontent.com/kakala666/TelegramProClientUpdate/refs/heads/main");
+	return AutoupdatePrefix("https://td.kakaco.top/api");
 }
 
 void writeAutoupdatePrefix(const QString &prefix) {
