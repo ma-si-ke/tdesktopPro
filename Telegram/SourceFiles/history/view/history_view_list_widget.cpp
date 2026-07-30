@@ -3273,7 +3273,10 @@ void ListWidget::mouseDoubleClickEvent(QMouseEvent *e) {
 	registerReadMetricsActivity();
 	if (_overElement
 		&& _delegate->listDoubleClicked(_overElement->data())) {
+		// Pressing outside of the text already started selecting the item,
+		// and cancelling the action alone would leave that selection.
 		mouseActionCancel();
+		clearSelected();
 		return;
 	}
 	mouseActionStart(e->globalPos(), e->button());
