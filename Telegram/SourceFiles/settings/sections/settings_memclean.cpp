@@ -28,6 +28,31 @@ namespace {
 
 namespace MC = Plugins::MemClean;
 
+// NumberInput is based on MaskedInputField which is not an RpWidget,
+// so it cannot go into a VerticalLayout directly - wrap it the way
+// OpenServiceNotificationsBox wraps its PasswordInput.
+[[nodiscard]] Ui::NumberInput *AddNumberField(
+		not_null<Ui::VerticalLayout*> container,
+		rpl::producer<QString> placeholder,
+		int value,
+		int limit) {
+	const auto fieldWrap = container->add(
+		object_ptr<Ui::RpWidget>(container),
+		st::boxRowPadding);
+	const auto field = Ui::CreateChild<Ui::NumberInput>(
+		fieldWrap,
+		st::defaultInputField,
+		std::move(placeholder),
+		QString::number(value),
+		limit);
+	fieldWrap->resize(fieldWrap->width(), field->height());
+	fieldWrap->widthValue(
+	) | rpl::on_next([=](int width) {
+		field->resize(width, field->height());
+	}, fieldWrap->lifetime());
+	return field;
+}
+
 class MemCleanSettings : public Section<MemCleanSettings> {
 public:
 	MemCleanSettings(
@@ -138,27 +163,21 @@ void MemCleanSettings::setupContent() {
 		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
 			inner,
 			object_ptr<Ui::VerticalLayout>(inner)));
-	const auto intervalField = intervalWrap->entity()->add(
-		object_ptr<Ui::NumberInput>(
-			intervalWrap->entity(),
-			st::defaultInputField,
-			rpl::single(u"清理间隔（秒，最少 30）"_q),
-			QString::number(MC::AutoCleanInterval()),
-			MC::kMaxIntervalSeconds),
-		st::boxRowPadding);
+	const auto intervalField = AddNumberField(
+		intervalWrap->entity(),
+		rpl::single(u"清理间隔（秒，最少 30）"_q),
+		MC::AutoCleanInterval(),
+		MC::kMaxIntervalSeconds);
 
 	const auto thresholdWrap = inner->add(
 		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
 			inner,
 			object_ptr<Ui::VerticalLayout>(inner)));
-	const auto thresholdField = thresholdWrap->entity()->add(
-		object_ptr<Ui::NumberInput>(
-			thresholdWrap->entity(),
-			st::defaultInputField,
-			rpl::single(u"内存占用阈值（%，20 - 95）"_q),
-			QString::number(MC::AutoCleanThreshold()),
-			MC::kMaxThresholdPercent),
-		st::boxRowPadding);
+	const auto thresholdField = AddNumberField(
+		thresholdWrap->entity(),
+		rpl::single(u"内存占用阈值（%，20 - 95）"_q),
+		MC::AutoCleanThreshold(),
+		MC::kMaxThresholdPercent);
 
 	const auto updateModeWraps = [=](anim::type animated) {
 		const auto interval = (group->current() == MC::AutoMode::Interval);
