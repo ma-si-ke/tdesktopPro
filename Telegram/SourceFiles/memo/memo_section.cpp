@@ -159,7 +159,9 @@ void MemoSection::setupTabs() {
 	_tabs->activated(
 	) | rpl::on_next([=](const QString &id) {
 		if (id == QString(kNewFolderTabId)) {
-			_tabs->setActiveTab(FolderTabId(_folderId.current()));
+			_tabs->setActiveTab(_folderId.current()
+				? FolderTabId(_folderId.current())
+				: QString());
 			promptNewFolder();
 			return;
 		}
@@ -223,10 +225,13 @@ void MemoSection::refreshTabs() {
 	_tabs->setPinnedInterval(newFolderIndex, newFolderIndex + 1);
 	_tabs->setTabs(std::move(tabs));
 
-	if (!memo->folder(_folderId.current()) && !folders.empty()) {
-		_folderId = folders.front().id;
+	if (!memo->folder(_folderId.current())) {
+		_folderId = folders.empty() ? uint64(0) : folders.front().id;
 	}
-	_tabs->setActiveTab(FolderTabId(_folderId.current()));
+	// An id that is not in the list would fail an assertion there.
+	_tabs->setActiveTab(_folderId.current()
+		? FolderTabId(_folderId.current())
+		: QString());
 	updateControlsGeometry();
 }
 

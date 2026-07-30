@@ -390,7 +390,9 @@ MessagesSlice MemoMessages::list(
 }
 
 void MemoMessages::ensureLoaded(uint64 folderId) {
-	if (!folderId) {
+	// A view may still ask for a folder that was just removed, loading it
+	// again would bring a dead entry back into the map.
+	if (!folderId || !folder(folderId)) {
 		return;
 	}
 	auto &list = _data[folderId];
