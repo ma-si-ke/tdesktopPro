@@ -25,6 +25,7 @@ namespace {
 
 constexpr auto kFormatVersion = 1;
 constexpr auto kMaxFolderTitle = 64;
+constexpr auto kMaxCommandLength = 32;
 
 [[nodiscard]] QString IdToString(uint64 id) {
 	return QString::number(id, 16);
@@ -123,6 +124,9 @@ constexpr auto kMaxFolderTitle = 64;
 	if (message.groupId) {
 		result.insert(u"group"_q, IdToString(message.groupId));
 	}
+	if (!message.command.isEmpty()) {
+		result.insert(u"command"_q, message.command);
+	}
 	if (message.media) {
 		result.insert(u"media"_q, SerializeMedia(*message.media));
 	}
@@ -138,6 +142,7 @@ constexpr auto kMaxFolderTitle = 64;
 		.revision = uint64(object[u"revision"_q].toDouble()),
 	};
 	result.text.text = object[u"text"_q].toString();
+	result.command = FilterMemoCommand(object[u"command"_q].toString());
 	const auto tags = object[u"tags"_q].toString();
 	if (!tags.isEmpty()) {
 		result.text.tags = TextUtilities::DeserializeTags(
@@ -468,6 +473,21 @@ bool GoodMemoFolderTitle(const QString &title) {
 		&& (trimmed == FilterMemoFolderTitle(trimmed))
 		&& !trimmed.endsWith('.')
 		&& !reserved.contains(trimmed.toLower());
+}
+
+QString FilterMemoCommand(const QString &command) {
+	auto result = QString();
+	result.reserve(command.size());
+	for (const auto ch : command) {
+		if (ch.isLetterOrNumber() || ch == '_') {
+			result.append(ch);
+		}
+	}
+	return result.left(kMaxCommandLength).toLower();
+}
+
+bool GoodMemoCommand(const QString &command) {
+	return !command.isEmpty() && (command == FilterMemoCommand(command));
 }
 
 QString UniqueArchiveTitle(

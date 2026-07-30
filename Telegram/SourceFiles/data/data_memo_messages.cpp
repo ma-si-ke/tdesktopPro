@@ -95,6 +95,24 @@ namespace {
 		: QSize();
 }
 
+[[nodiscard]] QString MemoMessagePreview(const MemoMessage &message) {
+	if (!message.text.text.isEmpty()) {
+		return message.text.text;
+	} else if (!message.media) {
+		return QString();
+	}
+	switch (message.media->type) {
+	case MemoMedia::Type::Photo: return tr::lng_in_dlg_photo(tr::now);
+	case MemoMedia::Type::Voice: return tr::lng_in_dlg_audio(tr::now);
+	case MemoMedia::Type::Audio: return tr::lng_in_dlg_audio_file(tr::now);
+	case MemoMedia::Type::Video: return tr::lng_in_dlg_video(tr::now);
+	case MemoMedia::Type::File: break;
+	}
+	return message.media->originalName.isEmpty()
+		? tr::lng_in_dlg_file(tr::now)
+		: message.media->originalName;
+}
+
 [[nodiscard]] QByteArray PackWaveform(const VoiceWaveform &waveform) {
 	return QByteArray(
 		reinterpret_cast<const char*>(waveform.constData()),
@@ -229,6 +247,122 @@ void MemoMessages::applyFolderOrder(const std::vector<uint64> &order) {
 	}
 	_folders = std::move(sorted);
 	saveFolders();
+}
+
+void MemoMessages::ensureCommandsLoaded() {
+	for (const auto &folder : _folders) {
+		ensureLoaded(folder.id);
+	}
+}
+
+std::vector<MemoCommand> MemoMessages::commands(const QString &filter) {
+	ensureCommandsLoaded();
+
+	auto result = std::vector<MemoCommand>();
+	for (const auto &folder : _folders) {
+		const auto i = _data.find(folder.id);
+		if (i == end(_data)) {
+			continue;
+		}
+		for (const auto &message : i->second.manifest.messages) {
+			if (message.command.isEmpty()
+				|| !message.command.startsWith(filter, Qt::CaseInsensitive)) {
+				continue;
+			}
+			const auto j = ranges::find(
+				result,
+				message.command,
+				&MemoCommand::command);
+			if (j != end(result)) {
+				++j->count;
+				j->preview = QString();
+				j->folderId = 0;
+				j->messageId = 0;
+				continue;
+			}
+			result.push_back({
+				.command = message.command,
+				.count = 1,
+				.preview = MemoMessagePreview(message),
+				.folderId = folder.id,
+				.messageId = message.id,
+			});
+		}
+	}
+	ranges::sort(result, ranges::less(), &MemoCommand::command);
+	return result;
+}
+
+std::vector<MemoCommandMessage> MemoMessages::commandMessages(
+		const QString &command) {
+	ensureCommandsLoaded();
+
+	auto result = std::vector<MemoCommandMessage>();
+	if (command.isEmpty()) {
+		return result;
+	}
+	for (const auto &folder : _folders) {
+		const auto i = _data.find(folder.id);
+		if (i == end(_data)) {
+			continue;
+		}
+		for (const auto &message : i->second.manifest.messages) {
+			if (message.command.compare(command, Qt::CaseInsensitive) != 0) {
+				continue;
+			}
+			result.push_back({
+				.folderId = folder.id,
+				.messageId = message.id,
+				.preview = MemoMessagePreview(message),
+			});
+		}
+	}
+	return result;
+}
+
+HistoryItem *MemoMessages::commandItem(uint64 folderId, uint64 messageId) {
+	ensureLoaded(folderId);
+
+	const auto i = _data.find(folderId);
+	if (i == end(_data)) {
+		return nullptr;
+	}
+	const auto j = ranges::find(
+		i->second.manifest.messages,
+		messageId,
+		&MemoMessage::id);
+	return (j != end(i->second.manifest.messages))
+		? materialize(folderId, *j)
+		: nullptr;
+}
+
+void MemoMessages::setCommand(
+		not_null<const HistoryItem*> item,
+		QString command) {
+	const auto folderId = lookupFolder(item);
+	const auto messageIt = _itemToMessage.find(item);
+	if (!folderId || messageIt == end(_itemToMessage)) {
+		return;
+	}
+	const auto i = _data.find(folderId);
+	if (i == end(_data)) {
+		return;
+	}
+	const auto j = ranges::find(
+		i->second.manifest.messages,
+		messageIt->second,
+		&MemoMessage::id);
+	if (j == end(i->second.manifest.messages) || j->command == command) {
+		return;
+	}
+	j->command = std::move(command);
+	++j->revision;
+	save(folderId);
+}
+
+QString MemoMessages::itemCommand(not_null<const HistoryItem*> item) const {
+	const auto message = lookupMessage(item);
+	return message ? message->command : QString();
 }
 
 std::vector<Memo::ArchiveFolder> MemoMessages::collectForArchive(

@@ -37,6 +37,20 @@ class Session;
 // never show up in the Saved Messages chat, exactly like the business
 // shortcut messages do.
 
+struct MemoCommand {
+	QString command;
+	int count = 0;
+	QString preview;
+	uint64 folderId = 0;
+	uint64 messageId = 0;
+};
+
+struct MemoCommandMessage {
+	uint64 folderId = 0;
+	uint64 messageId = 0;
+	QString preview;
+};
+
 class MemoMessages final {
 public:
 	explicit MemoMessages(not_null<Session*> owner);
@@ -71,7 +85,20 @@ public:
 		VoiceWaveform waveform,
 		crl::time duration);
 	void editText(not_null<HistoryItem*> item, TextWithTags text);
-	void deleteMessage(not_null<const HistoryItem*> item);
+	void deleteMessage(not_null<const HistoryItem*> item);
+
+	// Commands work from any chat, so every folder manifest has to be in
+	// memory before they can be listed. That is done on first use, the
+	// manifests hold no media and are cheap to read.
+	[[nodiscard]] std::vector<MemoCommand> commands(const QString &filter);
+	[[nodiscard]] std::vector<MemoCommandMessage> commandMessages(
+		const QString &command);
+	[[nodiscard]] HistoryItem *commandItem(
+		uint64 folderId,
+		uint64 messageId);
+	void setCommand(not_null<const HistoryItem*> item, QString command);
+	[[nodiscard]] QString itemCommand(
+		not_null<const HistoryItem*> item) const;
 
 	[[nodiscard]] std::vector<Memo::ArchiveFolder> collectForArchive(
 		const std::vector<uint64> &folderIds);
@@ -95,6 +122,7 @@ private:
 	};
 
 	void ensureLoaded(uint64 folderId);
+	void ensureCommandsLoaded();
 	[[nodiscard]] HistoryItem *materialize(
 		uint64 folderId,
 		const MemoMessage &message);

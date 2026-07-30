@@ -155,6 +155,7 @@ private:
 	void send();
 	void edit(not_null<HistoryItem*> item);
 	void promptNewFolder();
+	void promptCommand(not_null<HistoryItem*> item);
 	void showFolderMenu(uint64 folderId);
 
 	const std::shared_ptr<ChatHelpers::Show> _show;

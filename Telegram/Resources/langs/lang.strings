@@ -8623,6 +8623,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_memo_folder_reorder_done" = "完成调整";
 "lng_memo_send" = "发送到当前聊天";
 "lng_memo_open" = "打开";
+"lng_memo_bind_command" = "绑定快捷指令";
+"lng_memo_bind_command_hint" = "指令名，留空可解除绑定";
 "lng_memo_archive_error" = "处理压缩包时出错，请重试。";
 "lng_memo_archive_empty" = "压缩包里没有可导入的备忘录文件夹。";
 "lng_memo_export_title" = "导出文件夹…";

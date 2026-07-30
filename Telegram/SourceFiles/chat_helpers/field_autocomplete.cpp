@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_user.h"
 #include "data/data_peer_values.h"
 #include "data/data_file_origin.h"
+#include "data/data_memo_messages.h"
 #include "data/data_session.h"
 #include "data/stickers/data_stickers.h"
 #include "menu/menu_send.h" // SendMenu::FillSendMenu
@@ -769,6 +770,25 @@ void FieldAutocomplete::updateFiltered(bool resetScroll) {
 			}
 			if (!brows.empty()) {
 				brows.insert(begin(brows), BotCommandRow{ self }); // Edit.
+			}
+		}
+		// Memo commands work from any chat, not only from private ones.
+		if (!hasUsername && brows.empty()) {
+			const auto self = _session->user();
+			const auto memo = &_session->data().memoMessages();
+			for (const auto &entry : memo->commands(
+					listAllSuggestions ? QString() : _filter)) {
+				brows.push_back(BotCommandRow{
+					self,
+					entry.command,
+					((entry.count > 1)
+						? tr::lng_forum_messages(
+							tr::now,
+							lt_count,
+							entry.count)
+						: entry.preview),
+					self->activeUserpicView()
+				});
 			}
 		}
 	}
@@ -1921,6 +1941,7 @@ void InitFieldAutocomplete(
 	const auto peer = descriptor.peer;
 	const auto features = descriptor.features;
 	const auto processShortcut = descriptor.processShortcut;
+	const auto processMemoCommand = descriptor.processMemoCommand;
 	const auto shortcutMessages = (processShortcut != nullptr)
 		? &peer->owner().shortcutMessages()
 		: nullptr;
@@ -1932,9 +1953,19 @@ void InitFieldAutocomplete(
 		using Method = FieldAutocompleteChooseMethod;
 		const auto byTab = (data.method == Method::ByTab);
 		const auto shortcut = data.user->isSelf();
+		const auto name = data.command.mid(1);
+		const auto memo = &peer->owner().memoMessages();
 
-		// Send bot command at once, if it was not inserted by pressing Tab.
-		if (byTab && data.command.size() > 1) {
+		// A memo command acts at once, pressing Tab on it must not just
+		// complete the text the way it does for the other commands.
+		if (shortcut
+			&& !name.isEmpty()
+			&& processMemoCommand
+			&& !memo->commandMessages(name).empty()) {
+			processMemoCommand(name);
+			setText(
+				field->getTextWithTagsPart(field->textCursor().position()));
+		} else if (byTab && data.command.size() > 1) {
 			field->insertTag(data.command);
 		} else if (!shortcut) {
 			sendCommand(data.command);

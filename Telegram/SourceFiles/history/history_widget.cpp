@@ -155,6 +155,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "chat_helpers/tabbed_section.h"
 #include "chat_helpers/bot_keyboard.h"
 #include "chat_helpers/message_field.h"
+#include "memo/memo_fill.h"
 #include "menu/menu_send.h"
 #include "menu/menu_timecode_action.h"
 #include "mtproto/mtproto_config.h"
@@ -1859,6 +1860,9 @@ void HistoryWidget::initFieldAutocomplete() {
 				_field->textCursor().position()));
 		}
 	};
+	const auto processMemoCommand = [=](QString command) {
+		Memo::RunCommand(controller(), command);
+	};
 	ChatHelpers::InitFieldAutocomplete(_autocomplete, {
 		.parent = this,
 		.show = controller()->uiShow(),
@@ -1898,6 +1902,7 @@ void HistoryWidget::initFieldAutocomplete() {
 			}
 		},
 		.processShortcut = processShortcut,
+		.processMemoCommand = processMemoCommand,
 		.moderateKeyActivateCallback = [=](int key) {
 			const auto context = [=](FullMsgId itemId) {
 				return _list->prepareClickContext(Qt::LeftButton, itemId);

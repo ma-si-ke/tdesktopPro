@@ -62,6 +62,7 @@ struct MemoMessage {
 	TextWithTags text;
 	uint64 groupId = 0;
 	uint64 revision = 0;
+	QString command;
 	std::optional<MemoMedia> media;
 };
 
@@ -119,13 +120,18 @@ void RemoveMemoFolderData(
 	not_null<Main::Session*> session,
 	uint64 folderId);
 
-[[nodiscard]] uint64 GenerateMemoId();
+[[nodiscard]] uint64 GenerateMemoId();
 
 // Folder titles end up as directory names inside an exported archive,
 // so the characters that no file system accepts are rejected already
 // while the name is typed.
 [[nodiscard]] QString FilterMemoFolderTitle(const QString &title);
 [[nodiscard]] bool GoodMemoFolderTitle(const QString &title);
+
+// Commands are typed after a slash in the compose field, so they are kept
+// to what the autocomplete there is able to filter.
+[[nodiscard]] QString FilterMemoCommand(const QString &command);
+[[nodiscard]] bool GoodMemoCommand(const QString &command);
 [[nodiscard]] QString UniqueArchiveTitle(
 	const QString &title,
 	const base::flat_set<QString> &used);

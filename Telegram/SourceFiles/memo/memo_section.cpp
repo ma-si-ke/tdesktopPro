@@ -273,6 +273,44 @@ void MemoSection::promptNewFolder() {
 	}));
 }
 
+void MemoSection::promptCommand(not_null<HistoryItem*> item) {
+	const auto memo = &session().data().memoMessages();
+	const auto id = item->fullId();
+	const auto current = memo->itemCommand(item);
+	_show->show(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(tr::lng_memo_bind_command());
+		const auto field = box->addRow(object_ptr<Ui::InputField>(
+			box,
+			st::defaultInputField,
+			tr::lng_memo_bind_command_hint(),
+			current));
+		box->setFocusCallback([=] {
+			field->setFocusFast();
+			field->selectAll();
+		});
+		field->changes() | rpl::on_next([=] {
+			const auto was = field->getLastText();
+			const auto now = Data::FilterMemoCommand(was);
+			if (now != was) {
+				field->setText(now);
+			}
+		}, field->lifetime());
+		const auto save = [=] {
+			const auto value = field->getLastText();
+			if (!value.isEmpty() && !Data::GoodMemoCommand(value)) {
+				field->showError();
+				return;
+			} else if (const auto strong = session().data().message(id)) {
+				memo->setCommand(strong, value);
+			}
+			box->closeBox();
+		};
+		field->submits() | rpl::on_next(save, field->lifetime());
+		box->addButton(tr::lng_settings_save(), save);
+		box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+	}));
+}
+
 void MemoSection::showFolderMenu(uint64 folderId) {
 	const auto memo = &session().data().memoMessages();
 	const auto folder = memo->folder(folderId);
@@ -799,6 +837,11 @@ bool MemoSection::listFillContextMenu(
 			}
 		}, &st::menuIconFile);
 	}
+	menu->addAction(tr::lng_memo_bind_command(tr::now), [=] {
+		if (const auto strong = session().data().message(id)) {
+			promptCommand(strong);
+		}
+	}, &st::menuIconBotCommands);
 	if (item->allowsEdit(base::unixtime::now())) {
 		menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
 			if (const auto strong = session().data().message(id)) {

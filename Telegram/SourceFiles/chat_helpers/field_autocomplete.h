@@ -228,6 +228,7 @@ struct FieldAutocompleteDescriptor {
 	Fn<void(TextWithTags)> setText;
 	Fn<void(QString)> sendBotCommand;
 	Fn<void(QString)> processShortcut;
+	Fn<void(QString)> processMemoCommand;
 	Fn<bool(int)> moderateKeyActivateCallback;
 };
 void InitFieldAutocomplete(

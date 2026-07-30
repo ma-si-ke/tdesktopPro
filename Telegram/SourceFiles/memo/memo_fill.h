@@ -26,6 +26,12 @@ void FillCurrentChat(
 	not_null<Window::SessionController*> controller,
 	not_null<HistoryItem*> item);
 
+// Runs a memo command typed in the compose field. Contents always go to
+// the draft here, the double click option does not apply.
+void RunCommand(
+	not_null<Window::SessionController*> controller,
+	const QString &command);
+
 // When this is on a double click sends the memo to the current chat at
 // once, instead of putting it into the compose field or asking first.
 [[nodiscard]] bool DoubleClickSends();

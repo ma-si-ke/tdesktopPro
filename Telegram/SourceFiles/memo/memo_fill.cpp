@@ -29,10 +29,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/storage_media_prepare.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/chat/attach/attach_prepare.h"
+#include "ui/layers/generic_box.h"
+#include "ui/widgets/buttons.h"
 #include "ui/text/text.h"
 #include "window/window_session_controller.h"
 #include "styles/style_boxes.h"
 #include "styles/style_chat.h"
+#include "styles/style_settings.h"
 
 #include <QtCore/QFile>
 
@@ -147,7 +150,8 @@ void SendFilesNow(
 void FillWithMedia(
 		not_null<Window::SessionController*> controller,
 		not_null<Data::Thread*> thread,
-		const std::vector<not_null<HistoryItem*>> &items) {
+		const std::vector<not_null<HistoryItem*>> &items,
+		bool allowDirectSend) {
 	const auto memo = &controller->session().data().memoMessages();
 	auto paths = QStringList();
 	auto captions = std::vector<TextWithTags>();
@@ -195,7 +199,7 @@ void FillWithMedia(
 		}
 	}
 
-	if (DoubleClickSends()) {
+	if (allowDirectSend) {
 		SendFilesNow(thread, std::move(list), boxCaption);
 		return;
 	}
@@ -243,7 +247,8 @@ void FillWithMedia(
 void FillWithVoice(
 		not_null<Window::SessionController*> controller,
 		not_null<Data::Thread*> thread,
-		not_null<HistoryItem*> item) {
+		not_null<HistoryItem*> item,
+		bool allowDirectSend) {
 	const auto memo = &controller->session().data().memoMessages();
 	const auto message = memo->lookupMessage(item);
 	if (!message || !message->media) {
@@ -256,7 +261,7 @@ void FillWithVoice(
 		message->media->file);
 	const auto duration = message->media->duration;
 	const auto packed = message->media->waveform;
-	if (DoubleClickSends()) {
+	if (allowDirectSend) {
 		SendVoiceNow(thread, path, packed, duration);
 		return;
 	}
@@ -287,6 +292,33 @@ void FillWithVoice(
 	}));
 }
 
+void FillChat(
+		not_null<Window::SessionController*> controller,
+		not_null<HistoryItem*> item,
+		bool allowDirectSend) {
+	const auto thread = controller->activeChatCurrent().thread();
+	if (!thread) {
+		controller->showToast(tr::lng_memo_fill_no_chat(tr::now));
+		return;
+	}
+	const auto memo = &controller->session().data().memoMessages();
+	const auto message = memo->lookupMessage(item);
+	if (!message) {
+		return;
+	} else if (!message->media) {
+		if (allowDirectSend) {
+			SendText(thread, message->text);
+		} else {
+			SetDraft(thread, message->text);
+		}
+		return;
+	} else if (message->media->type == Data::MemoMedia::Type::Voice) {
+		FillWithVoice(controller, thread, item, allowDirectSend);
+		return;
+	}
+	FillWithMedia(controller, thread, CollectGroup(item), allowDirectSend);
+}
+
 } // namespace
 
 bool DoubleClickSends() {
@@ -308,27 +340,54 @@ rpl::producer<bool> DoubleClickSendsValue() {
 void FillCurrentChat(
 		not_null<Window::SessionController*> controller,
 		not_null<HistoryItem*> item) {
-	const auto thread = controller->activeChatCurrent().thread();
-	if (!thread) {
-		controller->showToast(tr::lng_memo_fill_no_chat(tr::now));
-		return;
-	}
+	FillChat(controller, item, DoubleClickSends());
+}
+
+void RunCommand(
+		not_null<Window::SessionController*> controller,
+		const QString &command) {
 	const auto memo = &controller->session().data().memoMessages();
-	const auto message = memo->lookupMessage(item);
-	if (!message) {
+	auto list = memo->commandMessages(command);
+	if (list.empty()) {
 		return;
-	} else if (!message->media) {
-		if (DoubleClickSends()) {
-			SendText(thread, message->text);
-		} else {
-			SetDraft(thread, message->text);
+	} else if (list.size() == 1) {
+		const auto item = memo->commandItem(
+			list.front().folderId,
+			list.front().messageId);
+		if (item) {
+			FillChat(controller, item, false);
 		}
 		return;
-	} else if (message->media->type == Data::MemoMedia::Type::Voice) {
-		FillWithVoice(controller, thread, item);
-		return;
 	}
-	FillWithMedia(controller, thread, CollectGroup(item));
+	const auto weak = base::make_weak(controller);
+	controller->uiShow()->show(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(rpl::single('/' + command));
+		for (const auto &entry : list) {
+			const auto folderId = entry.folderId;
+			const auto messageId = entry.messageId;
+			box->addRow(
+				object_ptr<Ui::SettingsButton>(
+					box,
+					rpl::single(entry.preview),
+					st::settingsButtonNoIcon),
+				style::margins()
+			)->setClickedCallback([=] {
+				box->closeBox();
+				const auto strong = weak.get();
+				if (!strong) {
+					return;
+				}
+				const auto memo
+					= &strong->session().data().memoMessages();
+				if (const auto item = memo->commandItem(
+						folderId,
+						messageId)) {
+					FillChat(strong, item, false);
+				}
+			});
+		}
+		box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+	}));
 }
 
 } // namespace Memo
