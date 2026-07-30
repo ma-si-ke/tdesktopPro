@@ -4283,6 +4283,7 @@ void ListWidget::mouseActionFinish(
 		clearTextSelection();
 	} else if (simpleSelectionChange
 		&& _mouseCursorState == CursorState::Date
+		&& _selectEnabled
 		&& !hasSelectRestriction()) {
 		if (const auto item = session().data().message(pressState.itemId)) {
 			if (_delegate->listIsItemGoodForSelection(item)) {
