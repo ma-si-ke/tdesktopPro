@@ -772,8 +772,9 @@ void FieldAutocomplete::updateFiltered(bool resetScroll) {
 				brows.insert(begin(brows), BotCommandRow{ self }); // Edit.
 			}
 		}
-		// Memo commands work from any chat, not only from private ones.
-		if (!hasUsername && brows.empty()) {
+		// Memo commands work from any chat, not only from private ones, and
+		// they are listed next to the shortcuts instead of replacing them.
+		if (!hasUsername && bots.empty()) {
 			const auto self = _session->user();
 			const auto memo = &_session->data().memoMessages();
 			for (const auto &entry : memo->commands(
@@ -1999,6 +2000,12 @@ void InitFieldAutocomplete(
 		}
 	}, raw->lifetime());
 
+	// Memo commands do not need the business shortcuts to be there, so the
+	// slash query must survive even with an empty shortcut list.
+	const auto hasMemoCommands = [=] {
+		return processMemoCommand
+			&& !peer->owner().memoMessages().commands(QString()).empty();
+	};
 	const auto check = [=] {
 		auto parsed = ParseMentionHashtagBotCommandQuery(field, features());
 		if (parsed.query.isEmpty()) {
@@ -2014,7 +2021,8 @@ void InitFieldAutocomplete(
 			&& !peer->asUser()->isBot()
 			&& (!shortcutMessages
 				|| shortcutMessages->shortcuts().list.empty()
-				|| peer->starsPerMessageChecked() != 0)) {
+				|| peer->starsPerMessageChecked() != 0)
+			&& !hasMemoCommands()) {
 			parsed = {};
 		}
 #ifdef TDESKTOP_EMPLOYEE_MODE
