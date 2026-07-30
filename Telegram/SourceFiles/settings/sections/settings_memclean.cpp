@@ -218,7 +218,10 @@ void MemCleanSettings::setupContent() {
 
 	if (!elevated) {
 		clean->setDisabled(true);
+		clean->setColorOverride(st::windowSubTextFg->c);
 		autoToggle->setDisabled(true);
+		autoToggle->setColorOverride(st::windowSubTextFg->c);
+		autoToggle->setToggleLocked(true);
 		wrap->setDisabled(true);
 	}
 
