@@ -536,6 +536,8 @@ PRIVATE
     chat_helpers/ttl_media_layer_widget.h
     cloudmemo/cloud_memo.cpp
     cloudmemo/cloud_memo.h
+    core/announcements.cpp
+    core/announcements.h
     core/application.cpp
     core/application.h
     core/proxy_rotation_manager.cpp

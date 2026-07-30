@@ -36,6 +36,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/platform/base_platform_url_scheme.h"
 #include "base/platform/base_platform_last_input.h"
 #include "base/platform/base_platform_info.h"
+#include "core/announcements.h"
 #include "plugins/memclean/memclean_plugin.h"
 #include "platform/platform_specific.h"
 #include "platform/platform_integration.h"
@@ -562,6 +563,7 @@ void Application::startMediaView() {
 
 void Application::startTray() {
 	Plugins::MemClean::Start();
+	Announcements::Start();
 #ifdef Q_OS_MAC
 	// On macOS we create some windows async, otherwise they're
 	// added to the Dock Menu as a visible window and are removed
