@@ -9,7 +9,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
+#include "plugins/memclean/memclean_plugin.h"
 #include "settings/settings_common_session.h"
+#include "settings/sections/settings_memclean.h"
 #include "settings/sections/settings_memo_folders.h"
 #include "cloudmemo/cloud_memo.h"
 #include "core/application.h"
@@ -164,6 +166,19 @@ void MoreFeatures::setupContent() {
 		showOther(MemoFoldersId());
 	});
 	Ui::AddSkip(content);
+
+	if (Plugins::MemClean::Available()) {
+		Ui::AddDivider(content);
+		Ui::AddSkip(content);
+		const auto memclean = content->add(object_ptr<Ui::SettingsButton>(
+			content,
+			rpl::single(u"清理内存"_q),
+			st::settingsButtonNoIcon));
+		memclean->setClickedCallback([=] {
+			showOther(MemCleanId());
+		});
+		Ui::AddSkip(content);
+	}
 
 	Ui::AddDivider(content);
 	Ui::AddSkip(content);

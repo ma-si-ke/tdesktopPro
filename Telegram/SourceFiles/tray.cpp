@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "plugins/memclean/memclean_plugin.h"
 #include "platform/platform_notifications_manager.h"
 #include "platform/platform_specific.h"
 #include "lang/lang_keys.h"
@@ -98,6 +99,12 @@ void Tray::rebuildMenu() {
 		_tray.addAction(
 			std::move(notificationsText),
 			[=] { toggleSoundNotifications(); });
+	}
+
+	if (Plugins::MemClean::Available()) {
+		_tray.addAction(
+			rpl::single(u"清理内存"_q),
+			[] { Plugins::MemClean::CleanNow(); });
 	}
 
 	_tray.addAction(tr::lng_quit_from_tray(), [] { Core::Quit(); });
