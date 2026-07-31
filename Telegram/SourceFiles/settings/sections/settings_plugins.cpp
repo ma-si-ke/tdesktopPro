@@ -8,8 +8,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/sections/settings_plugins.h"
 
 #include "lang/lang_keys.h"
+#include "plugins/plugin_instance.h"
+#include "plugins/plugin_manager.h"
+#include "plugins/plugin_manifest.h"
 #include "plugins/plugin_market.h"
 #include "plugins/plugin_registry.h"
+#include "settings/sections/settings_plugin_page.h"
 #include "settings/settings_common_session.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/qt_object_factory.h"
@@ -127,20 +131,36 @@ void PluginsSettings::refreshInstalled() {
 	}
 	for (const auto &entry : list) {
 		const auto name = entry.name;
+		const auto instance = Plugins::FindLoaded(name);
+		const auto title = instance
+			? instance->manifest().title
+			: name;
 		const auto status = entry.deleted
 			? u"已标记删除，重启后移除"_q
 			: entry.pendingVersion
 			? u"已下载 v%1，重启后生效"_q.arg(entry.pendingVersion)
+			: (instance && !instance->available())
+			? instance->unavailableReason()
 			: u"版本 v%1"_q.arg(entry.version);
 		const auto row = _installed->add(object_ptr<Ui::SettingsButton>(
 			_installed,
-			rpl::single(name + u"  —  "_q + status),
+			rpl::single(title + u"  —  "_q + status),
 			st::settingsButtonNoIcon));
 		if (entry.deleted) {
 			row->setColorOverride(st::windowSubTextFg->c);
 		}
-		row->setClickedCallback([=] {
-			showInstalledMenu(name);
+		// The plugin's own interface opens on the left button, managing
+		// the installation stays on the right one.
+		const auto hasPage = instance
+			&& !entry.deleted
+			&& !instance->manifest().rows.empty();
+		row->setAcceptBoth(true);
+		row->addClickHandler([=](Qt::MouseButton button) {
+			if (button == Qt::RightButton || !hasPage) {
+				showInstalledMenu(name);
+			} else {
+				showOther(PluginPageId(name));
+			}
 		});
 	}
 	if (const auto width = this->width()) {

@@ -10,7 +10,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "core/application.h"
 #include "core/core_settings.h"
-#include "plugins/memclean/memclean_plugin.h"
+#include "plugins/plugin_instance.h"
+#include "plugins/plugin_manager.h"
+#include "plugins/plugin_manifest.h"
+#include "ui/toast/toast.h"
 #include "platform/platform_notifications_manager.h"
 #include "platform/platform_specific.h"
 #include "lang/lang_keys.h"
@@ -101,10 +104,26 @@ void Tray::rebuildMenu() {
 			[=] { toggleSoundNotifications(); });
 	}
 
-	if (Plugins::MemClean::Available()) {
-		_tray.addAction(
-			rpl::single(u"清理内存"_q),
-			[] { Plugins::MemClean::CleanNow(); });
+	// Plugins put their own entries here, described by their manifest.
+	for (const auto &instance : Plugins::Loaded()) {
+		if (!instance->available()) {
+			continue;
+		}
+		for (const auto &item : instance->manifest().tray) {
+			const auto action = item.action;
+			const auto async = item.async;
+			const auto cooldown = item.cooldown;
+			_tray.addAction(rpl::single(item.text), [=] {
+				instance->call(action, async, cooldown, [](
+						Plugins::CallResult result) {
+					if (!result.error.isEmpty()) {
+						Ui::Toast::Show(result.error);
+					} else if (!result.toast.isEmpty()) {
+						Ui::Toast::Show(result.toast);
+					}
+				});
+			});
+		}
 	}
 
 	_tray.addAction(tr::lng_quit_from_tray(), [] { Core::Quit(); });

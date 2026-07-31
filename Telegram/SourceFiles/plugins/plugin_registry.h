@@ -20,15 +20,20 @@ struct Installed {
 [[nodiscard]] bool GoodPluginName(const QString &name);
 
 [[nodiscard]] QString PluginsDir();
-[[nodiscard]] QString PluginPath(const QString &name);
-[[nodiscard]] QString PluginUpdatePath(const QString &name);
+
+// A plugin is a folder holding plugin.json and its library. An update
+// waits in the ".new" folder next to it, a loaded library cannot be
+// replaced while the application runs.
+[[nodiscard]] QString PluginDir(const QString &name);
+[[nodiscard]] QString PluginUpdateDir(const QString &name);
+[[nodiscard]] QString ManifestPath(const QString &name);
 
 [[nodiscard]] const std::vector<Installed> &List();
 [[nodiscard]] const Installed *Find(const QString &name);
 
 // Reconciles the records with what is really on disk and performs the
-// deferred operations. Must run before any plugin gets loaded: files
-// are still unlocked then and unknown libraries must never be loaded.
+// deferred operations. Must run before any plugin gets loaded: folders
+// are still unlocked then and unknown ones must never be loaded.
 void ApplyPendingOperations();
 
 void RegisterInstalled(const QString &name, int version);

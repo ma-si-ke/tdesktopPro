@@ -9,14 +9,18 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/debug_log.h"
 #include "base/openssl_help.h"
+#include "base/zlib_help.h"
+#include "plugins/plugin_manifest.h"
 #include "plugins/plugin_registry.h"
 
 #include <QtCore/QDir>
+#include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
 #include <QtCore/QSaveFile>
+#include <QtCore/QTemporaryFile>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 
@@ -27,7 +31,11 @@ constexpr auto kListUrl = "https://td.kakaco.top/api/plugins";
 constexpr auto kListTimeout = 20 * 1000;
 constexpr auto kDownloadTimeout = 5 * 60 * 1000;
 constexpr auto kMaxListSize = 1024 * 1024;
-constexpr auto kMaxPluginSize = int64(64 * 1024 * 1024);
+constexpr auto kMaxPackageSize = int64(64 * 1024 * 1024);
+constexpr auto kMaxEntrySize = int64(128 * 1024 * 1024);
+constexpr auto kMaxEntries = 256;
+constexpr auto kMaxNameSize = 1024;
+constexpr auto kChunk = 512 * 1024;
 
 [[nodiscard]] QNetworkAccessManager &Manager() {
 	static auto result = QNetworkAccessManager();
@@ -70,7 +78,7 @@ constexpr auto kMaxPluginSize = int64(64 * 1024 * 1024);
 			|| result.link.startsWith(u"http://"_q))
 		&& GoodHash(result.sha256)
 		&& (result.size > 0)
-		&& (result.size <= kMaxPluginSize);
+		&& (result.size <= kMaxPackageSize);
 	if (!good) {
 		LOG(("Plugins Error: Skipping a bad market entry '%1'."
 			).arg(result.name));
@@ -85,6 +93,138 @@ constexpr auto kMaxPluginSize = int64(64 * 1024 * 1024);
 		reinterpret_cast<const char*>(hash.data()),
 		hash.size());
 	return QString::fromLatin1(bytes.toHex());
+}
+
+// A name coming from the archive may point anywhere, so only plain
+// entries below the destination are accepted.
+[[nodiscard]] bool GoodEntryName(const QString &name) {
+	if (name.isEmpty() || name.size() > kMaxNameSize) {
+		return false;
+	} else if (name.contains(u".."_q)
+		|| name.contains('\\')
+		|| name.startsWith('/')
+		|| name.contains(':')) {
+		return false;
+	}
+	for (const auto &part : name.split('/')) {
+		if (part == u"."_q || part == u".."_q) {
+			return false;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool ExtractCurrentEntry(
+		unzFile handle,
+		const QString &path,
+		int64 size) {
+	if (size < 0 || size > kMaxEntrySize) {
+		return false;
+	} else if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
+		return false;
+	} else if (unzOpenCurrentFile(handle) != UNZ_OK) {
+		return false;
+	}
+	auto file = QFile(path);
+	if (!file.open(QIODevice::WriteOnly)) {
+		unzCloseCurrentFile(handle);
+		return false;
+	}
+	auto buffer = QByteArray(kChunk, Qt::Uninitialized);
+	auto ok = true;
+	while (ok) {
+		const auto read = unzReadCurrentFile(handle, buffer.data(), kChunk);
+		if (read < 0) {
+			ok = false;
+		} else if (!read) {
+			break;
+		} else {
+			ok = (file.write(buffer.constData(), read) == read);
+		}
+	}
+	file.close();
+	unzCloseCurrentFile(handle);
+	if (!ok) {
+		QFile::remove(path);
+	}
+	return ok;
+}
+
+[[nodiscard]] bool ExtractPackage(
+		const QString &archive,
+		const QString &destination) {
+	const auto utf8 = QFile::encodeName(archive);
+	const auto handle = unzOpen(utf8.constData());
+	if (!handle) {
+		return false;
+	}
+	const auto guard = gsl::finally([&] { unzClose(handle); });
+	if (!QDir().mkpath(destination)) {
+		return false;
+	}
+	auto ok = (unzGoToFirstFile(handle) == UNZ_OK);
+	auto count = 0;
+	while (ok) {
+		if (++count > kMaxEntries) {
+			return false;
+		}
+		auto info = unz_file_info();
+		auto nameBuffer = std::array<char, kMaxNameSize>();
+		if (unzGetCurrentFileInfo(
+			handle,
+			&info,
+			nameBuffer.data(),
+			nameBuffer.size(),
+			nullptr,
+			0,
+			nullptr,
+			0) != UNZ_OK) {
+			return false;
+		}
+		const auto name = QString::fromUtf8(nameBuffer.data());
+		if (!GoodEntryName(name)) {
+			LOG(("Plugins Error: Bad entry '%1' in a package.").arg(name));
+			return false;
+		} else if (!name.endsWith('/')) {
+			if (!ExtractCurrentEntry(
+				handle,
+				destination + '/' + name,
+				int64(info.uncompressed_size))) {
+				return false;
+			}
+		}
+		const auto next = unzGoToNextFile(handle);
+		if (next == UNZ_END_OF_LIST_OF_FILE) {
+			break;
+		}
+		ok = (next == UNZ_OK);
+	}
+	return ok;
+}
+
+// The package must describe the very plugin it was downloaded for.
+[[nodiscard]] bool GoodPackage(
+		const QString &folder,
+		const QString &name,
+		int version) {
+	auto file = QFile(folder + u"/plugin.json"_q);
+	if (!file.open(QIODevice::ReadOnly)) {
+		LOG(("Plugins Error: No manifest in the package of '%1'.").arg(name));
+		return false;
+	}
+	const auto manifest = ParseManifest(file.readAll(), name);
+	if (!manifest) {
+		return false;
+	} else if (manifest->version != version) {
+		LOG(("Plugins Error: Package of '%1' declares version %2, not %3."
+			).arg(name).arg(manifest->version).arg(version));
+		return false;
+	} else if (!QFile::exists(folder + '/' + manifest->library)) {
+		LOG(("Plugins Error: Library missing in the package of '%1'."
+			).arg(name));
+		return false;
+	}
+	return true;
 }
 
 } // namespace
@@ -137,9 +277,9 @@ void Download(
 	const auto version = entry.version;
 	const auto expectedHash = entry.sha256;
 	const auto expectedSize = entry.size;
-	const auto path = asUpdate
-		? PluginUpdatePath(name)
-		: PluginPath(name);
+	const auto folder = asUpdate
+		? PluginUpdateDir(name)
+		: PluginDir(name);
 
 	auto request = QNetworkRequest(QUrl(entry.link));
 	request.setTransferTimeout(kDownloadTimeout);
@@ -150,9 +290,7 @@ void Download(
 			&QNetworkReply::downloadProgress,
 			[=](qint64 received, qint64 total) {
 				const auto full = (total > 0) ? total : expectedSize;
-				progress(full > 0
-					? int((received * 100) / full)
-					: 0);
+				progress(full > 0 ? int((received * 100) / full) : 0);
 			});
 	}
 	QObject::connect(reply, &QNetworkReply::finished, [=] {
@@ -164,9 +302,7 @@ void Download(
 		const auto content = reply->readAll();
 		if (content.size() != expectedSize) {
 			LOG(("Plugins Error: '%1' size %2, expected %3."
-				).arg(name
-				).arg(content.size()
-				).arg(expectedSize));
+				).arg(name).arg(content.size()).arg(expectedSize));
 			done({ .error = u"文件大小不符"_q });
 			return;
 		} else if (HashOf(content) != expectedHash) {
@@ -177,12 +313,29 @@ void Download(
 			done({ .error = u"无法创建插件目录"_q });
 			return;
 		}
-		auto file = QSaveFile(path);
-		if (!file.open(QIODevice::WriteOnly)
-			|| file.write(content) != content.size()
-			|| !file.commit()) {
-			LOG(("Plugins Error: Could not write '%1'.").arg(path));
+
+		// minizip works on files, so the verified bytes go through a
+		// temporary of their own before being extracted.
+		auto archive = QTemporaryFile(PluginsDir() + u"package.XXXXXX"_q);
+		archive.setAutoRemove(true);
+		if (!archive.open()
+			|| archive.write(content) != content.size()
+			|| !archive.flush()) {
 			done({ .error = u"写入失败"_q });
+			return;
+		}
+		const auto archivePath = archive.fileName();
+		archive.close();
+
+		auto directory = QDir(folder);
+		if (directory.exists() && !directory.removeRecursively()) {
+			done({ .error = u"无法清理旧文件"_q });
+			return;
+		}
+		if (!ExtractPackage(archivePath, folder)
+			|| !GoodPackage(folder, name, version)) {
+			QDir(folder).removeRecursively();
+			done({ .error = u"插件包无效"_q });
 			return;
 		}
 		if (asUpdate) {

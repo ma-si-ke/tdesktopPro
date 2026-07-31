@@ -37,8 +37,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/platform/base_platform_last_input.h"
 #include "base/platform/base_platform_info.h"
 #include "core/announcements.h"
-#include "plugins/memclean/memclean_plugin.h"
-#include "plugins/plugin_registry.h"
+#include "plugins/plugin_manager.h"
 #include "platform/platform_specific.h"
 #include "platform/platform_integration.h"
 #include "history/history.h"
@@ -563,10 +562,9 @@ void Application::startMediaView() {
 }
 
 void Application::startTray() {
-	// Deferred installs, updates and removals have to be applied while
-	// no plugin library is loaded yet and the files are not locked.
-	Plugins::ApplyPendingOperations();
-	Plugins::MemClean::Start();
+	// Applies the deferred installs, updates and removals, then loads
+	// the plugins - the tray menu below already asks them for entries.
+	Plugins::Start();
 	Announcements::Start();
 #ifdef Q_OS_MAC
 	// On macOS we create some windows async, otherwise they're

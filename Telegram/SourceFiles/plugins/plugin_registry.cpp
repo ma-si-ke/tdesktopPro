@@ -111,8 +111,9 @@ void Load() {
 	}
 }
 
-void Removed(const QString &path) {
-	if (QFile::exists(path) && !QFile::remove(path)) {
+void RemoveFolder(const QString &path) {
+	auto dir = QDir(path);
+	if (dir.exists() && !dir.removeRecursively()) {
 		LOG(("Plugins Error: Could not remove '%1'.").arg(path));
 	}
 }
@@ -139,12 +140,16 @@ QString PluginsDir() {
 	return QCoreApplication::applicationDirPath() + u"/plugins/"_q;
 }
 
-QString PluginPath(const QString &name) {
-	return PluginsDir() + name + u".dll"_q;
+QString PluginDir(const QString &name) {
+	return PluginsDir() + name;
 }
 
-QString PluginUpdatePath(const QString &name) {
-	return PluginPath(name) + u".update"_q;
+QString PluginUpdateDir(const QString &name) {
+	return PluginsDir() + name + u".new"_q;
+}
+
+QString ManifestPath(const QString &name) {
+	return PluginDir(name) + u"/plugin.json"_q;
 }
 
 const std::vector<Installed> &List() {
@@ -164,22 +169,22 @@ void ApplyPendingOperations() {
 	auto &list = Data().list;
 	auto changed = false;
 	for (auto i = begin(list); i != end(list);) {
-		const auto path = PluginPath(i->name);
-		const auto updatePath = PluginUpdatePath(i->name);
+		const auto folder = PluginDir(i->name);
+		const auto updateFolder = PluginUpdateDir(i->name);
 		if (i->deleted) {
-			Removed(path);
-			Removed(updatePath);
+			RemoveFolder(folder);
+			RemoveFolder(updateFolder);
 			LOG(("Plugins Info: Removed '%1'.").arg(i->name));
 			i = list.erase(i);
 			changed = true;
 			continue;
 		}
 		if (i->pendingVersion) {
-			// A loaded library cannot be overwritten on Windows, so the
-			// downloaded file waited next to it until this point.
-			if (QFile::exists(updatePath)) {
-				Removed(path);
-				if (QFile::rename(updatePath, path)) {
+			// A loaded library cannot be replaced on Windows, so the
+			// downloaded folder waited next to it until this point.
+			if (QDir(updateFolder).exists()) {
+				RemoveFolder(folder);
+				if (QDir().rename(updateFolder, folder)) {
 					LOG(("Plugins Info: Updated '%1' to version %2."
 						).arg(i->name
 						).arg(i->pendingVersion));
@@ -192,9 +197,10 @@ void ApplyPendingOperations() {
 			i->pendingVersion = 0;
 			changed = true;
 		}
-		if (!QFile::exists(path)) {
+		if (!QFile::exists(ManifestPath(i->name))) {
 			// Removed by hand outside the application.
 			LOG(("Plugins Info: '%1' is gone, forgetting it.").arg(i->name));
+			RemoveFolder(folder);
 			i = list.erase(i);
 			changed = true;
 			continue;
@@ -202,26 +208,28 @@ void ApplyPendingOperations() {
 		++i;
 	}
 
-	// Files nobody installed are never loaded: the libraries run inside
-	// this process, so dropping one into the folder must not be enough
-	// to get it executed.
+	// Folders nobody installed are never loaded: the libraries run
+	// inside this process, so dropping one in must not be enough to get
+	// it executed.
 	const auto dir = QDir(PluginsDir());
 	if (dir.exists()) {
-		const auto stray = dir.entryInfoList(
-			QStringList{ u"*.dll"_q, u"*.update"_q },
-			QDir::Files);
-		for (const auto &info : stray) {
+		const auto entries = dir.entryInfoList(
+			QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot);
+		for (const auto &info : entries) {
 			auto name = info.fileName();
-			if (name.endsWith(u".update"_q)) {
-				name.chop(7);
-			}
-			if (name.endsWith(u".dll"_q)) {
+			if (name.endsWith(u".new"_q)) {
 				name.chop(4);
 			}
-			if (!Find(name)) {
-				LOG(("Plugins Info: Removing unknown file '%1'."
-					).arg(info.fileName()));
-				Removed(info.absoluteFilePath());
+			if (Find(name)) {
+				continue;
+			}
+			LOG(("Plugins Info: Removing unknown entry '%1'."
+				).arg(info.fileName()));
+			if (info.isDir()) {
+				RemoveFolder(info.absoluteFilePath());
+			} else if (!QFile::remove(info.absoluteFilePath())) {
+				LOG(("Plugins Error: Could not remove '%1'."
+					).arg(info.absoluteFilePath()));
 			}
 		}
 	}

@@ -14,16 +14,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Plugins {
 
-Loader::Loader(const QString &name) {
+Loader::Loader(const QString &path) {
 #ifdef Q_OS_WIN
-	// Absolute path only, the system library search path must never be
-	// used here - the process may be running elevated. The plugins
-	// folder next to the binary may be missing entirely, that simply
-	// means no plugins are installed.
-	const auto path = QCoreApplication::applicationDirPath()
-		+ u"/plugins/"_q
-		+ name
-		+ u".dll"_q;
+	// The caller passes an absolute path, the system library search path
+	// must never be used here - the process may be running elevated.
 	if (!QFileInfo::exists(path)) {
 		_error = u"not found"_q;
 		return;

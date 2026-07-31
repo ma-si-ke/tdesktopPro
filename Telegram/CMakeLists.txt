@@ -1781,14 +1781,20 @@ PRIVATE
     platform/platform_tray.h
     platform/platform_webauthn.h
     platform/platform_window_title.h
-    plugins/memclean/memclean_plugin.cpp
-    plugins/memclean/memclean_plugin.h
+    plugins/plugin_instance.cpp
+    plugins/plugin_instance.h
     plugins/plugin_loader.cpp
     plugins/plugin_loader.h
+    plugins/plugin_manager.cpp
+    plugins/plugin_manager.h
+    plugins/plugin_manifest.cpp
+    plugins/plugin_manifest.h
     plugins/plugin_market.cpp
     plugins/plugin_market.h
     plugins/plugin_registry.cpp
     plugins/plugin_registry.h
+    plugins/plugin_settings.cpp
+    plugins/plugin_settings.h
     profile/profile_block_widget.cpp
     profile/profile_block_widget.h
     profile/profile_cover_drop_area.cpp
@@ -1871,12 +1877,12 @@ PRIVATE
     settings/sections/settings_local_storage.h
     settings/sections/settings_main.cpp
     settings/sections/settings_main.h
-    settings/sections/settings_memclean.cpp
-    settings/sections/settings_memclean.h
     settings/sections/settings_memo_folders.cpp
     settings/sections/settings_memo_folders.h
     settings/sections/settings_more_features.cpp
     settings/sections/settings_more_features.h
+    settings/sections/settings_plugin_page.cpp
+    settings/sections/settings_plugin_page.h
     settings/sections/settings_plugins.cpp
     settings/sections/settings_plugins.h
     settings/settings_recent_searches.cpp

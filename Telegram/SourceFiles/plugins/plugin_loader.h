@@ -11,13 +11,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Plugins {
 
-// Loads an optional feature library strictly from the application
-// directory. A missing or broken library makes the plugin unavailable,
-// it never breaks the application itself. Loading happens once in the
-// constructor, dropping the library in later requires a restart.
+// Loads an optional feature library from an absolute path. A missing
+// or broken library makes the plugin unavailable, it never breaks the
+// application itself. Loading happens once in the constructor, dropping
+// the library in later requires a restart.
 class Loader final {
 public:
-	explicit Loader(const QString &name);
+	explicit Loader(const QString &path);
 
 	[[nodiscard]] bool loaded() const {
 		return _loaded;
