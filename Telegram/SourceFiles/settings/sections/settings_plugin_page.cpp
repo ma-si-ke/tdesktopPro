@@ -9,8 +9,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/timer.h"
 #include "plugins/plugin_instance.h"
+#include "plugins/plugin_manager.h"
 #include "plugins/plugin_manifest.h"
 #include "plugins/plugin_settings.h"
+#include "settings/settings_common_session.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/qt_object_factory.h"
 #include "ui/rp_widget.h"
