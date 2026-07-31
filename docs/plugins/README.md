@@ -26,6 +26,8 @@ void __stdcall Plugin_Shutdown(void);
 ```
 
 - `Plugin_Abi` 返回 `1`，与主程序不符则插件不加载。
+- 主程序按**未修饰的名字**查找符号。x64 下 `__stdcall` 不产生名字修饰，直接
+  `__declspec(dllexport)` 即可；若要出 x86 版本，需用 `.def` 文件导出以去掉 `_Name@N` 修饰。
 - 所有字符串都是 **UTF-8 JSON**。
 - **缓冲区由主程序分配**（初始 8 KB）。返回值语义：
   - `>= 0`：写入的字节数

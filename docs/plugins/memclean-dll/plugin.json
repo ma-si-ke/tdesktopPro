@@ -1,0 +1,41 @@
+{
+  "manifest": 1,
+  "name": "memclean",
+  "title": "内存清理",
+  "version": 2,
+  "library": "memclean.dll",
+  "description": "清理系统内存，对低配电脑或多开用户尤为好用。",
+
+  "settings": [
+    { "id": "auto",      "type": "bool", "default": false },
+    { "id": "mode",      "type": "int",  "default": 0 },
+    { "id": "interval",  "type": "int",  "default": 300, "min": 30, "max": 86400 },
+    { "id": "threshold", "type": "int",  "default": 80,  "min": 20, "max": 95 }
+  ],
+
+  "ui": [
+    { "type": "button", "text": "立即清理", "action": "clean",
+      "async": true, "cooldown": 15 },
+    { "type": "label",  "bind": "statusLine",
+      "text": "清理期间 CPU 占用较高，低配电脑单次清理可能持续数秒。" },
+
+    { "type": "toggle", "text": "自动清理", "setting": "auto" },
+    { "type": "radio",  "setting": "mode", "visibleWhen": { "auto": true },
+      "options": [
+        { "text": "定时清理",         "value": 0 },
+        { "text": "按内存占用清理",   "value": 1 }
+      ] },
+    { "type": "number", "text": "清理间隔（秒，最少 30）", "setting": "interval",
+      "visibleWhen": { "auto": true, "mode": 0 } },
+    { "type": "number", "text": "内存占用阈值（%，20 - 95）", "setting": "threshold",
+      "visibleWhen": { "auto": true, "mode": 1 } },
+    { "type": "label",  "visibleWhen": { "auto": true },
+      "text": "定时清理：每隔指定秒数清理一次。按内存占用清理：占用超过阈值即清理，两次自动清理至少间隔 60 秒。" }
+  ],
+
+  "tray": [
+    { "text": "清理内存", "action": "clean", "async": true, "cooldown": 15 }
+  ],
+
+  "tick": { "everySeconds": 5 }
+}
