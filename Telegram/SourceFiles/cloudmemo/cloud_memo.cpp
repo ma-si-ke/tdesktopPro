@@ -9,8 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/flat_map.h"
 #include "base/flat_set.h"
-#include "core/application.h"
-#include "core/core_settings.h"
+#include "core/service_config.h"
 #include "logs.h"
 #include "settings.h"
 
@@ -30,7 +29,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace CloudMemo {
 namespace {
 
-constexpr auto kBaseUrlPrefKey = "cloud_memo/base_url";
 constexpr auto kUserId = "global";
 
 struct MemoChange {
@@ -74,7 +72,7 @@ PhotoLoadsNow() {
 }
 
 [[nodiscard]] QUrl Endpoint(const QString &path) {
-	return QUrl(BaseUrl() + path);
+	return QUrl(Core::ServiceUrl() + path);
 }
 
 [[nodiscard]] QNetworkRequest JsonRequest(const QString &path) {
@@ -160,28 +158,6 @@ void StoreCache(const QString &tgId, const Memo &memo, bool fire) {
 
 QString PhotoCachePath(const QString &photoId) {
 	return CacheDir() + u"/photos/"_q + photoId;
-}
-
-QString DefaultBaseUrl() {
-	return u"http://43.132.171.63:3100"_q;
-}
-
-QString BaseUrl() {
-	auto url = Core::App().settings().readPref<QString>(kBaseUrlPrefKey);
-	url = url.trimmed();
-	if (!url.startsWith(u"http://"_q) && !url.startsWith(u"https://"_q)) {
-		url = DefaultBaseUrl();
-	}
-	while (url.endsWith('/')) {
-		url.chop(1);
-	}
-	return url;
-}
-
-void SetBaseUrl(const QString &url) {
-	Core::App().settings().writePref<QString>(
-		kBaseUrlPrefKey,
-		url.trimmed());
 }
 
 Memo Cached(const QString &tgId) {

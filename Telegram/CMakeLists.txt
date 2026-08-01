@@ -584,6 +584,8 @@ PRIVATE
     core/local_url_handlers.h
     core/phone_click_handler.cpp
     core/phone_click_handler.h
+    core/service_config.cpp
+    core/service_config.h
     core/sandbox.cpp
     core/sandbox.h
     core/shortcuts.cpp

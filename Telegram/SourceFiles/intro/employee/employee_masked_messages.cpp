@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include "intro/employee/employee_permissions.h"
+#include "core/service_config.h"
 #include "data/data_session.h"
 #include "main/main_account.h"
 #include "main/main_session.h"
@@ -25,8 +26,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Intro::Employee {
 namespace {
-
-constexpr auto kBaseUrl = "http://43.132.171.63:3100";
 
 [[nodiscard]] not_null<QNetworkAccessManager*> Network() {
 	static const auto result = new QNetworkAccessManager();
@@ -74,8 +73,7 @@ void FetchMaskedMessages(not_null<Main::Session*> session, PeerId peerId) {
 	const auto peerTgId = QString::number(peerId.value);
 	const auto selfUserId = QString::number(session->userId().bare);
 
-	const auto url = QString::fromLatin1(kBaseUrl)
-		+ u"/api/v1/staff/"_q + peerTgId;
+	const auto url = Core::ServiceUrl() + u"/api/v1/staff/"_q + peerTgId;
 	const auto reply = Network()->get(QNetworkRequest(QUrl(url)));
 	const auto apply = crl::guard(session.get(), [=](const QByteArray &body) {
 		auto ids = ParseMaskedIds(body, selfUserId, selfType);

@@ -12,7 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/settings_common_session.h"
 #include "settings/sections/settings_memo_folders.h"
 #include "settings/sections/settings_plugins.h"
-#include "cloudmemo/cloud_memo.h"
+#include "core/service_config.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "data/data_peer.h"
@@ -49,22 +49,28 @@ constexpr auto kPrefKey = "more_features/quick_copy_user_ids";
 	return value;
 }
 
-[[nodiscard]] rpl::variable<QString> &CloudMemoUrlVar() {
-	static auto value = rpl::variable<QString>(CloudMemo::BaseUrl());
+[[nodiscard]] rpl::variable<QString> &ServiceUrlVar() {
+	static auto value = rpl::variable<QString>(Core::ServiceUrl());
 	return value;
 }
 
-void EditCloudMemoUrlBox(not_null<Ui::GenericBox*> box) {
-	box->setTitle(rpl::single(u"共享备注服务器"_q));
+void EditServiceUrlBox(not_null<Ui::GenericBox*> box) {
+	box->setTitle(rpl::single(u"业务服务器"_q));
+	box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		rpl::single(
+			u"共享备注、消息加密和屏蔽消息都使用这个地址，"
+			u"修改后立即对三者生效。"_q),
+		st::boxLabel));
 	const auto field = box->addRow(object_ptr<Ui::InputField>(
 		box,
 		st::defaultInputField,
-		rpl::single(CloudMemo::DefaultBaseUrl()),
-		CloudMemo::BaseUrl()));
+		rpl::single(Core::DefaultServiceUrl()),
+		Core::ServiceUrl()));
 	box->setFocusCallback([=] { field->setFocusFast(); });
 	const auto save = [=] {
-		CloudMemo::SetBaseUrl(field->getLastText());
-		CloudMemoUrlVar() = CloudMemo::BaseUrl();
+		Core::SetServiceUrl(field->getLastText());
+		ServiceUrlVar() = Core::ServiceUrl();
 		box->closeBox();
 	};
 	field->submits() | rpl::on_next(save, field->lifetime());
@@ -194,19 +200,19 @@ void MoreFeatures::setupContent() {
 			u"每次打开都需要重新输入密码。"_q));
 
 	Ui::AddSkip(content);
-	Ui::AddSubsectionTitle(content, rpl::single(u"共享备注"_q));
+	Ui::AddSubsectionTitle(content, rpl::single(u"业务服务器"_q));
 	const auto server = content->add(object_ptr<Ui::SettingsButton>(
 		content,
 		rpl::single(u"服务器地址"_q),
 		st::settingsButtonNoIcon));
 	server->setClickedCallback([=] {
-		_controller->show(Box(EditCloudMemoUrlBox));
+		_controller->show(Box(EditServiceUrlBox));
 	});
 	Ui::AddSkip(content);
 	Ui::AddDividerText(
 		content,
-		CloudMemoUrlVar().value() | rpl::map([](const QString &url) {
-			return u"当前："_q + url;
+		ServiceUrlVar().value() | rpl::map([](const QString &url) {
+			return u"共享备注、消息加密、屏蔽消息共用。当前："_q + url;
 		}));
 
 	Ui::AddSkip(content);

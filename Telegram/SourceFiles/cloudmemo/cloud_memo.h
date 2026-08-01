@@ -29,9 +29,8 @@ struct Memo {
 	}
 };
 
-[[nodiscard]] QString DefaultBaseUrl();
-[[nodiscard]] QString BaseUrl();
-void SetBaseUrl(const QString &url);
+// The server address is shared with the other internal services, see
+// Core::ServiceUrl in core/service_config.h.
 
 [[nodiscard]] Memo Cached(const QString &tgId);
 [[nodiscard]] rpl::producer<Memo> MemoValue(const QString &tgId);

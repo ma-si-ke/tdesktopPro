@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #ifdef TDESKTOP_EMPLOYEE_MODE
 
 #include "intro/employee/employee_permissions.h"
+#include "core/service_config.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
 #include "main/main_account.h"
@@ -27,8 +28,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Intro::Employee {
 namespace {
-
-constexpr auto kBaseUrl = "http://43.132.171.63:3100";
 
 [[nodiscard]] not_null<QNetworkAccessManager*> Network() {
 	static const auto result = new QNetworkAccessManager();
@@ -73,7 +72,7 @@ void EncryptSelectedMessages(
 		{ u"messageIds"_q, messageIds },
 	}).toJson(QJsonDocument::Compact);
 
-	const auto url = QString::fromLatin1(kBaseUrl)
+	const auto url = Core::ServiceUrl()
 		+ u"/api/v1/staff/"_q + peerTgId + '/' + selfUserId;
 	auto request = QNetworkRequest(QUrl(url));
 	request.setHeader(
