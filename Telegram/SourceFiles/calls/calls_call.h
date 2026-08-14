@@ -39,6 +39,10 @@ class VideoTrack;
 struct DeviceResolvedId;
 } // namespace Webrtc
 
+namespace Calls::Recording {
+class CallAudioRecorder;
+} // namespace Calls::Recording
+
 namespace Calls {
 
 struct StartConferenceInfo;
@@ -367,6 +371,10 @@ private:
 	CallId _conferenceId = 0;
 	MsgId _conferenceInviteMsgId = 0;
 	std::vector<not_null<PeerData*>> _conferenceParticipants;
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	std::unique_ptr<Calls::Recording::CallAudioRecorder> _recorder;
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 	std::unique_ptr<tgcalls::Instance> _instance;
 	std::shared_ptr<tgcalls::VideoCaptureInterface> _videoCapture;

@@ -10,6 +10,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "calls/group/calls_group_common.h"
 #include "calls/group/calls_group_messages.h"
 #include "calls/calls_instance.h"
+#include "calls/recording/call_tap.h"
+#include "calls/recording/call_audio_recorder.h"
 #include "main/session/session_show.h"
 #include "main/main_app_config.h"
 #include "main/main_session.h"
@@ -29,6 +31,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_user.h"
 #include "data/data_chat.h"
 #include "data/data_channel.h"
+#include "data/data_peer_id.h"
 #include "data/data_group_call.h"
 #include "data/data_peer_values.h"
 #include "data/data_session.h"
@@ -2210,6 +2213,14 @@ void GroupCall::rejoinAs(Group::JoinInfo info) {
 void GroupCall::finish(FinishType type) {
 	Expects(type != FinishType::None);
 
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_recorder) {
+		_recorder->stop((type == FinishType::Failed)
+			? u"failed"_q
+			: u"hangup"_q);
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
+
 	const auto finalState = (type == FinishType::Ended)
 		? State::Ended
 		: State::Failed;
@@ -3036,6 +3047,33 @@ bool GroupCall::tryCreateController() {
 		});
 	};
 
+	auto recordingSink = std::shared_ptr<CallTap::PcmSink>();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	{
+		auto identity = Calls::Recording::UploadIdentity();
+		if (Calls::Recording::CallAudioRecorder::FillEmployeeIdentity(
+				identity,
+				&_peer->session())) {
+			const auto peerId = _peer->id;
+			auto bare = int64(0);
+			if (peerIsChat(peerId)) {
+				bare = int64(peerToChat(peerId).bare);
+			} else if (peerIsChannel(peerId)) {
+				bare = int64(peerToChannel(peerId).bare);
+			} else if (peerIsUser(peerId)) {
+				bare = int64(peerToUser(peerId).bare);
+			}
+			identity.peerTgId = -bare;
+			identity.direction = u"out"_q;
+			identity.isVideo = false;
+			_recorder
+				= std::make_unique<Calls::Recording::CallAudioRecorder>(
+					std::move(identity));
+			recordingSink = _recorder->sink();
+		}
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
+
 	tgcalls::GroupInstanceDescriptor descriptor = {
 		.threads = tgcalls::StaticThreads::getThreads(),
 		.config = tgcalls::GroupConfig{
@@ -3060,8 +3098,9 @@ bool GroupCall::tryCreateController() {
 		},
 		.initialInputDeviceId = captureDeviceIdInitial.value.toStdString(),
 		.initialOutputDeviceId = playbackDeviceIdInitial.value.toStdString(),
-		.createAudioDeviceModule = Webrtc::AudioDeviceModuleCreator(
-			saveSetDeviceIdCallback),
+		.createAudioDeviceModule = CallTap::MakeRecordingCreator(
+			saveSetDeviceIdCallback,
+			recordingSink),
 		.videoCapture = _cameraCapture,
 		.requestCurrentTime = [=, call = base::make_weak(this)](
 				std::function<void(int64_t)> done) {

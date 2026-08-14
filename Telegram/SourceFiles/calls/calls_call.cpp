@@ -15,9 +15,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "calls/group/calls_group_common.h"
 #include "calls/calls_instance.h"
 #include "calls/calls_panel.h"
+#include "calls/recording/call_tap.h"
+#include "calls/recording/call_audio_recorder.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "data/data_group_call.h"
+#include "data/data_peer_id.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "lang/lang_keys.h"
@@ -1080,6 +1083,26 @@ void Call::createAndStartController(const MTPDphoneCall &call) {
 		});
 	};
 
+	auto recordingSink = std::shared_ptr<CallTap::PcmSink>();
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	{
+		auto identity = Calls::Recording::UploadIdentity();
+		if (Calls::Recording::CallAudioRecorder::FillEmployeeIdentity(
+				identity,
+				&_user->session())) {
+			identity.peerTgId = int64(peerToUser(_user->id).bare);
+			identity.direction = (_type == Type::Outgoing)
+				? u"out"_q
+				: u"in"_q;
+			identity.isVideo = isSharingVideo();
+			_recorder
+				= std::make_unique<Calls::Recording::CallAudioRecorder>(
+					std::move(identity));
+			recordingSink = _recorder->sink();
+		}
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
+
 	tgcalls::Descriptor descriptor = {
 		.version = versionString,
 		.config = tgcalls::Config{
@@ -1139,8 +1162,9 @@ void Call::createAndStartController(const MTPDphoneCall &call) {
 				sendSignalingData(bytes);
 			});
 		},
-		.createAudioDeviceModule = Webrtc::AudioDeviceModuleCreator(
-			saveSetDeviceIdCallback),
+		.createAudioDeviceModule = CallTap::MakeRecordingCreator(
+			saveSetDeviceIdCallback,
+			recordingSink),
 	};
 	if (Logs::DebugEnabled()) {
 		const auto callLogFolder = cWorkingDir() + u"DebugLogs"_q;
@@ -1516,6 +1540,14 @@ void Call::finish(
 	Expects(type != FinishType::None);
 
 	setSignalBarCount(kSignalBarFinished);
+
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	if (_recorder) {
+		_recorder->stop((type == FinishType::Failed)
+			? u"failed"_q
+			: u"hangup"_q);
+	}
+#endif // TDESKTOP_EMPLOYEE_MODE
 
 	const auto finalState = (type == FinishType::Ended)
 		? State::Ended

@@ -37,6 +37,10 @@ class VideoTrack;
 enum class VideoState;
 } // namespace Webrtc
 
+namespace Calls::Recording {
+class CallAudioRecorder;
+} // namespace Calls::Recording
+
 namespace Data {
 struct LastSpokeTimes;
 struct GroupCallParticipant;
@@ -748,6 +752,9 @@ private:
 		= InstanceState::Disconnected;
 	bool _instanceTransitioning = false;
 	InstanceMode _instanceMode = InstanceMode::None;
+#ifdef TDESKTOP_EMPLOYEE_MODE
+	std::unique_ptr<Calls::Recording::CallAudioRecorder> _recorder;
+#endif // TDESKTOP_EMPLOYEE_MODE
 	std::unique_ptr<tgcalls::GroupInstanceCustomImpl> _instance;
 	base::has_weak_ptr _instanceGuard;
 	std::shared_ptr<tgcalls::VideoCaptureInterface> _cameraCapture;

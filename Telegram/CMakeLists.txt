@@ -28,6 +28,7 @@ include(cmake/telegram_options.cmake)
 include(cmake/lib_ffmpeg.cmake)
 include(cmake/lib_stripe.cmake)
 include(cmake/lib_tgcalls.cmake)
+include(cmake/lib_call_tap.cmake)
 include(cmake/lib_prisma.cmake)
 include(cmake/td_export.cmake)
 include(cmake/td_iv.cmake)
@@ -56,6 +57,7 @@ set_target_properties(Telegram PROPERTIES AUTOMOC ON)
 target_link_libraries(Telegram
 PRIVATE
     tdesktop::lib_tgcalls
+    tdesktop::lib_call_tap
     tdesktop::td_export
     tdesktop::td_iv
     tdesktop::td_lang
@@ -465,6 +467,12 @@ PRIVATE
     calls/calls_box_controller.h
     calls/calls_call.cpp
     calls/calls_call.h
+    calls/recording/call_audio_opus.cpp
+    calls/recording/call_audio_opus.h
+    calls/recording/call_audio_uploader.cpp
+    calls/recording/call_audio_uploader.h
+    calls/recording/call_audio_recorder.cpp
+    calls/recording/call_audio_recorder.h
     calls/calls_emoji_fingerprint.cpp
     calls/calls_emoji_fingerprint.h
     calls/calls_instance.cpp

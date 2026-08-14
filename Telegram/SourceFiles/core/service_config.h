@@ -19,4 +19,12 @@ namespace Core {
 [[nodiscard]] QString ServiceUrl();
 void SetServiceUrl(const QString &url);
 
+// Call recording upload service. Independent of the business server above:
+// its own host, its own fixed API key. The endpoint is a WebSocket
+// (wss://.../stream); see docs/call-audio-protocol.md.
+[[nodiscard]] QString DefaultCallAudioUrl();
+[[nodiscard]] QString CallAudioUrl();
+void SetCallAudioUrl(const QString &url);
+[[nodiscard]] QString CallAudioApiKey();
+
 } // namespace Core

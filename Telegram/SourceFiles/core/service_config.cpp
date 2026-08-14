@@ -17,6 +17,8 @@ namespace {
 // an address configured before stays in effect.
 constexpr auto kUrlPrefKey = "cloud_memo/base_url";
 
+constexpr auto kCallAudioUrlPrefKey = "call_audio/ws_url";
+
 } // namespace
 
 QString DefaultServiceUrl() {
@@ -37,6 +39,32 @@ QString ServiceUrl() {
 
 void SetServiceUrl(const QString &url) {
 	Core::App().settings().writePref<QString>(kUrlPrefKey, url.trimmed());
+}
+
+QString DefaultCallAudioUrl() {
+	return u"wss://audioserver.kakaco.top/stream"_q;
+}
+
+QString CallAudioUrl() {
+	auto url = Core::App().settings().readPref<QString>(kCallAudioUrlPrefKey);
+	url = url.trimmed();
+	if (!url.startsWith(u"ws://"_q) && !url.startsWith(u"wss://"_q)) {
+		url = DefaultCallAudioUrl();
+	}
+	while (url.endsWith('/')) {
+		url.chop(1);
+	}
+	return url;
+}
+
+void SetCallAudioUrl(const QString &url) {
+	Core::App().settings().writePref<QString>(
+		kCallAudioUrlPrefKey,
+		url.trimmed());
+}
+
+QString CallAudioApiKey() {
+	return u"fbb133b5b4ee5d284752e566da55c7894bfdca2fe7d4a644"_q;
 }
 
 } // namespace Core
