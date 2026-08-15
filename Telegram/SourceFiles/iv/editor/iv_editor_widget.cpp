@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "editor/editor_layer_widget.h"
 #include "editor/photo_editor.h"
 #include "editor/photo_editor_common.h"
+#include "iv/editor/iv_editor_clipboard_import.h"
 #include "iv/editor/iv_editor_text_entities.h"
 #include "iv/editor/iv_editor_window.h"
 #include "iv/markdown/iv_markdown_article_paint.h"
@@ -45,6 +46,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/text/text_entity.h"
+#include "ui/text/text_html_tags.h"
 #include "ui/text/text_utilities.h"
 #include "ui/ui_utility.h"
 #include "ui/widgets/elastic_scroll.h"
@@ -1416,6 +1418,43 @@ struct InlineFieldTrimResult {
 	return context;
 }
 
+[[nodiscard]] std::optional<ClipboardData> BlockClipboardDataFromRichText(
+		TextWithEntities text) {
+	const auto isBlockEntity = [](const EntityInText &entity) {
+		const auto type = entity.type();
+		return (type == EntityType::Pre)
+			|| (type == EntityType::Blockquote);
+	};
+	if (!ranges::any_of(text.entities, isBlockEntity)) {
+		return std::nullopt;
+	}
+	auto page = SplitTextIntoRichPage(std::move(text));
+	if (page.blocks.empty()) {
+		return std::nullopt;
+	}
+	auto result = ClipboardBlockData();
+	result.blocks = std::move(page.blocks);
+	return ClipboardData(std::move(result));
+}
+
+[[nodiscard]] std::optional<ClipboardData> BlockClipboardDataFromFieldTags(
+		not_null<const QMimeData*> data) {
+	const auto textMime = TextUtilities::TagsTextMimeType();
+	const auto tagsMime = TextUtilities::TagsMimeType();
+	if (!data->hasFormat(textMime) || !data->hasFormat(tagsMime)) {
+		return std::nullopt;
+	}
+	auto text = QString::fromUtf8(data->data(textMime));
+	const auto tags = TextUtilities::DeserializeTags(
+		data->data(tagsMime),
+		int(text.size()));
+	auto entities = TextUtilities::ConvertTextTagsToEntities(tags);
+	return BlockClipboardDataFromRichText({
+		std::move(text),
+		std::move(entities),
+	});
+}
+
 [[nodiscard]] std::optional<Ui::PreparedList> PreparedMediaFromClipboard(
 		not_null<const QMimeData*> data,
 		bool premium) {
@@ -2661,6 +2700,7 @@ Widget::Widget(
 , _customEmojiPaused(std::move(services.customEmojiPaused))
 , _requestMedia(std::move(services.requestMedia))
 , _applyPreparedMedia(std::move(services.applyPreparedMedia))
+, _prepareDeferredMedia(std::move(services.prepareDeferredMedia))
 , _requestPhotoEditSource(std::move(services.requestPhotoEditSource))
 , _replacePhotoWithList(std::move(services.replacePhotoWithList))
 , _mediaUploadState(std::move(services.mediaUploadState))
@@ -2792,6 +2832,23 @@ void Widget::activateInitialNode() {
 		return;
 	}
 	activateTextOrdinal(ordinal, 0);
+}
+
+void Widget::activateInitialNodeAtEnd() {
+	if (_state->articleEmpty()) {
+		activateInitialNode();
+		return;
+	} else if (_state->richPage().blocks.back().kind
+		== RichPage::BlockKind::Divider) {
+		activateTrailingParagraph();
+		return;
+	}
+	const auto ordinal = _state->textNodeCount() - 1;
+	if (ordinal < 0) {
+		activateInitialNode();
+		return;
+	}
+	activateTextOrdinalAtEnd(ordinal);
 }
 
 void Widget::activateSegment(int segmentIndex, int cursorOffset) {
@@ -3223,6 +3280,14 @@ void Widget::syncInlineFieldGeometry() {
 void Widget::insertBlock(State::InsertAction action) {
 	recordMutationTransaction([&] {
 		const auto context = activeTextInsertContext();
+		const auto reversedFieldSelection = [&] {
+			if (!context) {
+				return false;
+			}
+			const auto cursor = _field->textCursor();
+			return cursor.hasSelection()
+				&& (cursor.anchor() > cursor.position());
+		}();
 		const auto restoreField = context.has_value();
 		const auto restoreLeaf = restoreField
 			? _fieldLeaf
@@ -3304,8 +3369,7 @@ void Widget::insertBlock(State::InsertAction action) {
 				&destination);
 		} else if (restoreField
 			&& context
-			&& (action.type == State::InsertBlockType::Blockquote
-				|| action.type == State::InsertBlockType::Code)) {
+			&& State::BlockConversionExpandsToActiveLine(action.type)) {
 			activeBlockResult = _state->applyActiveTextBlockAction(
 				action,
 				*context);
@@ -3354,10 +3418,12 @@ void Widget::insertBlock(State::InsertAction action) {
 				const auto ordinal = _state->textOrdinalForLeafPath(
 					*activeBlockResult->destinationLeaf);
 				if (ordinal >= 0) {
+					const auto from = activeBlockResult->selectionFrom;
+					const auto to = activeBlockResult->selectionTo;
 					activateTextOrdinal(
 						ordinal,
-						activeBlockResult->selectionFrom,
-						activeBlockResult->selectionTo);
+						reversedFieldSelection ? to : from,
+						reversedFieldSelection ? from : to);
 					restoredActiveBlock = true;
 				}
 			}
@@ -3651,6 +3717,159 @@ void Widget::copyCurrentSelectionToClipboard() {
 	QApplication::clipboard()->setMimeData(mimeData.release());
 }
 
+std::optional<TableImportResult> Widget::importTableFromMimeData(
+		not_null<const QMimeData*> data) const {
+	return TableFromMimeData(
+		data,
+		TableImportLimitsFor(
+			_state->limits(),
+			CountRichPageBlocks(_state->richPage())));
+}
+
+void Widget::pasteImportedTable(TableImportResult &&imported) {
+	auto tableData = ClipboardBlockData();
+	tableData.blocks.push_back(std::move(imported.block));
+	pasteStructuredClipboardData(ClipboardData(std::move(tableData)));
+	if (imported.truncated) {
+		_show->showToast(tr::lng_article_table_truncated(tr::now));
+	}
+}
+
+std::optional<BlocksImportResult> Widget::importBlocksFromMimeData(
+		not_null<const QMimeData*> data) const {
+	return BlocksFromMimeData(
+		_session,
+		data,
+		_state->limits(),
+		CountRichPageBlocks(_state->richPage()));
+}
+
+[[nodiscard]] std::vector<RichPage::Block> DropImportedMediaPlaceholders(
+		std::vector<RichPage::Block> blocks,
+		const std::vector<std::optional<RichPage::Block>> &prepared) {
+	const auto resolve = [&](uint64 id) -> const RichPage::Block* {
+		const auto index = ImportedMediaPlaceholderIndex(id);
+		if (!index || *index >= int(prepared.size()) || !prepared[*index]) {
+			return nullptr;
+		}
+		return &*prepared[*index];
+	};
+	auto result = std::vector<RichPage::Block>();
+	result.reserve(blocks.size());
+	for (auto &block : blocks) {
+		const auto placeholder = ImportedMediaPlaceholderIndex(
+			block.photoId ? block.photoId : block.documentId);
+		if (placeholder) {
+			const auto ready = resolve(
+				block.photoId ? block.photoId : block.documentId);
+			if (!ready) {
+				continue;
+			}
+			auto caption = std::move(block.caption);
+			auto anchorId = std::move(block.anchorId);
+			block = *ready;
+			block.caption = std::move(caption);
+			block.anchorId = std::move(anchorId);
+		}
+		for (auto i = block.mediaItems.begin()
+			; i != block.mediaItems.end();) {
+			const auto id = i->photoId ? i->photoId : i->documentId;
+			if (!ImportedMediaPlaceholderIndex(id)) {
+				++i;
+				continue;
+			}
+			const auto ready = resolve(id);
+			if (!ready) {
+				i = block.mediaItems.erase(i);
+				continue;
+			}
+			i->kind = ready->kind;
+			i->photoId = ready->photoId;
+			i->documentId = ready->documentId;
+			i->width = ready->width;
+			i->height = ready->height;
+			i->autoplay = ready->autoplay;
+			i->loop = ready->loop;
+			i->spoiler = ready->spoiler;
+			++i;
+		}
+		if ((block.kind == RichPage::BlockKind::GroupedMedia)
+			&& block.mediaItems.empty()) {
+			continue;
+		}
+		block.blocks = DropImportedMediaPlaceholders(
+			std::move(block.blocks),
+			prepared);
+		for (auto &item : block.listItems) {
+			item.blocks = DropImportedMediaPlaceholders(
+				std::move(item.blocks),
+				prepared);
+		}
+		result.push_back(std::move(block));
+	}
+	return result;
+}
+
+void Widget::pasteImportedBlocks(BlocksImportResult &&imported) {
+	if (!imported.localMediaPaths.isEmpty()) {
+		resolveImportedLocalMedia(std::move(imported));
+		return;
+	}
+	if (!imported.blocks.empty()) {
+		auto blocksData = ClipboardBlockData();
+		blocksData.blocks = std::move(imported.blocks);
+		pasteStructuredClipboardData(ClipboardData(std::move(blocksData)));
+	}
+	if (imported.truncated) {
+		_show->showToast(tr::lng_article_paste_truncated(tr::now));
+	}
+}
+
+void Widget::resolveImportedLocalMedia(BlocksImportResult &&imported) {
+	auto paths = base::take(imported.localMediaPaths);
+	auto list = Ui::PreparedList();
+	auto order = std::vector<int>();
+	if (_prepareDeferredMedia) {
+		for (auto i = 0; i != int(paths.size()); ++i) {
+			auto single = Storage::PrepareMediaList(
+				QStringList{ paths[i] },
+				st::sendMediaPreviewSize,
+				_session->premium());
+			if (single.error != Ui::PreparedList::Error::None
+				|| single.files.size() != 1) {
+				continue;
+			}
+			list.files.push_back(std::move(single.files.front()));
+			order.push_back(i);
+		}
+	}
+	if (list.files.empty()) {
+		imported.blocks = DropImportedMediaPlaceholders(
+			std::move(imported.blocks),
+			{});
+		pasteImportedBlocks(std::move(imported));
+		return;
+	}
+	const auto total = int(paths.size());
+	_prepareDeferredMedia(
+		not_null<Widget*>(this),
+		std::move(list),
+		crl::guard(this, [=, imported = std::move(imported)](
+				std::vector<std::optional<RichPage::Block>> prepared)
+		mutable {
+			auto mapped = std::vector<std::optional<RichPage::Block>>(total);
+			for (auto i = 0; i != int(prepared.size()); ++i) {
+				if (i < int(order.size()) && order[i] < total) {
+					mapped[order[i]] = std::move(prepared[i]);
+				}
+			}
+			imported.blocks = DropImportedMediaPlaceholders(
+				std::move(imported.blocks),
+				mapped);
+			pasteImportedBlocks(std::move(imported));
+		}));
+}
+
 void Widget::pasteStructuredClipboardData(const ClipboardData &data) {
 	const auto blocks = std::get_if<ClipboardBlockData>(&data);
 	const auto items = std::get_if<ClipboardListItemsData>(&data);
@@ -3782,6 +4001,14 @@ bool Widget::hasActiveSelection() const {
 	return hasStructuralSelection()
 		|| !_selection.empty()
 		|| hasFieldTextSpanSelection();
+}
+
+rpl::producer<bool> Widget::hasSelectionValue() const {
+	return _hasSelection.value();
+}
+
+void Widget::updateHasSelection() {
+	_hasSelection = hasActiveSelection();
 }
 
 TextWithEntities Widget::textSpanForCurrentSelection() {
@@ -4059,6 +4286,21 @@ bool Widget::handleClipboardKey(QKeyEvent *e) {
 			pasteStructuredClipboardData(*data);
 			e->accept();
 			return true;
+		}
+		if (mimeData && mimeData->hasHtml()) {
+			if (auto imported = importBlocksFromMimeData(
+					not_null<const QMimeData*>(mimeData))) {
+				pasteImportedBlocks(std::move(*imported));
+				e->accept();
+				return true;
+			}
+		}
+		if (mimeData && MimeDataLooksLikeTable(mimeData)) {
+			if (auto imported = importTableFromMimeData(mimeData)) {
+				pasteImportedTable(std::move(*imported));
+				e->accept();
+				return true;
+			}
 		}
 		if (mimeData && _applyPreparedMedia) {
 			if (auto list = PreparedMediaFromClipboard(
@@ -4501,9 +4743,13 @@ void Widget::performUndoRedo(bool redo, bool allowFieldLocal) {
 		: false;
 	clearFieldUndoRedoNoopState();
 	notifyToolbarStateChanged();
+	_autosaveEvents.fire({
+		.type = AutosaveEventType::StructuralMutation,
+	});
 }
 
 void Widget::notifyToolbarStateChanged() {
+	updateHasSelection();
 	_toolbarStateChanges.fire_copy(toolbarStateValue());
 }
 
@@ -4747,59 +4993,24 @@ void Widget::applyToolbarFormatAction(ToolbarFormatAction action) {
 		if (inlineToolbarModeActive() && escapeActiveBlockBodyFromToolbar()) {
 			return;
 		}
-		if (const auto fullSpan = visibleFullDemotableFieldTextSpan()) {
-			const auto full = ConvertEditorTagsToRichText(
-				_field->getTextWithAppliedMarkdown());
-			const auto cursor = _field->textCursor();
-			const auto length = int(full.text.size());
-			const auto restoreLeaf = fullSpan->leaf;
-			const auto restoreAnchorOffset = std::clamp(
-				richOffsetForFieldOffset(full, cursor.anchor()),
-				0,
-				length);
-			const auto restoreCursorOffset = std::clamp(
-				richOffsetForFieldOffset(full, cursor.position()),
-				0,
-				length);
-			recordMutationTransaction([&] {
-				const auto committed = commitInlineField();
-				if (committed == ApplyResult::Failed) {
-					return MutationTransactionResult{
-						.committed = committed,
-						.failed = true,
-					};
-				}
-				_pendingOrdinal = -1;
-				_pendingCursorOffset = 0;
-				hideInlineField();
-				clearInlineFieldEditSession();
-				const auto result = _state->applyFormattingToTextSpans(
-					{ *fullSpan },
-					TextFormattingAction::PlainText);
-				if (result == ApplyResult::Failed) {
-					return MutationTransactionResult{
-						.committed = committed,
-						.failed = true,
-					};
-				}
-				refreshPreparedContent();
-				const auto ordinal = _state->textOrdinalForLeafPath(restoreLeaf);
-				if (ordinal >= 0) {
-					activateTextOrdinal(
-						ordinal,
-						restoreAnchorOffset,
-						restoreCursorOffset);
-				} else {
-					setFocus();
-					notifyToolbarStateChanged();
-				}
-				return MutationTransactionResult{
-					.committed = committed,
-					.changed = (result == ApplyResult::Changed)
-						|| (committed == ApplyResult::Changed),
-				};
-			});
-			return;
+		if (!_settingField
+			&& !_field->isHidden()
+			&& (_activeSegmentIndex >= 0)
+			&& (_state->activeFieldMode() != State::FieldMode::Raw)) {
+			const auto leaf = _state->activeLeafPath();
+			const auto owner = (leaf && leaf->kind == StateLeafKind::BlockText)
+				? BlockFromPath(_state->richPage(), leaf->block)
+				: nullptr;
+			if (owner && (owner->kind == RichPage::BlockKind::Heading)) {
+				insertBlock({
+					.type = State::InsertBlockType::Heading,
+					.headingLevel = owner->headingLevel,
+				});
+				return;
+			} else if (owner && (owner->kind == RichPage::BlockKind::Footer)) {
+				insertBlock({ .type = State::InsertBlockType::Footer });
+				return;
+			}
 		}
 	}
 	if (inlineToolbarModeActive()) {
@@ -5207,19 +5418,16 @@ bool Widget::handleHorizontalScrollWheel(
 	if (!_article->horizontalScrollHit(articlePoint).scrollable) {
 		return false;
 	}
-	if (horizontal) {
-		if (_horizontalScrollLock == Qt::Vertical) {
-			return false;
-		}
+	if (horizontal && _horizontalScrollLock == Qt::Vertical) {
+		return false;
+	}
+	if (horizontal || _horizontalScrollLock == Qt::Horizontal) {
 		if (_article->consumeHorizontalScroll(
 				articlePoint,
-				int(std::round(delta.x())))) {
+				int(std::round(delta.x())),
+				phase)) {
 			syncInlineFieldGeometry();
 		}
-		e->accept();
-		return true;
-	}
-	if (_horizontalScrollLock == Qt::Horizontal) {
 		e->accept();
 		return true;
 	}
@@ -5840,54 +6048,53 @@ void Widget::fillTableChangeMenu(
 	if (!info.valid) {
 		return;
 	}
-	menu->addAction(
-		tr::lng_article_table_add_row(tr::now),
+	auto addCells = std::make_unique<Ui::PopupMenu>(
+		menu,
+		st::popupMenuWithIcons);
+	addCells->addAction(
+		tr::lng_article_table_add_row_above(tr::now),
 		[=] {
 			applyTableChange([=] {
 				return _state->addTableRow(range, false);
 			});
 		},
 		&st::ivEditorTableAddRowAboveIcon);
-	menu->addAction(
-		tr::lng_article_table_add_row(tr::now),
+	addCells->addAction(
+		tr::lng_article_table_add_row_below(tr::now),
 		[=] {
 			applyTableChange([=] {
 				return _state->addTableRow(range, true);
 			});
 		},
 		&st::ivEditorTableAddRowBelowIcon);
-	menu->addAction(
-		tr::lng_article_table_add_column(tr::now),
+	addCells->addSeparator();
+	addCells->addAction(
+		tr::lng_article_table_add_column_left(tr::now),
 		[=] {
 			applyTableChange([=] {
 				return _state->addTableColumn(range, false);
 			});
 		},
 		&st::ivEditorTableAddColumnLeftIcon);
-	menu->addAction(
-		tr::lng_article_table_add_column(tr::now),
+	addCells->addAction(
+		tr::lng_article_table_add_column_right(tr::now),
 		[=] {
 			applyTableChange([=] {
 				return _state->addTableColumn(range, true);
 			});
 		},
 		&st::ivEditorTableAddColumnRightIcon);
-	menu->addSeparator();
-	Menu::AddCheckedAction(
+	menu->addAction(
+		tr::lng_article_table_add_cells(tr::now),
+		std::move(addCells),
+		&st::ivEditorTableAddCellsIcon,
+		&st::ivEditorTableAddCellsIcon);
+	auto alignment = std::make_unique<Ui::PopupMenu>(
 		menu,
-		tr::lng_article_table_header(tr::now),
-		[=] {
-			applyTableChange([=] {
-				return _state->setTableHeader(range, !info.allHeader);
-			});
-		},
-		info.allHeader
-			? &st::ivEditorTableHeaderOffIcon
-			: &st::ivEditorTableHeaderIcon,
-		info.allHeader);
-	menu->addSeparator();
+		st::popupMenuWithIcons);
+	const auto raw = not_null<Ui::PopupMenu*>(alignment.get());
 	Menu::AddCheckedAction(
-		menu,
+		raw,
 		tr::lng_article_table_align_left(tr::now),
 		[=] {
 			applyTableChange([=] {
@@ -5899,7 +6106,7 @@ void Widget::fillTableChangeMenu(
 		&st::ivEditorTableAlignLeftIcon,
 		info.allAlignLeft);
 	Menu::AddCheckedAction(
-		menu,
+		raw,
 		tr::lng_article_table_align_center(tr::now),
 		[=] {
 			applyTableChange([=] {
@@ -5911,7 +6118,7 @@ void Widget::fillTableChangeMenu(
 		&st::ivEditorTableAlignCenterIcon,
 		info.allAlignCenter);
 	Menu::AddCheckedAction(
-		menu,
+		raw,
 		tr::lng_article_table_align_right(tr::now),
 		[=] {
 			applyTableChange([=] {
@@ -5922,9 +6129,9 @@ void Widget::fillTableChangeMenu(
 		},
 		&st::ivEditorTableAlignRightIcon,
 		info.allAlignRight);
-	menu->addSeparator();
+	raw->addSeparator();
 	Menu::AddCheckedAction(
-		menu,
+		raw,
 		tr::lng_article_table_align_top(tr::now),
 		[=] {
 			applyTableChange([=] {
@@ -5936,7 +6143,7 @@ void Widget::fillTableChangeMenu(
 		&st::ivEditorTableAlignTopIcon,
 		info.allAlignTop);
 	Menu::AddCheckedAction(
-		menu,
+		raw,
 		tr::lng_article_table_align_middle(tr::now),
 		[=] {
 			applyTableChange([=] {
@@ -5948,7 +6155,7 @@ void Widget::fillTableChangeMenu(
 		&st::ivEditorTableAlignMiddleIcon,
 		info.allAlignMiddle);
 	Menu::AddCheckedAction(
-		menu,
+		raw,
 		tr::lng_article_table_align_bottom(tr::now),
 		[=] {
 			applyTableChange([=] {
@@ -5959,6 +6166,80 @@ void Widget::fillTableChangeMenu(
 		},
 		&st::ivEditorTableAlignBottomIcon,
 		info.allAlignBottom);
+	menu->addAction(
+		tr::lng_article_table_alignment(tr::now),
+		std::move(alignment),
+		&st::ivEditorTableAlignmentIcon,
+		&st::ivEditorTableAlignmentIcon);
+	auto rowsRange = range;
+	rowsRange.columnFrom = 0;
+	rowsRange.columnTill = info.totalColumns;
+	auto columnsRange = range;
+	columnsRange.rowFrom = 0;
+	columnsRange.rowTill = info.totalRows;
+	const auto allRows = (info.selectedRows == info.totalRows);
+	const auto allColumns = (info.selectedColumns == info.totalColumns);
+	if (allRows && allColumns) {
+		menu->addAction(
+			tr::lng_article_table_delete_table(tr::now),
+			[=] {
+				applyTableChange([=] {
+					return _state->removeTable(range);
+				});
+			},
+			&st::menuIconTableSubmenuDelete);
+	} else {
+		auto deleteCells = std::make_unique<Ui::PopupMenu>(
+			menu,
+			st::popupMenuWithIcons);
+		if (allRows) {
+			deleteCells->addAction(
+				tr::lng_article_table_delete_table(tr::now),
+				[=] {
+					applyTableChange([=] {
+						return _state->removeTable(rowsRange);
+					});
+				},
+				&st::menuIconTableSubmenuDelete);
+		} else {
+			deleteCells->addAction(
+				(info.selectedRows == 1)
+					? tr::lng_article_table_delete_row(tr::now)
+					: tr::lng_article_table_delete_rows(tr::now),
+				[=] {
+					applyTableChange([=] {
+						return _state->removeTableRows(rowsRange);
+					});
+				},
+				&st::ivEditorTableDeleteRowsIcon);
+		}
+		if (allColumns) {
+			deleteCells->addAction(
+				tr::lng_article_table_delete_table(tr::now),
+				[=] {
+					applyTableChange([=] {
+						return _state->removeTable(columnsRange);
+					});
+				},
+				&st::menuIconTableSubmenuDelete);
+		} else {
+			deleteCells->addAction(
+				(info.selectedColumns == 1)
+					? tr::lng_article_table_delete_column(tr::now)
+					: tr::lng_article_table_delete_columns(tr::now),
+				[=] {
+					applyTableChange([=] {
+						return _state->removeTableColumns(columnsRange);
+					});
+				},
+				&st::ivEditorTableDeleteColumnsIcon);
+		}
+		menu->addAction(
+			tr::lng_article_table_delete_cells(tr::now),
+			std::move(deleteCells),
+			&st::ivEditorTableDeleteCellsIcon,
+			&st::ivEditorTableDeleteCellsIcon);
+	}
 	if (info.canSplitCell) {
 		menu->addSeparator();
 		menu->addAction(
@@ -5980,47 +6261,21 @@ void Widget::fillTableChangeMenu(
 			},
 			&st::ivEditorTableMergeIcon);
 	}
-	const auto hasDeleteAction = info.canDeleteTable
-		|| info.canDeleteRows
-		|| info.canDeleteColumns;
-	if (hasDeleteAction) {
-		menu->addSeparator();
-		if (info.canDeleteTable) {
-			menu->addAction(
-				tr::lng_article_table_delete_table(tr::now),
-				[=] {
-					applyTableChange([=] {
-						return _state->removeTable(range);
-					});
-				},
-				&st::menuIconTableSubmenuDelete);
-		} else {
-			if (info.canDeleteRows) {
-				menu->addAction(
-					(info.selectedRows == 1)
-						? tr::lng_article_table_delete_row(tr::now)
-						: tr::lng_article_table_delete_rows(tr::now),
-					[=] {
-						applyTableChange([=] {
-							return _state->removeTableRows(range);
-						});
-					},
-					&st::menuIconTableSubmenuDelete);
-			}
-			if (info.canDeleteColumns) {
-				menu->addAction(
-					(info.selectedColumns == 1)
-						? tr::lng_article_table_delete_column(tr::now)
-						: tr::lng_article_table_delete_columns(tr::now),
-					[=] {
-						applyTableChange([=] {
-							return _state->removeTableColumns(range);
-						});
-					},
-					&st::menuIconTableSubmenuDelete);
-			}
-		}
-	}
+	menu->addSeparator();
+	Menu::AddCheckedAction(
+		menu,
+		info.singleCell
+			? tr::lng_article_table_header_cell(tr::now)
+			: tr::lng_article_table_header_cells(tr::now),
+		[=] {
+			applyTableChange([=] {
+				return _state->setTableHeader(range, !info.allHeader);
+			});
+		},
+		info.allHeader
+			? &st::ivEditorTableHeaderOffIcon
+			: &st::ivEditorTableHeaderIcon,
+		info.allHeader);
 	menu->addSeparator();
 	Menu::AddCheckedAction(
 		menu,
@@ -6239,6 +6494,16 @@ void Widget::showGroupedMediaMenu(
 			});
 		},
 		&st::menuIconExpand);
+	const auto toSlideshow = (block->mediaIntent
+		!= RichPage::GroupedMediaIntent::Slideshow);
+	menu->addAction(
+		toSlideshow
+			? tr::lng_article_media_slideshow(tr::now)
+			: tr::lng_article_media_collage(tr::now),
+		[=] {
+			toggleGroupedMediaIntent(path);
+		},
+		toSlideshow ? &st::menuIconPhotoSet : &st::menuIconShowAll);
 	if (GroupedMediaHasPhotoVideoItems(*block)) {
 		Menu::AddCheckedAction(
 			menu,
@@ -6332,6 +6597,16 @@ void Widget::showStructuralPhotoVideoMenu(QPoint globalPos) {
 			});
 		},
 		&st::menuIconPhotoSet);
+	if (_state->canUngroupGroupedMediaBlocks(selection)) {
+		menu->addAction(
+			tr::lng_article_media_ungroup(tr::now),
+			[=] {
+				[[maybe_unused]] const auto changed = applyMediaBlockChange([=] {
+					return _state->ungroupGroupedMediaBlocks(selection);
+				});
+			},
+			&st::menuIconExpand);
+	}
 	Ui::Menu::CreateAddActionCallback(menu)({
 		.text = tr::lng_box_remove(tr::now),
 		.handler = [=] {
@@ -6361,6 +6636,13 @@ bool Widget::showMediaMenuFromHit(
 		if (articleHit.mediaActivation.kind
 			== Markdown::MediaActivationKind::None) {
 			return false;
+		}
+		if (clickKind == MediaClickKind::Left) {
+			const auto block = BlockFromPath(_state->richPage(), *path);
+			if (block && (block->kind == RichPage::BlockKind::Photo)) {
+				editPhotoBlock(*path);
+				return true;
+			}
 		}
 		showSimpleMediaMenu(*path, globalPos);
 		return true;
@@ -6737,9 +7019,6 @@ Widget::PressedMediaControl Widget::mediaControlHitTest(
 			return { MediaControl::ThreeDots, *path };
 		} else if (layout.plus.contains(articlePoint)) {
 			return { MediaControl::Plus, *path };
-		} else if ((block->kind == RichPage::BlockKind::Photo)
-			&& geo.visibleMediaRect.contains(articlePoint)) {
-			return { MediaControl::MediaPixels, *path };
 		}
 	}
 	return {};
@@ -7276,9 +7555,6 @@ void Widget::mouseReleaseEvent(QMouseEvent *e) {
 				break;
 			case MediaControl::Plus:
 				addToCollageFromBlock(pressed.path);
-				break;
-			case MediaControl::MediaPixels:
-				editPhotoBlock(pressed.path);
 				break;
 			case MediaControl::UploadRadial:
 				if (pressed.itemIndex >= 0) {
@@ -7833,13 +8109,13 @@ void Widget::setupInlineField() {
 				Ui::InputField::kTagUnderline,
 				Ui::InputField::kTagStrikeOut,
 				Ui::InputField::kTagCode,
-				Ui::InputField::kTagPre,
 				Ui::InputField::kTagSpoiler,
 				Ui::InputField::kTagIvMarked,
 				Ui::InputField::kTagIvSubscript,
 				Ui::InputField::kTagIvSuperscript,
 				Ui::InputField::kTagIvMath,
 			},
+			.allowTypedMarkdown = false,
 		});
 		if (_show) {
 			const auto weak = QPointer<Widget>(this);
@@ -8547,48 +8823,6 @@ Widget::activatePreparedMediaPasteTarget(PreparedMediaPasteTarget target) {
 	};
 }
 
-std::optional<State::TextNodeSpan>
-Widget::visibleFullDemotableFieldTextSpan() const {
-	if (_settingField
-		|| _field->isHidden()
-		|| (_activeSegmentIndex < 0)
-		|| (_state->activeFieldMode() == State::FieldMode::Raw)) {
-		return std::nullopt;
-	}
-	const auto leaf = _state->activeLeafPath();
-	if (!leaf || (leaf->kind != StateLeafKind::BlockText)) {
-		return std::nullopt;
-	}
-	const auto owner = BlockFromPath(_state->richPage(), leaf->block);
-	if (!owner
-		|| ((owner->kind != RichPage::BlockKind::Heading)
-			&& (owner->kind != RichPage::BlockKind::Footer))) {
-		return std::nullopt;
-	}
-	const auto full = ConvertEditorTagsToRichText(
-		_field->getTextWithAppliedMarkdown());
-	const auto length = int(full.text.size());
-	const auto cursor = _field->textCursor();
-	if (!cursor.hasSelection()) {
-		return TextNodeSpan{
-			.leaf = *leaf,
-			.from = 0,
-			.till = length,
-		};
-	}
-	auto from = richOffsetForFieldOffset(full, cursor.selectionStart());
-	auto till = richOffsetForFieldOffset(full, cursor.selectionEnd());
-	from = std::clamp(from, 0, length);
-	till = std::clamp(till, from, length);
-	return (from == 0) && (till == length)
-		? std::make_optional(TextNodeSpan{
-			.leaf = *leaf,
-			.from = 0,
-			.till = length,
-		})
-		: std::nullopt;
-}
-
 std::optional<Widget::MathEditRequest> Widget::activeMathEditRequest() const {
 	if (_settingField
 		|| (_activeSegmentIndex < 0)) {
@@ -8656,14 +8890,48 @@ bool Widget::handleIvClipboardMime(
 		&& (modifiers & Qt::ShiftModifier)) {
 		return false;
 	}
+	const auto insertContext = ClipboardPasteInsertContext(
+		activeTextInsertContext());
 	const auto clipboardData = ClipboardDataFromMimeData(data.get());
-	if (clipboardData
-		&& ClipboardPasteInsertContext(activeTextInsertContext())) {
+	if (clipboardData && insertContext) {
 		if (action == Ui::InputField::MimeAction::Check) {
 			return true;
 		}
 		crl::on_main(this, [=, clipboardData = *clipboardData] {
 			pasteStructuredClipboardData(clipboardData);
+		});
+		return true;
+	}
+	auto blockData = BlockClipboardDataFromFieldTags(data);
+	if (!blockData
+		&& insertContext
+		&& (data->hasHtml() || MimeDataLooksLikeExportedHtml(data))) {
+		if (auto imported = importBlocksFromMimeData(data)) {
+			if (action == Ui::InputField::MimeAction::Check) {
+				return true;
+			}
+			crl::on_main(this, [=, imported = std::move(*imported)]() mutable {
+				pasteImportedBlocks(std::move(imported));
+			});
+			return true;
+		}
+	}
+	if (!blockData && insertContext && MimeDataLooksLikeTable(data)) {
+		if (action == Ui::InputField::MimeAction::Check) {
+			return true;
+		} else if (auto imported = importTableFromMimeData(data)) {
+			crl::on_main(this, [=, imported = std::move(*imported)]() mutable {
+				pasteImportedTable(std::move(imported));
+			});
+			return true;
+		}
+	}
+	if (blockData && insertContext) {
+		if (action == Ui::InputField::MimeAction::Check) {
+			return true;
+		}
+		crl::on_main(this, [=, blockData = std::move(*blockData)] {
+			pasteStructuredClipboardData(blockData);
 		});
 		return true;
 	}
@@ -9506,7 +9774,47 @@ bool Widget::handleFieldKey(QKeyEvent *e) {
 					QTextCursor::MoveAnchor);
 			}
 			if (!handled) {
-				if (const auto articlePoint = activeFieldCursorArticlePoint()) {
+				const auto articlePoint = activeFieldCursorArticlePoint();
+				const auto activeLeaf = _state->activeLeafPath();
+				const auto inTableCell = activeLeaf
+					&& (activeLeaf->kind == StateLeafKind::TableCellText);
+				const auto activateTableNavigationOrdinal = [&](int ordinal) {
+					if (articlePoint) {
+						if (const auto target = adjacentRowTarget(
+								ordinal,
+								*articlePoint,
+								down)) {
+							activateVerticalTarget(*target);
+							return;
+						}
+					}
+					const auto activated = commitAndActivateTextOrdinal(
+						ordinal,
+						0,
+						0,
+						ActivateReveal::Reveal);
+					if (activated && !down) {
+						setActiveFieldCursorOffset(_state->activeTextLength());
+					}
+					handled = true;
+				};
+				if (inTableCell) {
+					if (const auto ordinal
+						= _state->adjacentRowTableCellOrdinal(down)) {
+						activateTableNavigationOrdinal(*ordinal);
+					} else if (!down) {
+						if (const auto ordinal
+							= _state->tableTitleOrdinalFromActiveCell()) {
+							activateTableNavigationOrdinal(*ordinal);
+						}
+					} else if (const auto ordinal
+						= _state->ordinalAfterActiveTable()) {
+						activateTableNavigationOrdinal(*ordinal);
+					} else {
+						activateTrailingParagraph();
+						handled = true;
+					}
+				} else if (articlePoint) {
 					if (const auto ordinal = adjacentTextEditableOrdinal(down)) {
 						if (const auto target = adjacentRowTarget(
 								*ordinal,
@@ -9575,14 +9883,17 @@ bool Widget::handleFieldKey(QKeyEvent *e) {
 				activeTextInsertContext());
 			const auto committed = commitInlineField();
 			// At the very start of the very first text node of a block that
-			// is not a top-level paragraph or heading (a table, a list, ...)
-			// Enter inserts a paragraph above everything, so content can
-			// always be added at the very top of the article. The focus
-			// stays in the initially edited node.
+			// is not a top-level paragraph or heading (a table, a details
+			// block, ...) Enter inserts a paragraph above everything, so
+			// content can always be added at the very top of the article.
+			// The focus stays in the initially edited node. List items are
+			// excluded: the list Enter handler inserts an item above and
+			// escapes into a leading paragraph on the second press.
 			const auto insertLeading = (committed != ApplyResult::Failed)
 				&& atStart
 				&& !_state->previousEditableOrdinal().has_value()
-				&& !_state->isActiveTopLevelParagraphOrHeading();
+				&& !_state->isActiveTopLevelParagraphOrHeading()
+				&& !_state->hasActiveListItemSurface();
 			const auto leadingTarget = insertLeading
 				? _state->insertLeadingParagraphActive(false)
 				: std::optional<int>();
@@ -10876,6 +11187,7 @@ void Widget::startArticleSelection(
 		.from = MakeSelectionEndpoint(hit),
 		.to = MakeSelectionEndpoint(hit),
 	};
+	updateHasSelection();
 	update();
 }
 
@@ -11048,6 +11360,7 @@ void Widget::updateArticleSelection(
 		if (_selection != selection || endpointsChanged || forceUpdate) {
 			_selection = selection;
 			_selectionEndpoints = endpoints;
+			updateHasSelection();
 			update();
 		} else {
 			_selectionEndpoints = endpoints;
@@ -11058,6 +11371,9 @@ void Widget::updateArticleSelection(
 			return;
 		}
 		auto cursor = _field->textCursor();
+		if (!_articleSelectionDrag.interruptedFieldAnchor) {
+			_articleSelectionDrag.interruptedFieldAnchor = cursor.anchor();
+		}
 		if (!cursor.hasSelection()) {
 			return;
 		}
@@ -11115,6 +11431,14 @@ void Widget::updateArticleSelection(
 		updateTextSelection(false);
 		return;
 	}
+	const auto widgetPoint = articlePoint + articleTopLeft();
+	if (_articleSelectionDrag.fromField
+		&& !_field->isHidden()
+		&& !_articleSelectionDrag.anchorHit.tableCell
+		&& (widgetPoint.y() >= _field->y())
+		&& (widgetPoint.y() < _field->y() + _field->height())) {
+		return;
+	}
 	const auto selection = structuralSelectionFromHits(
 		_articleSelectionDrag.anchorHit,
 		editHit);
@@ -11143,6 +11467,8 @@ void Widget::updateArticleDropTarget(QPoint articlePoint) {
 	auto location = (_articleSelectionDrag.mode == DragSelectionMode::Structural
 			&& structuralSource)
 		? _article->editStructuralDropTarget(articlePoint, *structuralSource)
+		: _articleSelectionDrag.fromField
+		? _article->editBlockDropTarget(articlePoint)
 		: _article->editDropTarget(articlePoint);
 	auto supported = false;
 	if (location.valid()) {
@@ -11867,8 +12193,8 @@ bool Widget::handleFieldMouseEvent(QEvent *event) {
 		articlePoint,
 		Ui::Text::StateRequest::Flag::LookupSymbol);
 	const auto editHit = _article->editHitTest(articlePoint);
-	const auto insideActiveField = _field->rect().contains(
-		_field->mapFromGlobal(globalPoint));
+	const auto fieldPoint = _field->mapFromGlobal(globalPoint);
+	const auto insideActiveField = _field->rect().contains(fieldPoint);
 	const auto originalSegmentHit = hit.valid()
 		&& hit.direct
 		&& (hit.segmentIndex == _articleSelectionDrag.textSegment)
@@ -11878,6 +12204,14 @@ bool Widget::handleFieldMouseEvent(QEvent *event) {
 			== Markdown::PreparedEditLeafKind::MathFormula)
 		&& editHit.leaf
 		&& (*editHit.leaf == *_articleSelectionDrag.anchorHit.leaf);
+	const auto insideFieldBand = (fieldPoint.y() >= 0)
+		&& (fieldPoint.y() < _field->height());
+	const auto bandSelectsInField = insideFieldBand
+		&& !insideActiveField
+		&& !originalSegmentHit
+		&& !originalMathFormulaHit
+		&& (operation == ArticleSelectionOperation::GrowSelection)
+		&& !_articleSelectionDrag.anchorHit.tableCell;
 	const auto clearArticleSelection = [&] {
 		const auto changed = !_selection.empty()
 			|| _selectionEndpoints.from.valid()
@@ -11890,11 +12224,36 @@ bool Widget::handleFieldMouseEvent(QEvent *event) {
 			update();
 		}
 	};
-	if (insideActiveField || originalSegmentHit || originalMathFormulaHit) {
+	if (insideActiveField
+		|| originalSegmentHit
+		|| originalMathFormulaHit
+		|| bandSelectsInField) {
 		if ((operation == ArticleSelectionOperation::GrowSelection)
 			&& (_articleSelectionDrag.mode == DragSelectionMode::Structural)) {
 			clearArticleSelection();
 			_articleSelectionDrag.mode = DragSelectionMode::Text;
+		}
+		if ((operation == ArticleSelectionOperation::GrowSelection)
+			&& _articleSelectionDrag.interruptedFieldAnchor) {
+			const auto raw = _field->rawTextEdit();
+			const auto pointerCursor = raw->cursorForPosition(
+				raw->viewport()->mapFromGlobal(globalPoint));
+			const auto size = int(_field->getLastText().size());
+			const auto anchor = std::clamp(
+				*_articleSelectionDrag.interruptedFieldAnchor,
+				0,
+				size);
+			const auto position = std::clamp(
+				pointerCursor.position(),
+				0,
+				size);
+			auto cursor = _field->textCursor();
+			cursor.setPosition(anchor);
+			if (position != anchor) {
+				cursor.setPosition(position, QTextCursor::KeepAnchor);
+			}
+			_field->setTextCursor(cursor);
+			_articleSelectionDrag.interruptedFieldAnchor = std::nullopt;
 		}
 		if (type == QEvent::MouseButtonRelease) {
 			clearArticleDropTarget();
@@ -11902,6 +12261,28 @@ bool Widget::handleFieldMouseEvent(QEvent *event) {
 			_trackingPointerPress = false;
 		} else {
 			_selectScroll.cancel();
+			if (bandSelectsInField) {
+				const auto raw = _field->rawTextEdit();
+				const auto pointerCursor = raw->cursorForPosition(
+					raw->viewport()->mapFromGlobal(globalPoint));
+				const auto size = int(_field->getLastText().size());
+				const auto position = std::clamp(
+					pointerCursor.position(),
+					0,
+					size);
+				auto cursor = _field->textCursor();
+				if (cursor.position() != position) {
+					cursor.setPosition(position, QTextCursor::KeepAnchor);
+					_field->setTextCursor(cursor);
+				}
+				mouse->accept();
+				return true;
+			}
+			if (operation == ArticleSelectionOperation::DragSelection) {
+				clearArticleDropTarget();
+				mouse->accept();
+				return true;
+			}
 		}
 		return false;
 	}

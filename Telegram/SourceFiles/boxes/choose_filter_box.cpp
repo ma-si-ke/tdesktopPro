@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/choose_filter_box.h"
 
 #include "apiwrap.h"
+#include "base/qt/qt_key_modifiers.h"
 #include "boxes/filters/edit_filter_box.h"
 #include "boxes/premium_limits_box.h"
 #include "core/application.h" // primaryWindow
@@ -32,10 +33,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
 #include "main/main_session_settings.h"
-#include "styles/style_dialogs.h"
 #include "styles/style_media_player.h" // mediaPlayerMenuCheck
 #include "styles/style_menu_icons.h"
-#include "styles/style_settings.h"
 #ifdef TDESKTOP_EMPLOYEE_MODE
 #include "intro/employee/employee_ui_guard.h"
 #endif // TDESKTOP_EMPLOYEE_MODE
@@ -289,13 +288,34 @@ void FillChooseFilterMenu(
 	const auto validator = ChooseFilterValidator(history);
 	const auto &list = history->owner().chatsFilters().list();
 	const auto showColors = history->owner().chatsFilters().tagsEnabled();
+	const auto suppressClose = menu->lifetime().make_state<bool>(false);
 	for (const auto &filter : list) {
 		const auto id = filter.id();
 		if (!id) {
 			continue;
 		}
 
-		auto callback = [=] {
+		const auto contains = menu->lifetime().make_state<bool>(
+			filter.contains(history));
+		const auto title = filter.title();
+		auto item = base::make_unique_q<FilterAction>(
+			menu->menu(),
+			menu->st().menu,
+			new QAction(
+				Ui::Text::FixAmpersandInAction(title.text.text),
+				menu.get()),
+			*contains ? &st::mediaPlayerMenuCheck : nullptr,
+			*contains ? &st::mediaPlayerMenuCheck : nullptr);
+		const auto raw = item.get();
+		const auto refresh = [=] {
+			raw->Ui::Menu::Action::setIcon(
+				*contains ? &st::mediaPlayerMenuCheck : nullptr,
+				*contains ? &st::mediaPlayerMenuCheck : nullptr);
+			raw->action()->setEnabled(*contains
+				? validator.canRemove(id)
+				: validator.canAdd());
+		};
+		item->setActionTriggered([=] {
 #ifdef TDESKTOP_EMPLOYEE_MODE
 			if (!Intro::Employee::Allowed(
 					&controller->session(),
@@ -303,9 +323,10 @@ void FillChooseFilterMenu(
 				return;
 			}
 #endif // TDESKTOP_EMPLOYEE_MODE
-			const auto toAdd = !filter.contains(history);
+			const auto toAdd = !*contains;
 			const auto r = validator.limitReached(id, toAdd);
 			if (r.reached) {
+				menu->hideMenu();
 				controller->show(Box(
 					FilterChatsLimitBox,
 					&controller->session(),
@@ -313,28 +334,24 @@ void FillChooseFilterMenu(
 					toAdd));
 				return;
 			} else if (toAdd ? validator.canAdd() : validator.canRemove(id)) {
+				*suppressClose = true;
 				if (toAdd) {
 					validator.add(id);
 				} else {
 					validator.remove(id);
 				}
+				*suppressClose = false;
+				*contains = toAdd;
+				refresh();
 			}
-		};
-
-		const auto contains = filter.contains(history);
-		const auto title = filter.title();
-		auto item = base::make_unique_q<FilterAction>(
-			menu->menu(),
-			menu->st().menu,
-			Ui::Menu::CreateAction(
-				menu.get(),
-				Ui::Text::FixAmpersandInAction(title.text.text),
-				std::move(callback)),
-			contains ? &st::mediaPlayerMenuCheck : nullptr,
-			contains ? &st::mediaPlayerMenuCheck : nullptr);
+			if (!base::IsShiftPressed() && !base::IsCtrlPressed()) {
+				menu->hideMenu();
+			}
+		});
+		item->setPreventClose(true);
 		item->setMarkedText(title.text, QString(), Core::TextContext({
 			.session = &history->session(),
-			.repaint = [raw = item.get()] { raw->update(); },
+			.repaint = [raw] { raw->update(); },
 			.customEmojiLoopLimit = title.isStatic ? -1 : 0,
 		}));
 
@@ -346,7 +363,7 @@ void FillChooseFilterMenu(
 			Intro::Employee::PermissionKey::FolderAddChat,
 			action);
 #endif // TDESKTOP_EMPLOYEE_MODE
-		action->setEnabled(contains
+		action->setEnabled(*contains
 			? validator.canRemove(id)
 			: validator.canAdd());
 	}
@@ -390,6 +407,9 @@ void FillChooseFilterMenu(
 
 	history->owner().chatsFilters().changed(
 	) | rpl::on_next([=] {
+		if (*suppressClose) {
+			return;
+		}
 		menu->hideMenu();
 	}, menu->lifetime());
 }

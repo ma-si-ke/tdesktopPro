@@ -678,6 +678,7 @@ void ShortcutMessages::setupComposeControls() {
 	});
 	_composeControls->setHistory({
 		.history = _history.get(),
+		.sendActionFactory = [=] { return prepareSendAction({}); },
 		.writeRestriction = std::move(writeRestriction),
 	});
 
@@ -797,7 +798,7 @@ void ShortcutMessages::setupComposeControls() {
 
 	_composeControls->height(
 	) | rpl::on_next([=](int height) {
-		const auto wasMax = (_scroll->scrollTopMax() == _scroll->scrollTop());
+		const auto wasMax = (_scroll->scrollTop() >= _scroll->scrollTopMax());
 		_controlsWrap->resize(width(), height - st::boxRadius);
 		updateComposeControlsPosition();
 		if (wasMax) {

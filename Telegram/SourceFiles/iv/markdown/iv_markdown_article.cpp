@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "iv/markdown/iv_markdown_article.h"
 
 #include "base/algorithm.h"
+#include "data/data_file_click_handler.h"
 #include "iv/markdown/iv_markdown_article_layout_structure.h"
 #include "iv/markdown/iv_markdown_article_paint.h"
 #include "iv/markdown/iv_markdown_article_selection.h"
@@ -157,23 +158,27 @@ struct MarkdownArticleHorizontalScrollLookup {
 [[nodiscard]] CachedTextLeafSourceSignature MarkedTextLeafSourceSignature(
 		TextWithEntities text,
 		const style::TextStyle &textStyle,
-		int minResizeWidth) {
+		int minResizeWidth,
+		bool rtl) {
 	auto result = CachedTextLeafSourceSignature();
 	result.dependsOnMediaRuntime = TextDependsOnMediaRuntime(text);
 	result.text = std::move(text);
 	result.minResizeWidth = minResizeWidth;
 	result.styleKey = TextStyleKey(textStyle);
+	result.rtl = rtl;
 	return result;
 }
 
 [[nodiscard]] CachedTextLeafSourceSignature PlainTextLeafSourceSignature(
 		const QString &text,
 		const style::TextStyle &textStyle,
-		int minResizeWidth) {
+		int minResizeWidth,
+		bool rtl) {
 	return MarkedTextLeafSourceSignature(
 		TextWithEntities::Simple(text),
 		textStyle,
-		minResizeWidth);
+		minResizeWidth,
+		rtl);
 }
 
 [[nodiscard]] CachedTextLeafSourceSignature CodeTextLeafSourceSignature(
@@ -182,7 +187,8 @@ struct MarkdownArticleHorizontalScrollLookup {
 	auto result = MarkedTextLeafSourceSignature(
 		CodeBlockDisplayText(prepared.text),
 		st.code,
-		CodeTextMinResizeWidth(st));
+		CodeTextMinResizeWidth(st),
+		false);
 	result.codeLanguage = prepared.codeLanguage;
 	return result;
 }
@@ -286,13 +292,15 @@ void HarvestCachedTextLeafs(
 	std::vector<LaidOutBlock> *blocks,
 	const style::Markdown &st,
 	CachedTextLeafPool *pool,
-	std::vector<int> *preparedPath);
+	std::vector<int> *preparedPath,
+	bool rtl);
 
 void RebuildCachedTextLeafs(
 		const std::vector<PreparedBlock> &preparedBlocks,
 		std::vector<LaidOutBlock> *blocks,
 		const style::Markdown &st,
-		CachedTextLeafPool *pool) {
+		CachedTextLeafPool *pool,
+		bool rtl) {
 	if (!pool) {
 		return;
 	}
@@ -303,7 +311,8 @@ void RebuildCachedTextLeafs(
 		blocks,
 		st,
 		pool,
-		&preparedPath);
+		&preparedPath,
+		rtl);
 }
 
 void HarvestCachedTextLeafs(
@@ -311,7 +320,8 @@ void HarvestCachedTextLeafs(
 		LaidOutBlock *block,
 		const style::Markdown &st,
 		CachedTextLeafPool *pool,
-		const std::vector<int> &preparedPath) {
+		const std::vector<int> &preparedPath,
+		bool rtl) {
 	const auto storeBlockLeaf = [&](CachedTextLeafSlot slot,
 			CachedTextLeafSourceSignature source,
 			Ui::Text::String *leaf) {
@@ -346,7 +356,8 @@ void HarvestCachedTextLeafs(
 			PlainTextLeafSourceSignature(
 				ListMarkerText(prepared),
 				st.body,
-				PlainTextMinResizeWidth(st.body)),
+				PlainTextMinResizeWidth(st.body),
+				false),
 			&block->marker);
 	}
 
@@ -364,14 +375,18 @@ void HarvestCachedTextLeafs(
 			MarkedTextLeafSourceSignature(
 				prepared.text,
 				textStyle,
-				FlowBlockMinimumWidth(prepared, st)),
+				FlowBlockMinimumWidth(prepared, st),
+				rtl),
 			&block->leaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Placeholder,
-			PlainTextLeafSourceSignature(
-				prepared.editPlaceholderText,
+			MarkedTextLeafSourceSignature(
+				EditPlaceholderTextValue(
+					prepared,
+					prepared.editPlaceholderText),
 				placeholderStyle,
-				PlainTextMinResizeWidth(placeholderStyle)),
+				PlainTextMinResizeWidth(placeholderStyle),
+				rtl),
 			&block->placeholderLeaf);
 	} break;
 	case PreparedBlockKind::CodeBlock:
@@ -390,7 +405,8 @@ void HarvestCachedTextLeafs(
 			PlainTextLeafSourceSignature(
 				prepared.editPlaceholderText,
 				st.code,
-				PlainTextMinResizeWidth(st.code)),
+				PlainTextMinResizeWidth(st.code),
+				rtl),
 			&block->placeholderLeaf);
 		break;
 	case PreparedBlockKind::DisplayMath:
@@ -399,14 +415,16 @@ void HarvestCachedTextLeafs(
 			PlainTextLeafSourceSignature(
 				prepared.editPlaceholderText,
 				st.displayMath.fallbackStyle,
-				DisplayMathFallbackTextMinResizeWidth(st)),
+				DisplayMathFallbackTextMinResizeWidth(st),
+				rtl),
 			&block->placeholderLeaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Fallback,
 			MarkedTextLeafSourceSignature(
 				DisplayMathFallbackText(),
 				st.displayMath.fallbackStyle,
-				DisplayMathFallbackTextMinResizeWidth(st)),
+				DisplayMathFallbackTextMinResizeWidth(st),
+				false),
 			&block->fallbackLeaf);
 		break;
 	case PreparedBlockKind::Table: {
@@ -415,14 +433,16 @@ void HarvestCachedTextLeafs(
 			MarkedTextLeafSourceSignature(
 				prepared.text,
 				st.body,
-				FlowTextMinResizeWidth(st.body)),
+				FlowTextMinResizeWidth(st.body),
+				rtl),
 			&block->leaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Placeholder,
 			PlainTextLeafSourceSignature(
 				prepared.editPlaceholderText,
 				st.body,
-				PlainTextMinResizeWidth(st.body)),
+				PlainTextMinResizeWidth(st.body),
+				rtl),
 			&block->placeholderLeaf);
 		const auto rowCount = std::min(
 			int(prepared.tableRows.size()),
@@ -449,7 +469,8 @@ void HarvestCachedTextLeafs(
 					MarkedTextLeafSourceSignature(
 						preparedCell.text,
 						textStyle,
-						minResizeWidth),
+						minResizeWidth,
+						rtl),
 					&cell.leaf);
 				storeTableCellLeaf(
 					CachedTextLeafSlot::TableCellPlaceholder,
@@ -459,7 +480,8 @@ void HarvestCachedTextLeafs(
 					PlainTextLeafSourceSignature(
 						preparedCell.editPlaceholderText,
 						textStyle,
-						minResizeWidth),
+						minResizeWidth,
+						rtl),
 					&cell.placeholderLeaf);
 			}
 		}
@@ -470,21 +492,24 @@ void HarvestCachedTextLeafs(
 			MarkedTextLeafSourceSignature(
 				prepared.text,
 				st.details.summaryStyle,
-				FlowTextMinResizeWidth(st.details.summaryStyle)),
+				FlowTextMinResizeWidth(st.details.summaryStyle),
+				rtl),
 			&block->leaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Placeholder,
 			PlainTextLeafSourceSignature(
 				prepared.editPlaceholderText,
 				st.details.summaryStyle,
-				PlainTextMinResizeWidth(st.details.summaryStyle)),
+				PlainTextMinResizeWidth(st.details.summaryStyle),
+				rtl),
 			&block->placeholderLeaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Action,
 			PlainTextLeafSourceSignature(
 				DetailsStateText(prepared.detailsOpen),
 				st.details.summaryStyle,
-				PlainTextMinResizeWidth(st.details.summaryStyle)),
+				PlainTextMinResizeWidth(st.details.summaryStyle),
+				false),
 			&block->actionLeaf);
 		break;
 	case PreparedBlockKind::Placeholder:
@@ -493,21 +518,24 @@ void HarvestCachedTextLeafs(
 			PlainTextLeafSourceSignature(
 				prepared.placeholder.label,
 				st.placeholder.labelStyle,
-				PlainTextMinResizeWidth(st.placeholder.labelStyle)),
+				PlainTextMinResizeWidth(st.placeholder.labelStyle),
+				rtl),
 			&block->labelLeaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Leaf,
 			MarkedTextLeafSourceSignature(
 				prepared.text,
 				st.body,
-				FlowTextMinResizeWidth(st.body)),
+				FlowTextMinResizeWidth(st.body),
+				rtl),
 			&block->leaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Placeholder,
 			PlainTextLeafSourceSignature(
 				prepared.editPlaceholderText,
 				st.body,
-				PlainTextMinResizeWidth(st.body)),
+				PlainTextMinResizeWidth(st.body),
+				rtl),
 			&block->placeholderLeaf);
 		break;
 	case PreparedBlockKind::RelatedArticle:
@@ -516,21 +544,24 @@ void HarvestCachedTextLeafs(
 			PlainTextLeafSourceSignature(
 				prepared.relatedArticle.title,
 				st.relatedArticle.titleStyle,
-				PlainTextMinResizeWidth(st.relatedArticle.titleStyle)),
+				PlainTextMinResizeWidth(st.relatedArticle.titleStyle),
+				rtl),
 			&block->labelLeaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Subtitle,
 			PlainTextLeafSourceSignature(
 				prepared.relatedArticle.description,
 				st.relatedArticle.subtitleStyle,
-				PlainTextMinResizeWidth(st.relatedArticle.subtitleStyle)),
+				PlainTextMinResizeWidth(st.relatedArticle.subtitleStyle),
+				rtl),
 			&block->subtitleLeaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Action,
 			PlainTextLeafSourceSignature(
 				prepared.relatedArticle.footer,
 				st.relatedArticle.footerStyle,
-				PlainTextMinResizeWidth(st.relatedArticle.footerStyle)),
+				PlainTextMinResizeWidth(st.relatedArticle.footerStyle),
+				rtl),
 			&block->actionLeaf);
 		break;
 	case PreparedBlockKind::EmbedPost:
@@ -539,14 +570,16 @@ void HarvestCachedTextLeafs(
 			PlainTextLeafSourceSignature(
 				prepared.embedPost.author,
 				st.embedPost.authorStyle,
-				PlainTextMinResizeWidth(st.embedPost.authorStyle)),
+				PlainTextMinResizeWidth(st.embedPost.authorStyle),
+				rtl),
 			&block->labelLeaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Subtitle,
 			PlainTextLeafSourceSignature(
 				prepared.embedPost.dateText,
 				st.embedPost.dateStyle,
-				PlainTextMinResizeWidth(st.embedPost.dateStyle)),
+				PlainTextMinResizeWidth(st.embedPost.dateStyle),
+				rtl),
 			&block->subtitleLeaf);
 		break;
 	case PreparedBlockKind::Photo:
@@ -560,14 +593,16 @@ void HarvestCachedTextLeafs(
 			MarkedTextLeafSourceSignature(
 				prepared.text,
 				st.body,
-				FlowTextMinResizeWidth(st.body)),
+				FlowTextMinResizeWidth(st.body),
+				rtl),
 			&block->leaf);
 		storeBlockLeaf(
 			CachedTextLeafSlot::Placeholder,
 			PlainTextLeafSourceSignature(
 				prepared.editPlaceholderText,
 				st.body,
-				PlainTextMinResizeWidth(st.body)),
+				PlainTextMinResizeWidth(st.body),
+				rtl),
 			&block->placeholderLeaf);
 		break;
 	case PreparedBlockKind::Rule:
@@ -578,7 +613,7 @@ void HarvestCachedTextLeafs(
 	}
 
 	auto childPath = preparedPath;
-	HarvestCachedTextLeafs(prepared.children, &block->children, st, pool, &childPath);
+	HarvestCachedTextLeafs(prepared.children, &block->children, st, pool, &childPath, rtl);
 }
 
 void HarvestCachedTextLeafs(
@@ -586,7 +621,8 @@ void HarvestCachedTextLeafs(
 		std::vector<LaidOutBlock> *blocks,
 		const style::Markdown &st,
 		CachedTextLeafPool *pool,
-		std::vector<int> *preparedPath) {
+		std::vector<int> *preparedPath,
+		bool rtl) {
 	if (!blocks || !pool || !preparedPath) {
 		return;
 	}
@@ -598,7 +634,8 @@ void HarvestCachedTextLeafs(
 			&(*blocks)[i],
 			st,
 			pool,
-			*preparedPath);
+			*preparedPath,
+			rtl);
 		preparedPath->pop_back();
 	}
 }
@@ -911,7 +948,7 @@ void AppendTextRevealLines(
 	if (textRect.isEmpty() || visibleRect.isEmpty() || (textWidth <= 0)) {
 		return;
 	}
-	const auto geometry = leaf.countLinesGeometry(textWidth, true);
+	const auto geometry = leaf.countLinesGeometry(textWidth);
 	const auto viewportLeft = visibleRect.x();
 	const auto viewportRight = visibleRect.x() + visibleRect.width();
 	for (const auto &line : geometry) {
@@ -1128,7 +1165,7 @@ void AppendBlocksRevealLines(
 	}
 	auto request = Ui::Text::StateRequest();
 	request.align = align;
-	request.flags = flags | Ui::Text::StateRequest::Flag::BreakEverywhere;
+	request.flags = flags;
 	const auto availableWidth = std::max(width, 1);
 	return leaf.getState(
 		point - rect.topLeft(),
@@ -1946,7 +1983,7 @@ void CollectMediaBlockGeometries(
 	}
 	for (const auto &row : block.tableRows) {
 		for (const auto &cell : row.cells) {
-			if (ContainsPoint(cell.outer, point)) {
+			if (ContainsPoint(TableCellHitRect(block, cell), point)) {
 				if (const auto result = EditHitForTableCell(cell, point);
 					result.valid()) {
 					return result;
@@ -2051,15 +2088,20 @@ void CollectMediaBlockGeometries(
 		const LaidOutBlock &block,
 		QPoint point) {
 	if (ContainsPoint(block.headerRect, point) && block.editBlock) {
-		const auto leftWidth = std::max(
-			block.textRect.left() - block.headerRect.left(),
+		const auto textRight = block.textRect.left() + block.textRect.width();
+		const auto toggleWidth = std::max(
+			block.rtl
+				? (block.headerRect.left()
+					+ block.headerRect.width()
+					- textRight)
+				: (block.textRect.left() - block.headerRect.left()),
 			0);
-		const auto leftToggleRect = QRect(
-			block.headerRect.left(),
+		const auto toggleRect = QRect(
+			block.rtl ? textRight : block.headerRect.left(),
 			block.headerRect.top(),
-			leftWidth,
+			toggleWidth,
 			block.headerRect.height());
-		if (ContainsPoint(leftToggleRect, point)
+		if (ContainsPoint(toggleRect, point)
 			|| (!block.actionRect.isEmpty()
 				&& ContainsPoint(block.actionRect, point))) {
 			return {
@@ -3307,6 +3349,7 @@ public:
 	Impl(
 		const style::Markdown &st,
 		std::shared_ptr<MathRenderer> renderer);
+	~Impl();
 
 	void setRenderer(std::shared_ptr<MathRenderer> renderer);
 
@@ -3383,12 +3426,23 @@ public:
 	[[nodiscard]] MarkdownArticleEditControlHit editControlHitTest(
 		QPoint point) const;
 
+	void clickHandlerActiveChanged(
+		const ClickHandlerPtr &handler,
+		bool active);
+	void clickHandlerPressedChanged(
+		const ClickHandlerPtr &handler,
+		bool pressed);
+	void updatePressed(QPoint point);
+
 	[[nodiscard]] MarkdownArticleHorizontalScrollHit horizontalScrollHit(
 		QPoint point) const;
 	[[nodiscard]] bool canConsumeHorizontalScroll(
 		QPoint point,
 		int delta) const;
-	[[nodiscard]] bool consumeHorizontalScroll(QPoint point, int delta);
+	[[nodiscard]] bool consumeHorizontalScroll(
+		QPoint point,
+		int delta,
+		Qt::ScrollPhase phase);
 	[[nodiscard]] bool beginHorizontalScroll(QPoint point, bool fromTouch);
 	[[nodiscard]] bool updateHorizontalScroll(QPoint point);
 	void endHorizontalScroll();
@@ -3518,6 +3572,7 @@ private:
 	void refreshVisibleSegmentSpan();
 
 	void clearMediaBlocks();
+	void releasePressedHandler();
 
 	void refreshMediaBlockHosts();
 
@@ -3576,6 +3631,7 @@ private:
 	void invalidateGeometry();
 
 	[[nodiscard]] const style::Markdown &layoutStyle() const;
+	[[nodiscard]] bool contentRtl() const;
 	[[nodiscard]] MarkdownArticleScrollOwnerIdentity scrollOwnerIdentity(
 		const LaidOutBlock &block,
 		const std::vector<int> &preparedPath) const;
@@ -3699,6 +3755,10 @@ MarkdownArticle::Impl::Impl(
 	_style.code.font = _style.code.font->monospace();
 }
 
+MarkdownArticle::Impl::~Impl() {
+	releasePressedHandler();
+}
+
 void MarkdownArticle::Impl::setRenderer(std::shared_ptr<MathRenderer> renderer) {
 	_renderer = std::move(renderer);
 	SetInlineFormulaObjectCacheRenderer(_inlineFormulaObjects, _renderer);
@@ -3732,6 +3792,7 @@ void MarkdownArticle::Impl::setTextRepaintCallbacks(
 }
 
 void MarkdownArticle::Impl::setContent(MarkdownArticleContent content) {
+	releasePressedHandler();
 	if (hasHeavyPart()) {
 		unloadHeavyPart();
 	}
@@ -3741,7 +3802,8 @@ void MarkdownArticle::Impl::setContent(MarkdownArticleContent content) {
 		_content.blocks.blocks,
 		&_blocks,
 		layoutStyle(),
-		&_cachedTextLeafs);
+		&_cachedTextLeafs,
+		contentRtl());
 	if (!reuseMediaBlocks) {
 		PruneMediaRuntimeBoundCachedTextLeafs(&_cachedTextLeafs);
 	}
@@ -3887,6 +3949,7 @@ void MarkdownArticle::Impl::updatePreparedLeaf(
 	}
 
 	auto context = LayoutContext();
+	context.rtl = contentRtl();
 	context.syntaxHighlightTracker = this;
 	context.repaint = _textRepaint;
 	context.repaintRect = _textRepaintRect;
@@ -4885,7 +4948,8 @@ void MarkdownArticle::Impl::invalidateLayout(bool harvestCurrentBlocks) {
 			_content.blocks.blocks,
 			&_blocks,
 			layoutStyle(),
-			&_cachedTextLeafs);
+			&_cachedTextLeafs,
+			contentRtl());
 	}
 	retainBlocks();
 }
@@ -4925,6 +4989,12 @@ void MarkdownArticle::Impl::refreshVisibleSegmentSpan() {
 
 void MarkdownArticle::Impl::clearMediaBlocks() {
 	ClearMediaBlockStorage(&_mediaBlocks);
+}
+
+void MarkdownArticle::Impl::releasePressedHandler() {
+	if (const auto handler = ClickHandler::getPressed()) {
+		clickHandlerPressedChanged(handler, false);
+	}
 }
 
 void MarkdownArticle::Impl::clearPlaceholderRuntimes() {
@@ -5233,6 +5303,10 @@ const style::Markdown &MarkdownArticle::Impl::layoutStyle() const {
 	return _style;
 }
 
+bool MarkdownArticle::Impl::contentRtl() const {
+	return _content.richPage && _content.richPage->rtl;
+}
+
 MarkdownArticleScrollOwnerIdentity MarkdownArticle::Impl::scrollOwnerIdentity(
 		const LaidOutBlock &block,
 		const std::vector<int> &preparedPath) const {
@@ -5292,6 +5366,15 @@ MarkdownArticle::Impl::findHorizontalScrollOwner(
 					.block = &block,
 				};
 			}
+		}
+		if (block.mediaBlock
+			&& block.mediaBlock->canHandleHorizontalScroll()
+			&& ContainsPoint(block.mediaBlock->geometry(), point)) {
+			return {
+				.hit = { .scrollable = true, .overViewport = true },
+				.identity = scrollOwnerIdentity(block, *preparedPath),
+				.block = &block,
+			};
 		}
 		preparedPath->pop_back();
 	}
@@ -5616,6 +5699,38 @@ bool MarkdownArticle::Impl::revealSegment(int segmentIndex) {
 	return false;
 }
 
+void MarkdownArticle::Impl::clickHandlerActiveChanged(
+		const ClickHandlerPtr &handler,
+		bool active) {
+	for (const auto &entry : _mediaBlocks) {
+		if (const auto &block = entry.second) {
+			block->clickHandlerActiveChanged(handler, active);
+		}
+	}
+}
+
+void MarkdownArticle::Impl::clickHandlerPressedChanged(
+		const ClickHandlerPtr &handler,
+		bool pressed) {
+	for (const auto &entry : _mediaBlocks) {
+		if (const auto &block = entry.second) {
+			block->clickHandlerPressedChanged(handler, pressed);
+		}
+	}
+}
+
+void MarkdownArticle::Impl::updatePressed(QPoint point) {
+	if (!std::dynamic_pointer_cast<VoiceSeekClickHandler>(
+			ClickHandler::getPressed())) {
+		return;
+	}
+	for (const auto &entry : _mediaBlocks) {
+		if (const auto &block = entry.second) {
+			block->updatePressed(point);
+		}
+	}
+}
+
 MarkdownArticleHorizontalScrollHit MarkdownArticle::Impl::horizontalScrollHit(
 		QPoint point) const {
 	return findHorizontalScrollOwner(point).hit;
@@ -5626,6 +5741,10 @@ bool MarkdownArticle::Impl::canConsumeHorizontalScroll(
 		int delta) const {
 	if (const auto lookup = findHorizontalScrollOwner(point);
 		lookup.block) {
+		if (lookup.block->mediaBlock
+			&& lookup.block->mediaBlock->canHandleHorizontalScroll()) {
+			return true;
+		}
 		const auto left = std::clamp(
 			lookup.block->horizontalScrollLeft - delta,
 			0,
@@ -5635,15 +5754,24 @@ bool MarkdownArticle::Impl::canConsumeHorizontalScroll(
 	return false;
 }
 
-bool MarkdownArticle::Impl::consumeHorizontalScroll(QPoint point, int delta) {
-	if (const auto lookup = findHorizontalScrollOwner(point);
-		lookup.block) {
-		if (const auto block = findScrollOwnerByIdentity(lookup.identity)) {
-			return setScrollLeft(
-				*block,
-				lookup.identity,
-				block->horizontalScrollLeft - delta);
+bool MarkdownArticle::Impl::consumeHorizontalScroll(
+		QPoint point,
+		int delta,
+		Qt::ScrollPhase phase) {
+	const auto lookup = findHorizontalScrollOwner(point);
+	if (!lookup.block) {
+		return false;
+	}
+	if (const auto &media = lookup.block->mediaBlock) {
+		if (media->canHandleHorizontalScroll()) {
+			return media->handleHorizontalScroll(delta, phase);
 		}
+	}
+	if (const auto block = findScrollOwnerByIdentity(lookup.identity)) {
+		return setScrollLeft(
+			*block,
+			lookup.identity,
+			block->horizontalScrollLeft - delta);
 	}
 	return false;
 }
@@ -5653,6 +5781,9 @@ bool MarkdownArticle::Impl::beginHorizontalScroll(
 		bool fromTouch) {
 	const auto lookup = findHorizontalScrollOwner(point);
 	if (!lookup.block) {
+		return false;
+	}
+	if (lookup.block->scrollViewportRect.isEmpty()) {
 		return false;
 	}
 	if (fromTouch) {
@@ -5738,7 +5869,7 @@ void MarkdownArticle::Impl::finalizeRelayout(int heightBottom) {
 	_laidOutWidth = std::min(
 		_width,
 		std::max(
-			ArticleContentMaxRight(_blocks, layoutStyle()) + page.right(),
+			ArticleContentMaxRight(_blocks, layoutStyle(), contentRtl()) + page.right(),
 			page.left() + page.right() + 1));
 	pruneTaskMarkerRuntimes();
 	prunePlaceholderRuntimes();
@@ -5773,7 +5904,8 @@ void MarkdownArticle::Impl::relayout(int width) {
 		_content.blocks.blocks,
 		&_blocks,
 		layoutStyle(),
-		&_cachedTextLeafs);
+		&_cachedTextLeafs,
+		contentRtl());
 	retainBlocks();
 	_missingMediaBlocks = 0;
 
@@ -5786,6 +5918,7 @@ void MarkdownArticle::Impl::relayout(int width) {
 		.mediaPixelScale = _mediaPixelScale,
 		.useArticleBands = true,
 		.editMode = _content.editMode,
+		.rtl = contentRtl(),
 		.syntaxHighlightTracker = this,
 		.cachedTextLeafs = &_cachedTextLeafs,
 		.repaint = _textRepaint,
@@ -5874,6 +6007,7 @@ void MarkdownArticle::Impl::relayoutRetained(int width) {
 		.mediaPixelScale = _mediaPixelScale,
 		.useArticleBands = true,
 		.editMode = _content.editMode,
+		.rtl = contentRtl(),
 		.syntaxHighlightTracker = this,
 		.cachedTextLeafs = &_cachedTextLeafs,
 		.repaint = _textRepaint,
@@ -6105,6 +6239,22 @@ void MarkdownArticle::addTaskMarkerRipple(
 	_impl->addTaskMarkerRipple(source, point);
 }
 
+void MarkdownArticle::clickHandlerActiveChanged(
+		const ClickHandlerPtr &handler,
+		bool active) {
+	_impl->clickHandlerActiveChanged(handler, active);
+}
+
+void MarkdownArticle::clickHandlerPressedChanged(
+		const ClickHandlerPtr &handler,
+		bool pressed) {
+	_impl->clickHandlerPressedChanged(handler, pressed);
+}
+
+void MarkdownArticle::updatePressed(QPoint point) {
+	_impl->updatePressed(point);
+}
+
 MarkdownArticleHorizontalScrollHit MarkdownArticle::horizontalScrollHit(
 		QPoint point) const {
 	return _impl->horizontalScrollHit(point);
@@ -6116,8 +6266,11 @@ bool MarkdownArticle::canConsumeHorizontalScroll(
 	return _impl->canConsumeHorizontalScroll(point, delta);
 }
 
-bool MarkdownArticle::consumeHorizontalScroll(QPoint point, int delta) {
-	return _impl->consumeHorizontalScroll(point, delta);
+bool MarkdownArticle::consumeHorizontalScroll(
+		QPoint point,
+		int delta,
+		Qt::ScrollPhase phase) {
+	return _impl->consumeHorizontalScroll(point, delta, phase);
 }
 
 bool MarkdownArticle::beginHorizontalScroll(QPoint point, bool fromTouch) {

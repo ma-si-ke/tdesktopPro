@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/unique_qptr.h"
 #include "base/flat_map.h"
+#include "iv/editor/iv_editor_clipboard_import.h"
 #include "iv/editor/iv_editor_state.h"
 #include "iv/markdown/iv_markdown_article.h"
 #include "ui/style/style_core_types.h"
@@ -96,6 +97,11 @@ struct WidgetServices {
 		RequestMediaType)> requestMedia;
 	Fn<void(not_null<Widget*>, Ui::PreparedList, PreparedMediaPasteTarget)>
 		applyPreparedMedia;
+	Fn<void(
+		not_null<Widget*>,
+		Ui::PreparedList,
+		Fn<void(std::vector<std::optional<RichPage::Block>>)>)>
+		prepareDeferredMedia;
 	Fn<void(uint64 /*photoId*/, Fn<void(QImage)>)> requestPhotoEditSource;
 	Fn<void(not_null<Widget*>, Ui::PreparedList, State::ReplaceTarget)>
 		replacePhotoWithList;
@@ -119,6 +125,7 @@ public:
 	~Widget() override;
 
 	void activateInitialNode();
+	void activateInitialNodeAtEnd();
 	void activateSegment(int segmentIndex, int cursorOffset);
 	[[nodiscard]] State::ApplyResult commitInlineField();
 	[[nodiscard]] State::ApplyResult commitInlineFieldForClose();
@@ -135,6 +142,7 @@ public:
 	void replacePreparedBlock(State::ReplaceTarget target, RichPage::Block block);
 	void insertPreparedBlocks(std::vector<RichPage::Block> blocks);
 	[[nodiscard]] bool hasActiveSelection() const;
+	[[nodiscard]] rpl::producer<bool> hasSelectionValue() const;
 	[[nodiscard]] std::shared_ptr<const RichPage>
 		richPageForCurrentSelection() const;
 	void replaceCurrentSelectionWithRichPage(
@@ -273,7 +281,6 @@ private:
 		None,
 		ThreeDots,
 		Plus,
-		MediaPixels,
 		UploadRadial,
 		LayoutSwitch,
 	};
@@ -358,6 +365,7 @@ private:
 		Markdown::PreparedEditHit anchorHit;
 		int textSegment = -1;
 		int textOffset = 0;
+		std::optional<int> interruptedFieldAnchor;
 		ArticleSelectionOperation operation
 			= ArticleSelectionOperation::None;
 		DragSelectionMode mode = DragSelectionMode::None;
@@ -509,8 +517,6 @@ private:
 		std::vector<RichPage::Block> blocks,
 		std::optional<State::ActiveTextInsertContext> context,
 		bool useStructuralSelection = true);
-	[[nodiscard]] std::optional<State::TextNodeSpan>
-	visibleFullDemotableFieldTextSpan() const;
 	[[nodiscard]] std::optional<MathEditRequest> activeMathEditRequest() const;
 	[[nodiscard]] MathEditRequest newDisplayMathRequest() const;
 	[[nodiscard]] int richOffsetForFieldOffset(
@@ -600,6 +606,13 @@ private:
 	void copyCurrentSelectionToClipboard();
 	[[nodiscard]] TextForMimeData currentSelectionTextForClipboard() const;
 	void pasteStructuredClipboardData(const ClipboardData &data);
+	[[nodiscard]] std::optional<TableImportResult> importTableFromMimeData(
+		not_null<const QMimeData*> data) const;
+	void pasteImportedTable(TableImportResult &&imported);
+	[[nodiscard]] std::optional<BlocksImportResult> importBlocksFromMimeData(
+		not_null<const QMimeData*> data) const;
+	void pasteImportedBlocks(BlocksImportResult &&imported);
+	void resolveImportedLocalMedia(BlocksImportResult &&imported);
 	[[nodiscard]] bool handleIvClipboardMime(
 		not_null<const QMimeData*> data,
 		Ui::InputField::MimeAction action);
@@ -664,6 +677,7 @@ private:
 	[[nodiscard]] bool performFieldUndoRedo(bool redo);
 	void performUndoRedo(bool redo, bool allowFieldLocal = true);
 	void notifyToolbarStateChanged();
+	void updateHasSelection();
 	[[nodiscard]] ToolbarLinkMode toolbarLinkMode() const;
 	[[nodiscard]] ToolbarActionState toolbarActionState(
 		ToolbarFormatAction action) const;
@@ -883,6 +897,11 @@ private:
 		RequestMediaType)> _requestMedia;
 	const Fn<void(not_null<Widget*>, Ui::PreparedList, PreparedMediaPasteTarget)>
 		_applyPreparedMedia;
+	const Fn<void(
+		not_null<Widget*>,
+		Ui::PreparedList,
+		Fn<void(std::vector<std::optional<RichPage::Block>>)>)>
+		_prepareDeferredMedia;
 	const Fn<void(uint64, Fn<void(QImage)>)> _requestPhotoEditSource;
 	const Fn<void(not_null<Widget*>, Ui::PreparedList, State::ReplaceTarget)>
 		_replacePhotoWithList;
@@ -936,6 +955,7 @@ private:
 	Markdown::MarkdownArticleSelection _selection;
 	Markdown::MarkdownArticleSelectionEndpoints _selectionEndpoints;
 	Markdown::PreparedEditSelection _structuralSelection;
+	rpl::variable<bool> _hasSelection;
 	std::optional<BoundarySelectionOrigin> _boundarySelectionOrigin;
 	Ui::VisibleRange _visibleRange;
 	ArticleSelectionDrag _articleSelectionDrag;

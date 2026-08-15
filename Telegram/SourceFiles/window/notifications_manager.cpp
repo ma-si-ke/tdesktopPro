@@ -96,6 +96,16 @@ base::options::toggle OptionGNotification({
 	},
 });
 
+base::options::toggle OptionMacModernNotifications({
+	.id = kOptionMacModernNotifications,
+	.name = "Modern macOS notifications",
+	.description = "Use UserNotifications framework"
+		" for native notifications (macOS 10.14+)."
+		" System asks for notifications permission on first launch.",
+	.scope = base::options::macos,
+	.restartRequired = true,
+});
+
 base::options::toggle HideReplyButtonOption({
 	.id = kOptionHideReplyButton,
 	.name = "Hide reply button",
@@ -166,13 +176,15 @@ base::options::toggle HideReplyButtonOption({
 }
 
 [[nodiscard]] bool AllowNotificationActions(not_null<PeerData*> peer) {
-	return Platform::IsMac() && peer->isNotificationsUser();
+	return (Platform::IsMac() || Platform::IsLinux())
+		&& peer->isNotificationsUser();
 }
 
 } // namespace
 
 const char kOptionCustomNotification[] = "custom-notification";
 const char kOptionGNotification[] = "gnotification";
+const char kOptionMacModernNotifications[] = "mac-modern-notifications";
 const char kOptionHideReplyButton[] = "hide-reply-button";
 
 struct System::Waiter {
@@ -1176,16 +1188,9 @@ TextWithEntities Manager::ComposeReactionNotification(
 		}
 		return simple(tr::lng_reaction_document);
 	} else if (const auto contact = media->sharedContact()) {
-		const auto name = contact->firstName.isEmpty()
-			? contact->lastName
-			: contact->lastName.isEmpty()
-			? contact->firstName
-			: tr::lng_full_name(
-				tr::now,
-				lt_first_name,
-				contact->firstName,
-				lt_last_name,
-				contact->lastName);
+		const auto name = langFullName(
+			contact->firstName,
+			contact->lastName);
 		return tr::lng_reaction_contact(
 			tr::now,
 			lt_reaction,

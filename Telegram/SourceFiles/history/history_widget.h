@@ -419,6 +419,7 @@ private:
 	void setTabbedPanel(std::unique_ptr<TabbedPanel> panel);
 	void updateField();
 	void fieldChanged();
+	[[nodiscard]] bool suppressSendAction() const;
 	void fieldFocused();
 	void fieldResized();
 
@@ -579,6 +580,9 @@ private:
 	void initExpandButton();
 	void updateExpandButtonVisibility();
 	void updateExpandButtonGeometry();
+	void initDiscardRichDraftButton();
+	void updateDiscardRichDraftVisibility();
+	void updateDiscardRichDraftGeometry();
 	[[nodiscard]] bool canSendAiComposeDirect() const;
 
 	[[nodiscard]] MsgId resolveReplyToTopicRootId();
@@ -710,15 +714,15 @@ private:
 
 	void unregisterDraftSources();
 	void registerDraftSource();
-	void unregisterThreadFieldBridge();
-	void registerThreadFieldBridge();
+	void untrackThreadFieldVisibility();
+	void trackThreadFieldVisibility();
 	[[nodiscard]] Data::Draft *cloudDraft() const;
 	[[nodiscard]] std::shared_ptr<const Iv::RichPage> shownRichMessage() const;
 	[[nodiscard]] bool isComposeBoxOpen() const;
+	[[nodiscard]] bool hasEditDraft() const;
 	[[nodiscard]] bool bypassNormalDraftHandling() const;
 	[[nodiscard]] bool shouldShowRichDraftPreview() const;
-	[[nodiscard]] std::unique_ptr<Data::Draft> readThreadFieldDraft() const;
-	void saveThreadFieldDraft(std::unique_ptr<Data::Draft> draft);
+	void clearRichDraft();
 	void migrateFieldToRichEditor();
 	void setHistory(History *history);
 	void setEditMsgId(MsgId msgId);
@@ -904,6 +908,7 @@ private:
 	HistoryView::Controls::ComposeAiButton * const _aiButton = nullptr;
 	Ui::IconButton * const _sendAsFile = nullptr;
 	Ui::IconButton * const _expand = nullptr;
+	Ui::IconButton * const _discardRichDraft = nullptr;
 	object_ptr<Ui::FlatButton> _unblock;
 	object_ptr<Ui::FlatButton> _botStart;
 	object_ptr<Ui::FlatButton> _joinChannel;
@@ -985,7 +990,7 @@ private:
 	bool _saveDraftText = false;
 	base::Timer _saveDraftTimer;
 	base::Timer _saveCloudDraftTimer;
-	rpl::lifetime _threadFieldBridgeLifetime;
+	rpl::lifetime _threadFieldVisibleLifetime;
 
 	HistoryView::InfoTooltip _topToast;
 	HistoryView::AnchoredTooltip _hiddenSenderTooltip;

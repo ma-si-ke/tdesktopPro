@@ -354,6 +354,9 @@ private:
 	void initExpandButton();
 	void updateExpandButtonVisibility();
 	void updateExpandButtonGeometry();
+	void initDiscardRichDraftButton();
+	void updateDiscardRichDraftVisibility();
+	void updateDiscardRichDraftGeometry();
 	void setupSendMenu(
 		not_null<Ui::RpWidget*> button,
 		Fn<void(Api::SendOptions)> send);
@@ -377,6 +380,7 @@ private:
 
 	void escape();
 	void fieldChanged();
+	[[nodiscard]] bool suppressSendAction() const;
 	void toggleTabbedSelectorMode();
 	void createTabbedPanel();
 	void setTabbedPanel(std::unique_ptr<ChatHelpers::TabbedPanel> panel);
@@ -436,8 +440,8 @@ private:
 
 	void unregisterDraftSources();
 	void registerDraftSource();
-	void unregisterThreadFieldBridge();
-	void registerThreadFieldBridge();
+	void untrackThreadFieldVisibility();
+	void trackThreadFieldVisibility();
 	void updateFieldVisibility();
 	void changeFocusedControl();
 
@@ -445,12 +449,15 @@ private:
 	[[nodiscard]] Data::Draft *cloudDraft() const;
 	[[nodiscard]] bool isComposeBoxOpen() const;
 	[[nodiscard]] bool hasRichDraftThreadScope() const;
+	[[nodiscard]] bool isShortcutComposeEligible() const;
 	[[nodiscard]] bool bypassNormalDraftHandling() const;
 	[[nodiscard]] bool hasEditDraft() const;
 	[[nodiscard]] bool shouldShowRichDraftPreview() const;
-	[[nodiscard]] std::unique_ptr<Data::Draft> readThreadFieldDraft() const;
-	void saveThreadFieldDraft(std::unique_ptr<Data::Draft> draft);
+	void clearRichDraft();
 	void migrateFieldToRichEditor();
+	void migrateScheduledFieldToRichEditor();
+	void migrateShortcutFieldToRichEditor(
+		BusinessShortcutId expectedShortcutId);
 
 	const style::ComposeControls &_st;
 	ChatHelpers::ComposeFeatures _features;
@@ -489,6 +496,7 @@ private:
 	Controls::ComposeAiButton * const _aiButton = nullptr;
 	Ui::IconButton * const _sendAsFile = nullptr;
 	Ui::IconButton * const _expand = nullptr;
+	Ui::IconButton * const _discardRichDraft = nullptr;
 	Ui::IconButton *_editStars = nullptr;
 	Ui::IconButton *_like = nullptr;
 	rpl::variable<int> _minStarsCount;
@@ -581,7 +589,7 @@ private:
 	bool _threadFieldVisible = false;
 
 	rpl::lifetime _historyLifetime;
-	rpl::lifetime _threadFieldBridgeLifetime;
+	rpl::lifetime _threadFieldVisibleLifetime;
 	rpl::lifetime _uploaderSubscriptions;
 
 };

@@ -1101,17 +1101,31 @@ void ApiWrap::requestPinnedDialogs(Data::Folder *folder) {
 		return;
 	}
 
-	const auto finalize = [=] {
+	state->pinnedRequestId = sendPinnedDialogsRequest(folder, [=] {
 		if (const auto state = dialogsLoadState(folder)) {
 			state->pinnedRequestId = 0;
 			state->pinnedReceived = true;
 			dialogsLoadFinish(folder);
 		}
-	};
-	state->pinnedRequestId = request(MTPmessages_GetPinnedDialogs(
+	});
+}
+
+void ApiWrap::reloadPinnedDialogs(Data::Folder *folder) {
+	if (!_pinnedDialogsReloads.emplace(folder).second) {
+		return;
+	}
+	sendPinnedDialogsRequest(folder, [=] {
+		_pinnedDialogsReloads.remove(folder);
+	});
+}
+
+mtpRequestId ApiWrap::sendPinnedDialogsRequest(
+		Data::Folder *folder,
+		Fn<void()> finish) {
+	return request(MTPmessages_GetPinnedDialogs(
 		MTP_int(folder ? folder->id() : 0)
 	)).done([=](const MTPmessages_PeerDialogs &result) {
-		finalize();
+		finish();
 		result.match([&](const MTPDmessages_peerDialogs &data) {
 			_session->data().processUsers(data.vusers());
 			_session->data().processChats(data.vchats());
@@ -1124,7 +1138,7 @@ void ApiWrap::requestPinnedDialogs(Data::Folder *folder) {
 			_session->data().notifyPinnedDialogsOrderUpdated();
 		});
 	}).fail([=] {
-		finalize();
+		finish();
 	}).send();
 }
 
@@ -2082,8 +2096,11 @@ void ApiWrap::sendNotifySettingsUpdates() {
 		)).afterDelay(kSmallDelayMs).send();
 	}
 	for (const auto &peer : base::take(_updateNotifyPeers)) {
+		const auto channel = peer->asChannel();
 		request(MTPaccount_UpdateNotifySettings(
-			MTP_inputNotifyPeer(peer->input()),
+			(channel && channel->isCommunity())
+				? MTP_inputNotifyCommunity(channel->inputChannel())
+				: MTP_inputNotifyPeer(peer->input()),
 			peer->notify().serialize()
 		)).afterDelay(kSmallDelayMs).send();
 	}
@@ -4189,6 +4206,17 @@ void ApiWrap::sendFiles(
 		SendMediaType type,
 		std::shared_ptr<SendingAlbum> album,
 		SendAction action) {
+	auto &ephemeral = _session->ephemeralMessages();
+	if (album && !ephemeral.isEphemeralBotReply(action.replyTo.messageId)) {
+		const auto peer = action.history->peer;
+		for (const auto &file : list.files) {
+			if (ephemeral.hasEphemeralCommand(peer, file.caption.text)) {
+				LOG(("API Error: "
+					"Dropped album send with ephemeral command caption."));
+				return;
+			}
+		}
+	}
 	const auto to = FileLoadTaskOptions(action);
 	if (album) {
 		album->options = to.options;
@@ -4456,11 +4484,13 @@ void ApiWrap::sendRichMessage(
 				Api::UnixtimeFromMsgId(response.outerMsgId));
 		}
 	};
-	const auto richDraftOrigin = Data::FileOrigin(Data::FileOriginCloudDraft{
-		.peerId = peer->id,
-		.topicRootId = draftTopicRootId,
-		.monoforumPeerId = draftMonoforumPeerId,
-	});
+	const auto richDraftOrigin = clearCloudDraft
+		? Data::FileOrigin(Data::FileOriginCloudDraft{
+			.peerId = peer->id,
+			.topicRootId = draftTopicRootId,
+			.monoforumPeerId = draftMonoforumPeerId,
+		})
+		: Data::FileOrigin();
 	const auto serializeCurrent = [=]() -> std::optional<MTPInputRichMessage> {
 		const auto fullPage = item->fullRichPage();
 		const auto page = fullPage ? fullPage : item->richPage();
@@ -4479,18 +4509,22 @@ void ApiWrap::sendRichMessage(
 	const auto itemId = item->fullId();
 	const auto recoverRichFailure = [=](const QString &type) {
 		if (const auto failed = _session->data().message(itemId)) {
-			const auto fullPage = failed->fullRichPage();
-			if (const auto page = fullPage ? fullPage : failed->richPage()) {
-				auto draft = Data::Draft();
-				draft.reply.topicRootId = draftTopicRootId;
-				draft.reply.monoforumPeerId = draftMonoforumPeerId;
-				draft.richMessage = page;
-				draft.richMessageSummary = failed->originalText();
-				history->createCloudDraft(
-					draftTopicRootId,
-					draftMonoforumPeerId,
-					&draft);
-				history->applyCloudDraft(draftTopicRootId, draftMonoforumPeerId);
+			if (clearCloudDraft) {
+				const auto fullPage = failed->fullRichPage();
+				if (const auto page = fullPage ? fullPage : failed->richPage()) {
+					auto draft = Data::Draft();
+					draft.reply.topicRootId = draftTopicRootId;
+					draft.reply.monoforumPeerId = draftMonoforumPeerId;
+					draft.richMessage = page;
+					draft.richMessageSummary = failed->originalText();
+					history->createCloudDraft(
+						draftTopicRootId,
+						draftMonoforumPeerId,
+						&draft);
+					history->applyCloudDraft(
+						draftTopicRootId,
+						draftMonoforumPeerId);
+				}
 			}
 			if (randomId) {
 				_session->data().unregisterMessageRandomId(randomId);

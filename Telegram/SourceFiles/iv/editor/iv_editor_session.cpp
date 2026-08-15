@@ -18,7 +18,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_sending.h"
 #include "api/api_editing.h"
 #include "apiwrap.h"
-#include "base/algorithm.h"
 #include "base/flat_map.h"
 #include "base/timer.h"
 #include "base/weak_qptr.h"
@@ -26,17 +25,21 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/premium_preview_box.h"
 #include "chat_helpers/compose/compose_show.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "data/data_file_origin.h"
 #include "core/shortcuts.h"
 #include "data/components/ephemeral_messages.h"
 #include "data/data_drafts.h"
 #include "data/data_document.h"
+#include "data/data_forum_topic.h"
 #include "data/data_location.h"
 #include "data/data_photo.h"
 #include "data/data_photo_media.h"
 #include "data/data_premium_limits.h"
+#include "data/data_saved_sublist.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
+#include "history/view/history_view_schedule_box.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_helpers.h"
@@ -49,6 +52,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "iv/iv_rich_page.h"
 #include "lang/lang_keys.h"
 #include "main/main_app_config.h"
+#include "main/main_domain.h"
 #include "main/main_session.h"
 #include "mainwidget.h"
 #include "menu/menu_send.h"
@@ -107,9 +111,6 @@ struct ComposeThreadKey {
 struct ComposeThreadEntry {
 	std::weak_ptr<ArticleSession> articleSession;
 	rpl::variable<bool> fieldVisible = false;
-	ThreadFieldDraftReader readDraft;
-	ThreadFieldDraftSaver saveDraft;
-	ThreadFieldMigratedAway migratedAway;
 };
 
 [[nodiscard]] ComposeThreadKey ComposeKey(
@@ -150,12 +151,6 @@ struct ComposeThreadEntry {
 	return (i != end(threads)) ? &i->second : nullptr;
 }
 
-void SetComposeFieldVisible(
-		const ComposeThreadKey &key,
-		bool visible) {
-	ComposeThreadEntryFor(key).fieldVisible.force_assign(visible);
-}
-
 enum class AttachmentState : uchar {
 	Uploading,
 	Finalizing,
@@ -167,6 +162,7 @@ enum class AttachmentInsertMode : uchar {
 	Normal,
 	ClipboardPaste,
 	ReplaceBlock,
+	Deferred,
 };
 
 struct PreparedDocumentInfo {
@@ -256,7 +252,7 @@ enum class RichMessagePosting {
 		not_null<Main::Session*> session) {
 	const auto value = session->appConfig().get<QString>(
 		u"rich_message_posting"_q,
-		u"disabled"_q);
+		u"premium"_q);
 	if (value == u"enabled"_q) {
 		return RichMessagePosting::Enabled;
 	} else if (value == u"premium"_q) {
@@ -518,6 +514,8 @@ template <typename Container>
 	const auto sendType = (file.type == PreparedFileType::Photo)
 		? SendMediaType::Photo
 		: SendMediaType::File;
+	const auto sendLargePhotos = (sendType == SendMediaType::Photo)
+		|| file.sendLargePhotos;
 	return {
 		.session = session,
 		.filepath = file.path,
@@ -537,7 +535,7 @@ template <typename Container>
 		.spoiler = file.spoiler,
 		.album = std::make_shared<SendingAlbum>(),
 		.forceFile = false,
-		.sendLargePhotos = file.sendLargePhotos,
+		.sendLargePhotos = sendLargePhotos,
 		.idOverride = 0,
 		.displayName = file.displayName,
 	};
@@ -552,46 +550,58 @@ public:
 		not_null<PeerData*> peer,
 		Api::SendAction action,
 		SendMenu::Details sendMenuDetails,
+		TextWithTags fieldText,
+		Fn<void()> onMigrated,
+		ComposeBoxOptions options,
 		base::weak_ptr<Window::SessionController> controller) {
 		const auto history = action.history;
-		const auto topicRootId = action.replyTo.topicRootId;
-		const auto monoforumPeerId = action.replyTo.monoforumPeerId;
-		const auto composeKey = ComposeKey(
-			session,
-			history->peer->id,
-			topicRootId,
-			monoforumPeerId);
-		if (const auto entry = LookupComposeThreadEntry(composeKey)) {
-			if (const auto existing = entry->articleSession.lock()) {
-				SetComposeFieldVisible(composeKey, true);
-				existing->focusWindow();
-				return;
-			}
-		}
-		const auto cloudDraft = history->cloudDraft(topicRootId, monoforumPeerId);
-		const auto hasRichDraft = (cloudDraft && cloudDraft->hasRichMessage());
-		const auto page = hasRichDraft
-			? std::make_shared<RichPage>(*cloudDraft->richMessage)
-			: std::make_shared<RichPage>();
-		if (!hasRichDraft) {
+		auto composeThreadKey = std::optional<ComposeThreadKey>();
+		auto page = std::make_shared<RichPage>();
+		auto hasRichDraft = false;
+		auto fieldTextAdopted = false;
+		if (options.scope == ComposeBoxOptions::Scope::Thread) {
+			const auto topicRootId = action.replyTo.topicRootId;
+			const auto monoforumPeerId = action.replyTo.monoforumPeerId;
+			const auto composeKey = ComposeKey(
+				session,
+				history->peer->id,
+				topicRootId,
+				monoforumPeerId);
 			if (const auto entry = LookupComposeThreadEntry(composeKey)) {
-				if (entry->readDraft) {
-					if (const auto draft = entry->readDraft()) {
-						const auto &withTags = draft->textWithTags;
-						auto migrated = SplitTextIntoRichPage({
-							withTags.text,
-							TextUtilities::ConvertTextTagsToEntities(
-								withTags.tags),
-						});
-						if (!migrated.blocks.empty()) {
-							*page = std::move(migrated);
-							if (entry->migratedAway) {
-								entry->migratedAway();
-							}
-						}
-					}
+				if (const auto existing = entry->articleSession.lock()) {
+					existing->focusWindow();
+					return;
 				}
 			}
+			const auto cloudDraft = history->cloudDraft(
+				topicRootId,
+				monoforumPeerId);
+			hasRichDraft = cloudDraft && cloudDraft->hasRichMessage();
+			if (hasRichDraft) {
+				page = std::make_shared<RichPage>(*cloudDraft->richMessage);
+			}
+			composeThreadKey = composeKey;
+		}
+		if (!fieldText.empty()) {
+			auto migrated = SplitTextIntoRichPage(fieldText);
+			if (!migrated.blocks.empty()) {
+				if (hasRichDraft) {
+					page->blocks.insert(
+						page->blocks.end(),
+						std::make_move_iterator(migrated.blocks.begin()),
+						std::make_move_iterator(migrated.blocks.end()));
+				} else {
+					*page = std::move(migrated);
+				}
+				fieldTextAdopted = true;
+				if (onMigrated) {
+					onMigrated();
+				}
+			}
+		}
+		if (!fieldTextAdopted
+			&& options.scope == ComposeBoxOptions::Scope::Detached) {
+			(void)base::take(options.returnText);
 		}
 		auto articleSession = std::shared_ptr<ArticleSession>(new ArticleSession(
 			session,
@@ -601,8 +611,9 @@ public:
 			std::move(page),
 			std::move(action),
 			std::move(sendMenuDetails),
+			std::move(options),
 			std::nullopt,
-			composeKey,
+			std::move(composeThreadKey),
 			std::move(controller)));
 		articleSession->showWindow();
 	}
@@ -611,6 +622,9 @@ public:
 		not_null<HistoryItem*> item,
 		std::shared_ptr<const RichPage> richPage,
 		base::weak_ptr<Window::SessionController> controller) {
+		if (ActivateEditWindow(&item->history()->session(), item->fullId())) {
+			return;
+		}
 		if (!richPage || !CanEditRichPage(richPage)) {
 			if (const auto window = item->history()->session().tryResolveWindow(
 					item->history()->peer)) {
@@ -626,6 +640,7 @@ public:
 			std::make_shared<RichPage>(*richPage),
 			std::nullopt,
 			{},
+			{},
 			EditedItemSnapshot{
 				.item = item,
 				.inlinePage = item->richPage(),
@@ -640,29 +655,18 @@ public:
 	static void ShowEditFromField(
 			not_null<HistoryItem*> item,
 			Api::SendAction action,
+			std::optional<TextWithTags> fieldTextOverride,
+			Fn<void()> fieldMigratedOverride,
 			base::weak_ptr<Window::SessionController> controller) {
 		const auto session = &item->history()->session();
-		const auto topicRootId = action.replyTo.topicRootId;
-		const auto monoforumPeerId = action.replyTo.monoforumPeerId;
-		const auto composeKey = ComposeKey(
-			session,
-			item->history()->peer->id,
-			topicRootId,
-			monoforumPeerId);
+		if (ActivateEditWindow(session, item->fullId())) {
+			return;
+		}
 		auto page = std::make_shared<RichPage>();
-		if (const auto entry = LookupComposeThreadEntry(composeKey)) {
-			if (entry->readDraft) {
-				if (const auto draft = entry->readDraft()) {
-					const auto &withTags = draft->textWithTags;
-					*page = SplitTextIntoRichPage({
-						withTags.text,
-						TextUtilities::ConvertTextTagsToEntities(
-							withTags.tags),
-					});
-				}
-			}
-			if (entry->migratedAway) {
-				entry->migratedAway();
+		if (fieldTextOverride) {
+			*page = SplitTextIntoRichPage(*fieldTextOverride);
+			if (fieldMigratedOverride) {
+				fieldMigratedOverride();
 			}
 		}
 		auto articleSession = std::shared_ptr<ArticleSession>(new ArticleSession(
@@ -672,6 +676,7 @@ public:
 			item->fullId(),
 			std::move(page),
 			std::move(action),
+			{},
 			{},
 			EditedItemSnapshot{
 				.item = item,
@@ -686,8 +691,16 @@ public:
 
 	~ArticleSession() {
 		_submitDeferred = false;
-		for (const auto &attachment : _attachments) {
-			_session->uploader().cancel(attachment.uploadId);
+		auto attachments = base::take(_attachments);
+		_mediaBatches.clear();
+		for (const auto &attachment : attachments) {
+			if (attachment.state != AttachmentState::Ready) {
+				_session->uploader().cancel(attachment.uploadId);
+			}
+			if (attachment.finalizationRequestId) {
+				_session->api().request(
+					attachment.finalizationRequestId).cancel();
+			}
 		}
 	}
 
@@ -703,6 +716,7 @@ private:
 		RichPage::BlockKind blockKind = RichPage::BlockKind::Unsupported;
 		uint64 localMediaId = 0;
 		AttachmentState state = AttachmentState::Uploading;
+		mtpRequestId finalizationRequestId = 0;
 		QString caption;
 		QString filename;
 		QString filemime;
@@ -780,6 +794,7 @@ private:
 		std::shared_ptr<RichPage> page,
 		std::optional<Api::SendAction> action,
 		SendMenu::Details sendMenuDetails,
+		ComposeBoxOptions composeOptions,
 		std::optional<EditedItemSnapshot> edited,
 		std::optional<ComposeThreadKey> composeThreadKey,
 		base::weak_ptr<Window::SessionController> controller = {})
@@ -793,6 +808,7 @@ private:
 	, _articleId(articleId)
 	, _composeAction(std::move(action))
 	, _sendMenuDetails(std::move(sendMenuDetails))
+	, _composeOptions(std::move(composeOptions))
 	, _edited(std::move(edited))
 	, _composeThreadKey(std::move(composeThreadKey))
 	, _page(page ? std::move(page) : std::make_shared<RichPage>())
@@ -865,12 +881,6 @@ private:
 		entry.fieldVisible.force_assign(false);
 	}
 
-	[[nodiscard]] ComposeThreadEntry *composeThreadEntry() const {
-		return _composeThreadKey
-			? LookupComposeThreadEntry(*_composeThreadKey)
-			: nullptr;
-	}
-
 	[[nodiscard]] ::Data::FileOrigin composeDraftOrigin() const {
 		return _composeThreadKey
 			? ComposeDraftOrigin(*_composeThreadKey)
@@ -881,6 +891,75 @@ private:
 		return (_mode == Mode::Edit)
 			? ::Data::FileOrigin(_articleId)
 			: composeDraftOrigin();
+	}
+
+	[[nodiscard]] bool detachedCompose() const {
+		return _composeOptions.scope
+			== ComposeBoxOptions::Scope::Detached;
+	}
+
+	void dropDetachedReturnText() {
+		if (detachedCompose()) {
+			(void)base::take(_composeOptions.returnText);
+		}
+	}
+
+	[[nodiscard]] bool deliverDetachedReturnText() {
+		Expects(detachedCompose());
+
+		if (hasPendingPreparation()) {
+			return false;
+		}
+		auto result = TextWithTags();
+		if (!_state->articleEmpty()) {
+			const auto simple = SerializeAsSimple(_state->richPage(), _session);
+			if (!simple) {
+				return false;
+			}
+			result = {
+				simple->text,
+				TextUtilities::ConvertEntitiesToTextTags(simple->entities),
+			};
+		}
+		const auto callback = base::take(_composeOptions.returnText);
+		if (callback) {
+			callback(std::move(result));
+		}
+		return true;
+	}
+
+	[[nodiscard]] bool showDetachedScheduleBox() {
+		if (!detachedCompose()
+			|| _composeOptions.submitPolicy
+				!= ComposeBoxOptions::SubmitPolicy::Schedule
+			|| _submitOptions.scheduled) {
+			return false;
+		} else if (_scheduleBox) {
+			return true;
+		}
+		const auto show = resolveShow();
+		if (!show) {
+			return true;
+		}
+		const auto generation = ++_scheduleBoxGeneration;
+		const auto weak = base::make_weak(this);
+		auto box = HistoryView::PrepareScheduleBox(
+			base::make_weak(show->toastParent()),
+			show,
+			_sendMenuDetails,
+			[weak, generation](Api::SendOptions options) {
+				if (const auto session = weak.get()) {
+					if (session->_scheduleBoxGeneration != generation) {
+						return;
+					}
+					++session->_scheduleBoxGeneration;
+					session->_scheduleBox.reset();
+					session->requestSubmit(std::move(options));
+				}
+			},
+			_submitOptions);
+		_scheduleBox = show->show(std::move(box));
+		return true;
 	}
 
 	[[nodiscard]] bool submitWouldBeEphemeral(
@@ -938,6 +1017,9 @@ private:
 			showEmptySubmittedPageToast();
 			return false;
 		}
+		if (showDetachedScheduleBox()) {
+			return false;
+		}
 		auto simple = SerializeAsSimple(_state->richPage(), _session);
 		const auto weak = base::make_weak(this);
 		const auto withPaymentApproved = [weak](int approved) {
@@ -975,7 +1057,8 @@ private:
 					if (const auto strong = weak.get()) {
 						strong->submitWithoutFormatting(page);
 					}
-				});
+				},
+				_mode == Mode::Edit);
 			return false;
 		}
 		auto page = std::shared_ptr<const RichPage>(
@@ -1016,16 +1099,19 @@ private:
 			}
 			auto action = *_composeAction;
 			action.options = _submitOptions;
-			action.clearDraft = true;
-			action.history->clearCloudDraft(
-				action.replyTo.topicRootId,
-				action.replyTo.monoforumPeerId);
+			action.clearDraft = !detachedCompose();
+			if (action.clearDraft) {
+				action.history->clearCloudDraft(
+					action.replyTo.topicRootId,
+					action.replyTo.monoforumPeerId);
+			}
 			auto message = Api::MessageToSend(action);
 			message.textWithTags = {
 				text.text,
 				TextUtilities::ConvertEntitiesToTextTags(text.entities),
 			};
 			cancelRichDraftAutosave();
+			dropDetachedReturnText();
 			_session->api().sendMessage(std::move(message));
 			return true;
 		}
@@ -1038,13 +1124,15 @@ private:
 			not_null{ item },
 			text,
 			::Data::WebPageDraft{ .removed = true },
-			_submitOptions,
+			editMessageOptions(not_null{ item }),
 			[weak = base::make_weak(this)](mtpRequestId) {
 			},
 			[weak = base::make_weak(this)](
 					const QString &error,
 					mtpRequestId) {
-				if (const auto session = weak.get()) {
+				if (error == u"MESSAGE_NOT_MODIFIED"_q) {
+					return;
+				} else if (const auto session = weak.get()) {
 					session->showToast(error.isEmpty()
 						? tr::lng_edit_error(tr::now)
 						: error);
@@ -1077,11 +1165,16 @@ private:
 
 	[[nodiscard]] bool cancelRequested() {
 		_submitDeferred = false;
-		return true;
+		return detachedCompose()
+			? deliverDetachedReturnText()
+			: true;
 	}
 
 	[[nodiscard]] bool changedCancelRequested() {
 		_submitDeferred = false;
+		if (detachedCompose()) {
+			return deliverDetachedReturnText();
+		}
 		if (!_composeAction || !_composeThreadKey) {
 			return true;
 		}
@@ -1092,17 +1185,13 @@ private:
 	[[nodiscard]] bool discardRequested() {
 		_submitDeferred = false;
 		cancelRichDraftAutosave();
+		dropDetachedReturnText();
 		if (!_composeAction || !_composeThreadKey) {
 			return true;
 		}
 		const auto topicRootId = _composeThreadKey->draftKey.topicRootId();
 		const auto monoforumPeerId = _composeThreadKey->draftKey.monoforumPeerId();
 		const auto history = _composeAction->history;
-		if (const auto entry = composeThreadEntry()) {
-			if (entry->saveDraft) {
-				entry->saveDraft(nullptr);
-			}
-		}
 		history->clearCloudDraft(topicRootId, monoforumPeerId);
 		if (const auto thread = history->threadFor(topicRootId, monoforumPeerId)) {
 			const auto cloudDraft = history->createCloudDraft(
@@ -1118,6 +1207,15 @@ private:
 
 	[[nodiscard]] HistoryItem *currentSubmittedItem() const {
 		return _session->data().message(_articleId);
+	}
+
+	[[nodiscard]] Api::SendOptions editMessageOptions(
+			not_null<HistoryItem*> item) const {
+		auto options = _submitOptions;
+		options.scheduled = item->isScheduled() ? item->date() : 0;
+		options.scheduleRepeatPeriod = item->scheduleRepeatPeriod();
+		options.shortcutId = item->shortcutId();
+		return options;
 	}
 
 	[[nodiscard]] HistoryItem *ensureComposeLocalItem() {
@@ -1428,10 +1526,13 @@ private:
 		if (_mode == Mode::Compose) {
 			auto action = *_composeAction;
 			action.options = _submitOptions;
-			action.clearDraft = true;
-			action.history->clearCloudDraft(
-				action.replyTo.topicRootId,
-				action.replyTo.monoforumPeerId);
+			action.clearDraft = !detachedCompose();
+			if (action.clearDraft) {
+				action.history->clearCloudDraft(
+					action.replyTo.topicRootId,
+					action.replyTo.monoforumPeerId);
+			}
+			dropDetachedReturnText();
 			_session->api().sendRichMessage(
 				item,
 				*richMessage.value,
@@ -1451,7 +1552,7 @@ private:
 				}
 				return std::optional<MTPInputRichMessage>();
 			},
-			_submitOptions,
+			editMessageOptions(not_null{ item }),
 			[weak = base::make_weak(this)](mtpRequestId) {
 				if (const auto session = weak.get()) {
 					session->finishSubmittedWork();
@@ -1460,9 +1561,11 @@ private:
 			[weak = base::make_weak(this)](const QString &error, mtpRequestId) {
 				if (const auto session = weak.get()) {
 					session->restoreEditedItem();
-					session->showToast(error.isEmpty()
-						? tr::lng_edit_error(tr::now)
-						: error);
+					if (error != u"MESSAGE_NOT_MODIFIED"_q) {
+						session->showToast(error.isEmpty()
+							? tr::lng_edit_error(tr::now)
+							: error);
+					}
 					session->finishSubmittedWork();
 				}
 			});
@@ -1577,6 +1680,46 @@ private:
 		});
 	}
 
+	[[nodiscard]] ::Data::Thread *titleThread() const {
+		if (_composeAction) {
+			return _composeAction->history->threadFor(
+				_composeAction->replyTo.topicRootId,
+				_composeAction->replyTo.monoforumPeerId);
+		} else if (_edited) {
+			const auto item = _edited->item;
+			if (const auto topic = item->topic()) {
+				return topic;
+			} else if (const auto sublist = item->savedSublist()) {
+				return sublist;
+			}
+			return item->history();
+		}
+		return nullptr;
+	}
+
+	[[nodiscard]] QString windowTitle() const {
+		const auto word = (_mode == Mode::Compose)
+			? tr::lng_article_editor_title(tr::now)
+			: tr::lng_article_editor_title_editing(tr::now);
+		const auto settings = Core::App().settings().windowTitleContent();
+		const auto thread = settings.hideChatName ? nullptr : titleThread();
+		const auto topic = thread ? thread->asTopic() : nullptr;
+		const auto name = !thread
+			? QString()
+			: topic
+			? topic->title()
+			: thread->owningHistory()->peer->isSelf()
+			? tr::lng_saved_messages(tr::now)
+			: thread->owningHistory()->peer->name();
+		const auto user = (!settings.hideAccountName
+			&& Core::App().domain().accountsAuthedCount() > 1)
+			? st::wrap_rtl(_session->user()->name())
+			: QString();
+		return word
+			+ (name.isEmpty() ? QString() : u" · "_q + st::wrap_rtl(name))
+			+ (user.isEmpty() ? QString() : u" @ "_q + user);
+	}
+
 	void showWindow() {
 		_backgroundHold = shared_from_this();
 		registerLiveAndTrackSession();
@@ -1585,6 +1728,7 @@ private:
 			.session = _session,
 			.peer = _peer,
 			.state = _state,
+			.title = windowTitle(),
 			.submitType = _submitType,
 			.discarded = _composeAction
 				? Fn<bool()>([session = shared_from_this()] {
@@ -1633,6 +1777,16 @@ private:
 					QPointer<Widget>(editor.get()),
 					std::move(list),
 					std::move(target));
+			},
+			.prepareDeferredMedia = [session = shared_from_this()](
+					not_null<Widget*> editor,
+					PreparedList list,
+					Fn<void(
+						std::vector<std::optional<RichPage::Block>>)> done) {
+				session->prepareDeferredMedia(
+					QPointer<Widget>(editor.get()),
+					std::move(list),
+					std::move(done));
 			},
 			.requestPhotoEditSource = [session = shared_from_this()](
 					uint64 photoId,
@@ -1711,9 +1865,6 @@ private:
 			// the cloud-to-local clear branch.
 			syncFieldWithCloudDraftAfterClose();
 		}
-		if (const auto continuation = base::take(_onWindowClosedContinuation)) {
-			continuation();
-		}
 	}
 
 public:
@@ -1727,16 +1878,12 @@ public:
 		}
 	}
 
-	[[nodiscard]] static bool SaveOpenComposeDraftThen(
+	[[nodiscard]] static bool ActivateEditWindow(
 		not_null<Main::Session*> session,
-		PeerId peerId,
-		MsgId topicRootId,
-		PeerId monoforumPeerId,
-		Fn<void()> onSaved);
-	[[nodiscard]] static bool RequestCloseOpenEditWindowThen(
-		not_null<Main::Session*> session,
-		not_null<PeerData*> peer,
-		Fn<void()> onClosed);
+		FullMsgId itemId);
+
+	[[nodiscard]] static std::shared_ptr<ChatHelpers::Show> ActiveShow(
+		not_null<Main::Session*> session);
 
 private:
 	// Registry of all editor sessions that currently own a window, so that
@@ -1786,6 +1933,12 @@ private:
 		}
 		cancelRichDraftAutosave();
 		cancelCloseWithDraftSave(_closeDraftSaveGeneration);
+		if (detachedCompose()
+			&& _composeOptions.returnText
+			&& !_submittedPage
+			&& !_submitApiRequested) {
+			(void)deliverDetachedReturnText();
+		}
 		const auto sync = _composeAction
 			&& _composeThreadKey
 			&& !_submittedPage
@@ -1804,8 +1957,6 @@ private:
 		_windowHost = nullptr;
 		_editorShow = nullptr;
 		_backgroundHold = nullptr;
-		_closeDraftSaveContinuation = nullptr;
-		_onWindowClosedContinuation = nullptr;
 		if (sync) {
 			syncFieldWithCloudDraftAfterClose();
 			const auto history = _composeAction->history;
@@ -1976,11 +2127,15 @@ private:
 	}
 
 	void cancelMediaUploadByMediaId(uint64 mediaId) {
+		auto uploadId = FullMsgId();
 		for (const auto &attachment : _attachments) {
 			if (mediaIdMatchesAttachment(mediaId, attachment)) {
-				eraseAttachment(attachment.uploadId);
-				return;
+				uploadId = attachment.uploadId;
+				break;
 			}
+		}
+		if (uploadId) {
+			eraseAttachment(uploadId);
 		}
 	}
 
@@ -2146,7 +2301,7 @@ private:
 		_prepareQueue.pop_front();
 		const auto weak = base::make_weak(this);
 		_preparing = true;
-		const auto sideLimit = PhotoSideLimit();
+		const auto sideLimit = PhotoSideLimit(true);
 		crl::async([weak, queued = std::move(queued), sideLimit]() mutable {
 			Storage::PrepareDetails(
 				queued.file,
@@ -2207,6 +2362,65 @@ private:
 			std::move(replaceTarget));
 	}
 
+	void prepareDeferredMedia(
+			QPointer<Widget> editor,
+			PreparedList list,
+			Fn<void(std::vector<std::optional<RichPage::Block>>)> done) {
+		const auto count = int(list.files.size());
+		if (!count) {
+			done({});
+			return;
+		}
+		const auto batchId = ++_prepareBatchId;
+		auto &pending = _deferredBatches[batchId];
+		pending.results.resize(count);
+		pending.left = count;
+		pending.done = std::move(done);
+		for (auto i = 0; i != count; ++i) {
+			prepareAttachment(
+				editor,
+				std::move(list.files[i]),
+				batchId,
+				i,
+				AttachmentInsertMode::Deferred,
+				std::nullopt);
+		}
+	}
+
+	void pendingDeferredUpload(uint64 batchId, FullMsgId uploadId) {
+		const auto i = _deferredBatches.find(batchId);
+		if (i != end(_deferredBatches)) {
+			i->second.uploads.push_back(uploadId);
+		}
+	}
+
+	void deferredAttachmentReady(
+			uint64 batchId,
+			int order,
+			std::optional<RichPage::Block> block) {
+		const auto i = _deferredBatches.find(batchId);
+		if (i == end(_deferredBatches)) {
+			return;
+		}
+		auto &pending = i->second;
+		if (order >= 0 && order < int(pending.results.size())) {
+			pending.results[order] = std::move(block);
+		}
+		if (--pending.left > 0) {
+			return;
+		}
+		auto callback = std::move(pending.done);
+		auto results = std::move(pending.results);
+		auto uploads = std::move(pending.uploads);
+		_deferredBatches.erase(i);
+		if (callback) {
+			callback(std::move(results));
+		}
+		for (const auto &uploadId : uploads) {
+			_deferredUploads.remove(uploadId);
+		}
+	}
+
 	void prepareAttachment(
 		QPointer<Widget> editor,
 		PreparedFile file,
@@ -2257,6 +2471,26 @@ private:
 		_pendingAttachmentPrepareCount = std::max(
 			_pendingAttachmentPrepareCount - 1,
 			0);
+		if (insertMode == AttachmentInsertMode::Deferred) {
+			auto block = std::optional<RichPage::Block>();
+			if (prepared && editor) {
+				const auto uploadId = createAttachmentUpload(
+					std::move(meta),
+					std::move(prepared),
+					std::move(originalImage));
+				if (uploadId && !_attachments.empty()) {
+					block = makeAttachmentBlock(_attachments.back());
+					_deferredUploads.emplace(*uploadId);
+					pendingDeferredUpload(batchId, *uploadId);
+				}
+			}
+			if (!block) {
+				showAttachmentFailedToast();
+			}
+			deferredAttachmentReady(batchId, order, std::move(block));
+			maybeContinueDeferredSubmit();
+			return;
+		}
 		if (!prepared) {
 			if (!IsReplacing(insertMode, replaceTarget)) {
 				markMediaBatchItemSkipped(batchId, order);
@@ -2479,7 +2713,7 @@ private:
 		return item;
 	}
 
-	[[nodiscard]] RichPage::Block makeGroupedAttachmentBlock(
+	[[nodiscard]] std::vector<RichPage::Block> makeGroupedAttachmentBlocks(
 			const std::vector<FullMsgId> &uploadIds) const {
 		auto block = RichPage::Block();
 		block.kind = RichPage::BlockKind::GroupedMedia;
@@ -2507,7 +2741,7 @@ private:
 		if (captionCount == 1) {
 			block.caption = ToRichText(std::move(caption));
 		}
-		return block;
+		return SplitGroupedMediaBlock(std::move(block));
 	}
 
 	[[nodiscard]] RichPage::Block makeMapBlock(::Data::InputVenue venue) const {
@@ -2543,7 +2777,9 @@ private:
 		}, _lifetime);
 		_session->uploader().documentReady(
 		) | rpl::on_next([=](const Storage::UploadedMedia &data) {
-			if (const auto attachment = findAttachment(data.fullId)) {
+			const auto attachment = findAttachment(data.fullId);
+			if (attachment
+				&& attachment->state == AttachmentState::Uploading) {
 				finalizeUploadedDocument(*attachment, data);
 			}
 		}, _lifetime);
@@ -2636,21 +2872,23 @@ private:
 			: QVector<MTPDocumentAttribute>(
 				1,
 				MTP_documentAttributeFilename(MTP_string(attachment.filename)));
-		_session->api().request(MTPmessages_UploadMedia(
-			MTP_flags(0),
-			MTPstring(),
-			_peer->input(),
-			MTP_inputMediaUploadedDocument(
-				MTP_flags(flags),
-				data.info.file,
-				data.info.thumb.value_or(MTPInputFile()),
-				MTP_string(attachment.filemime),
-				MTP_vector<MTPDocumentAttribute>(std::move(attributes)),
-				MTP_vector<MTPInputDocument>(std::move(stickers)),
-				data.info.videoCover.value_or(MTPInputPhoto()),
-				MTP_int(0),
-				MTP_int(0))
-		)).done([weak = base::make_weak(this), uploadId = attachment.uploadId](
+		attachment.finalizationRequestId = _session->api().request(
+			MTPmessages_UploadMedia(
+				MTP_flags(0),
+				MTPstring(),
+				_peer->input(),
+				MTP_inputMediaUploadedDocument(
+					MTP_flags(flags),
+					data.info.file,
+					data.info.thumb.value_or(MTPInputFile()),
+					MTP_string(attachment.filemime),
+					MTP_vector<MTPDocumentAttribute>(std::move(attributes)),
+					MTP_vector<MTPInputDocument>(std::move(stickers)),
+					data.info.videoCover.value_or(MTPInputPhoto()),
+					MTP_int(0),
+					MTP_int(0))
+			)
+		).done([weak = base::make_weak(this), uploadId = attachment.uploadId](
 				const MTPMessageMedia &result) {
 			if (const auto session = weak.get()) {
 				session->applyUploadedDocumentResult(uploadId, result);
@@ -2740,9 +2978,12 @@ private:
 		FullMsgId uploadId,
 		const MTPMessageMedia &result) {
 		const auto attachment = findAttachment(uploadId);
-		if (!attachment) {
+		if (!attachment
+			|| attachment->state != AttachmentState::Finalizing
+			|| !attachment->finalizationRequestId) {
 			return;
 		}
+		base::take(attachment->finalizationRequestId);
 		auto ok = false;
 		auto failed = false;
 		const auto fail = [&] {
@@ -2810,13 +3051,22 @@ private:
 	}
 
 	void markAttachmentFailed(FullMsgId uploadId) {
-		if (const auto attachment = findAttachment(uploadId)) {
-			attachment->state = AttachmentState::Failed;
-			showAttachmentFailedToast();
-			requestEditorUpdate();
-			retryRichDraftCloseSaveIfNeeded();
-			maybeContinueSubmittedRequest();
+		const auto attachment = findAttachment(uploadId);
+		if (!attachment
+			|| attachment->state == AttachmentState::Ready
+			|| attachment->state == AttachmentState::Failed) {
+			return;
 		}
+		const auto requestId = base::take(
+			attachment->finalizationRequestId);
+		attachment->state = AttachmentState::Failed;
+		if (requestId) {
+			_session->api().request(requestId).cancel();
+		}
+		showAttachmentFailedToast();
+		requestEditorUpdate();
+		retryRichDraftCloseSaveIfNeeded();
+		maybeContinueSubmittedRequest();
 	}
 
 	void requestEditorUpdate() {
@@ -3046,7 +3296,6 @@ private:
 	[[nodiscard]] std::optional<::Data::Draft> prepareRichDraftForAutosave() const;
 	void saveRichDraftNow();
 	void startCloseWithDraftSave();
-	void startCloseWithDraftSaveThen(Fn<void()> continuation);
 	void saveRichDraftForClose(uint64 generation);
 	void retryRichDraftCloseSaveIfNeeded();
 	void closeWithDraftSaveDone(uint64 generation);
@@ -3140,6 +3389,20 @@ private:
 		item.blockKind = blockKind;
 	}
 
+	void detachMediaBatchUpload(FullMsgId uploadId) {
+		for (auto &batch : _mediaBatches) {
+			for (auto &item : batch.items) {
+				if (item.uploadId != uploadId) {
+					continue;
+				}
+				item.uploadId = FullMsgId();
+				if (item.state == MediaBatchItemState::Ready) {
+					item.state = MediaBatchItemState::Skipped;
+				}
+			}
+		}
+	}
+
 	void eraseAttachment(FullMsgId uploadId) {
 		const auto i = std::find_if(
 			_attachments.begin(),
@@ -3150,10 +3413,17 @@ private:
 		if (i == _attachments.end()) {
 			return;
 		}
-		if (i->state != AttachmentState::Ready) {
-			_session->uploader().cancel(i->uploadId);
-		}
+		const auto erasedUploadId = i->uploadId;
+		const auto state = i->state;
+		const auto finalizationRequestId = i->finalizationRequestId;
+		detachMediaBatchUpload(erasedUploadId);
 		_attachments.erase(i);
+		if (state != AttachmentState::Ready) {
+			_session->uploader().cancel(erasedUploadId);
+		}
+		if (finalizationRequestId) {
+			_session->api().request(finalizationRequestId).cancel();
+		}
 	}
 
 	[[nodiscard]] bool hasUninsertedMediaBatchUpload(
@@ -3170,27 +3440,26 @@ private:
 	}
 
 	void abandonMediaBatch(uint64 batchId) {
-		const auto batch = findMediaBatch(batchId);
-		if (!batch) {
+		const auto i = std::find_if(
+			_mediaBatches.begin(),
+			_mediaBatches.end(),
+			[=](const MediaBatch &batch) {
+				return batch.id == batchId;
+			});
+		if (i == _mediaBatches.end()) {
 			return;
 		}
-		for (auto &item : batch->items) {
+		auto uploadIds = std::vector<FullMsgId>();
+		for (const auto &item : i->items) {
 			if (item.state == MediaBatchItemState::Ready
 				&& item.uploadId) {
-				eraseAttachment(item.uploadId);
-			}
-			if (item.state != MediaBatchItemState::Inserted) {
-				item.state = MediaBatchItemState::Skipped;
+				uploadIds.push_back(item.uploadId);
 			}
 		}
-		_mediaBatches.erase(
-			std::remove_if(
-				_mediaBatches.begin(),
-				_mediaBatches.end(),
-				[=](const MediaBatch &batch) {
-					return batch.id == batchId;
-				}),
-			_mediaBatches.end());
+		_mediaBatches.erase(i);
+		for (const auto &uploadId : uploadIds) {
+			eraseAttachment(uploadId);
+		}
 		maybeContinueDeferredSubmit();
 	}
 
@@ -3231,7 +3500,11 @@ private:
 					}
 				}
 			} else {
-				blocks.push_back(makeGroupedAttachmentBlock(uploadIds));
+				auto grouped = makeGroupedAttachmentBlocks(uploadIds);
+				blocks.insert(
+					blocks.end(),
+					std::make_move_iterator(grouped.begin()),
+					std::make_move_iterator(grouped.end()));
 			}
 			emittedUploadIds.insert(
 				emittedUploadIds.end(),
@@ -3536,19 +3809,19 @@ private:
 		for (auto &attachment : _attachments) {
 			refreshAttachmentLocators(page, attachment);
 		}
-		for (auto i = _attachments.begin(); i != _attachments.end();) {
-			if (!i->blockLocators.empty()) {
-				++i;
+		auto uploadIds = std::vector<FullMsgId>();
+		for (const auto &attachment : _attachments) {
+			if (!attachment.blockLocators.empty()) {
 				continue;
 			}
-			if (hasUninsertedMediaBatchUpload(i->uploadId)) {
-				++i;
+			if (hasUninsertedMediaBatchUpload(attachment.uploadId)
+				|| _deferredUploads.contains(attachment.uploadId)) {
 				continue;
 			}
-			if (i->state != AttachmentState::Ready) {
-				_session->uploader().cancel(i->uploadId);
-			}
-			i = _attachments.erase(i);
+			uploadIds.push_back(attachment.uploadId);
+		}
+		for (const auto &uploadId : uploadIds) {
+			eraseAttachment(uploadId);
 		}
 	}
 
@@ -3744,6 +4017,7 @@ private:
 	const FullMsgId _articleId;
 	std::optional<Api::SendAction> _composeAction;
 	const SendMenu::Details _sendMenuDetails;
+	ComposeBoxOptions _composeOptions;
 	const std::optional<EditedItemSnapshot> _edited;
 	const std::optional<ComposeThreadKey> _composeThreadKey;
 	const std::shared_ptr<RichPage> _page;
@@ -3757,8 +4031,6 @@ private:
 	QPointer<Widget> _editor;
 	std::unique_ptr<WindowHost> _windowHost;
 	std::shared_ptr<ArticleSession> _backgroundHold;
-	Fn<void()> _closeDraftSaveContinuation;
-	Fn<void()> _onWindowClosedContinuation;
 	std::shared_ptr<const RichPage> _submittedPage;
 	std::vector<AttachmentRecord> _attachments;
 	base::flat_map<uint64, QImage> _originalMediaImages;
@@ -3767,12 +4039,22 @@ private:
 	std::vector<MediaBatch> _mediaBatches;
 	TaskQueue _attachmentPrepareQueue;
 	base::Timer _richDraftAutosaveTimer;
+	base::weak_qptr<Ui::GenericBox> _scheduleBox;
 	base::weak_qptr<Ui::GenericBox> _closeDraftSaveBox;
 	rpl::lifetime _editorAutosaveLifetime;
 	rpl::lifetime _photoEditSourceLifetime;
 	rpl::lifetime _lifetime;
+	struct DeferredMediaBatch {
+		std::vector<std::optional<RichPage::Block>> results;
+		std::vector<FullMsgId> uploads;
+		Fn<void(std::vector<std::optional<RichPage::Block>>)> done;
+		int left = 0;
+	};
+	base::flat_map<uint64, DeferredMediaBatch> _deferredBatches;
+	base::flat_set<FullMsgId> _deferredUploads;
 	uint64 _prepareBatchId = 0;
 	uint64 _rejectedToastBatchId = 0;
+	uint64 _scheduleBoxGeneration = 0;
 	uint64 _closeDraftSaveGeneration = 0;
 	mtpRequestId _closeDraftSaveRequestId = 0;
 	int _pendingAttachmentPrepareCount = 0;
@@ -3787,9 +4069,6 @@ private:
 
 void ArticleSession::editorCreated(not_null<Widget*> editor) {
 	_editor = editor;
-	if (!_composeAction || !_composeThreadKey) {
-		return;
-	}
 	_editorAutosaveLifetime.destroy();
 	editor->autosaveEvents(
 	) | rpl::on_next([weak = weak_from_this()](Widget::AutosaveEvent event) {
@@ -3810,6 +4089,9 @@ void ArticleSession::restartRichDraftAutosave() {
 }
 
 void ArticleSession::handleRichDraftAutosave(Widget::AutosaveEvent event) {
+	if (event.type == Widget::AutosaveEventType::StructuralMutation) {
+		refreshAttachmentLocatorsAndDropMissing();
+	}
 	if (!_composeAction
 		|| !_composeThreadKey
 		|| !_windowHost
@@ -3873,7 +4155,7 @@ std::optional<::Data::Draft> ArticleSession::prepareRichDraftForAutosave() const
 		_session,
 		*richMessage,
 		SerializeInputRichMessageMode::Draft);
-	if (serialized.status == SerializeInputRichMessageStatus::Failed) {
+	if (serialized.status != SerializeInputRichMessageStatus::Success) {
 		return std::nullopt;
 	}
 	draft.richMessage = std::move(richMessage);
@@ -3925,11 +4207,6 @@ void ArticleSession::startCloseWithDraftSave() {
 	const auto generation = ++_closeDraftSaveGeneration;
 	showCloseDraftSavingBox(generation);
 	saveRichDraftForClose(generation);
-}
-
-void ArticleSession::startCloseWithDraftSaveThen(Fn<void()> continuation) {
-	_closeDraftSaveContinuation = std::move(continuation);
-	startCloseWithDraftSave();
 }
 
 void ArticleSession::saveRichDraftForClose(uint64 generation) {
@@ -4010,9 +4287,6 @@ void ArticleSession::closeWithDraftSaveDone(uint64 generation) {
 	if (_windowHost) {
 		_windowHost->close();
 	}
-	if (const auto continuation = base::take(_closeDraftSaveContinuation)) {
-		continuation();
-	}
 }
 
 void ArticleSession::closeWithDraftSaveFailed(uint64 generation, QString error) {
@@ -4031,7 +4305,6 @@ void ArticleSession::closeNowWithoutDraftSave(uint64 generation) {
 	if (!_closeDraftSaveActive || generation != _closeDraftSaveGeneration) {
 		return;
 	}
-	_closeDraftSaveContinuation = nullptr;
 	_closeDraftSaveActive = false;
 	_closeDraftSaveWaiting = false;
 	_closeDraftSaveRequestId = 0;
@@ -4045,7 +4318,6 @@ void ArticleSession::cancelCloseWithDraftSave(uint64 generation) {
 	if (!_closeDraftSaveActive || generation != _closeDraftSaveGeneration) {
 		return;
 	}
-	_closeDraftSaveContinuation = nullptr;
 	_closeDraftSaveActive = false;
 	_closeDraftSaveWaiting = false;
 	_closeDraftSaveRequestId = 0;
@@ -4134,45 +4406,53 @@ void ArticleSession::showCloseDraftSaveFailedBox(
 	}));
 }
 
-bool ArticleSession::SaveOpenComposeDraftThen(
+bool ArticleSession::ActivateEditWindow(
 		not_null<Main::Session*> session,
-		PeerId peerId,
-		MsgId topicRootId,
-		PeerId monoforumPeerId,
-		Fn<void()> onSaved) {
-	const auto entry = LookupComposeThreadEntry(
-		ComposeKey(session, peerId, topicRootId, monoforumPeerId));
-	const auto strong = entry
-		? entry->articleSession.lock()
-		: nullptr;
-	if (!strong) {
-		return false;
-	}
-	strong->startCloseWithDraftSaveThen(std::move(onSaved));
-	return true;
-}
-
-bool ArticleSession::RequestCloseOpenEditWindowThen(
-		not_null<Main::Session*> session,
-		not_null<PeerData*> peer,
-		Fn<void()> onClosed) {
+		FullMsgId itemId) {
 	for (const auto &weak : Live()) {
 		const auto strong = weak.lock();
 		if (!strong
 			|| strong->_mode != Mode::Edit
 			|| strong->_session != session
-			|| strong->_peer != peer
+			|| strong->_articleId != itemId
 			|| !strong->_windowHost) {
 			continue;
 		}
-		strong->_onWindowClosedContinuation = std::move(onClosed);
-		strong->_windowHost->activateClose();
+		strong->focusWindow();
 		return true;
 	}
 	return false;
 }
 
+std::shared_ptr<ChatHelpers::Show> ArticleSession::ActiveShow(
+		not_null<Main::Session*> session) {
+	const auto active = QApplication::activeWindow();
+	if (!active) {
+		return nullptr;
+	}
+	for (const auto &weak : Live()) {
+		const auto strong = weak.lock();
+		if (!strong
+			|| strong->_session != session
+			|| !strong->_windowHost) {
+			continue;
+		}
+		const auto show = strong->_editorShow;
+		if (show
+			&& show->valid()
+			&& (show->toastParent()->window() == active)) {
+			return show;
+		}
+	}
+	return nullptr;
+}
+
 } // namespace
+
+std::shared_ptr<ChatHelpers::Show> ActiveWindowShow(
+		not_null<Main::Session*> session) {
+	return ArticleSession::ActiveShow(session);
+}
 
 void ShowRichMessagesPremiumToast(std::shared_ptr<ChatHelpers::Show> show) {
 	if (!show) {
@@ -4248,7 +4528,8 @@ void OfferRichMessagePremiumChoice(
 		std::shared_ptr<ChatHelpers::Show> show,
 		not_null<Main::Session*> session,
 		const RichPage &page,
-		Fn<void()> sendWithoutFormatting) {
+		Fn<void()> sendWithoutFormatting,
+		bool save) {
 	if (!show) {
 		return;
 	}
@@ -4328,7 +4609,9 @@ void OfferRichMessagePremiumChoice(
 		const auto plain = box->addRow(
 			object_ptr<Ui::RoundButton>(
 				box,
-				tr::lng_article_premium_choice_plain(),
+				(save
+					? tr::lng_article_premium_choice_plain_save()
+					: tr::lng_article_premium_choice_plain()),
 				st::defaultLightButton),
 			st::boxRowPadding,
 			style::al_justify);
@@ -4362,28 +4645,22 @@ bool CanAuthorRichMessages(not_null<Main::Session*> session) {
 	return RichMessagePostingMode(session) != RichMessagePosting::Disabled;
 }
 
-bool CheckRichMessagesPremium(
-		not_null<Window::SessionController*> controller) {
-	if (!CanAuthorRichMessages(&controller->session())) {
-		return false;
-	}
-	if (CanUseRichMessages(&controller->session())) {
-		return true;
-	}
-	ShowRichMessagesPremiumToast(controller->uiShow());
-	return false;
-}
-
 void ShowComposeBox(
 		not_null<Window::SessionController*> controller,
 		not_null<PeerData*> peer,
 		Api::SendAction action,
-		SendMenu::Details sendMenuDetails) {
+		SendMenu::Details sendMenuDetails,
+		TextWithTags fieldText,
+		Fn<void()> onMigrated,
+		ComposeBoxOptions options) {
 	ArticleSession::ShowCompose(
 		&controller->session(),
 		peer,
 		std::move(action),
 		std::move(sendMenuDetails),
+		std::move(fieldText),
+		std::move(onMigrated),
+		std::move(options),
 		base::make_weak(controller));
 }
 
@@ -4393,13 +4670,9 @@ void ShowEditBox(
 	if (!CanAuthorRichMessages(&controller->session())) {
 		return;
 	}
-	if (!CanUseRichMessages(&controller->session())) {
-		ShowRichMessagesPremiumToast(controller->uiShow());
-		return;
-	}
 	const auto weak = base::make_weak(controller);
 	const auto itemId = item->fullId();
-	Core::App().iv().resolveRichMessage(controller, item, [=](
+	Core::App().iv().resolveRichMessage(&controller->session(), item, [=](
 			std::shared_ptr<const RichPage> page) {
 		const auto strong = weak.get();
 		const auto current = strong
@@ -4422,10 +4695,14 @@ void ShowEditBox(
 void ShowEditFromFieldBox(
 		not_null<Window::SessionController*> controller,
 		not_null<HistoryItem*> item,
-		Api::SendAction action) {
+		Api::SendAction action,
+		std::optional<TextWithTags> fieldTextOverride,
+		Fn<void()> fieldMigratedOverride) {
 	ArticleSession::ShowEditFromField(
 		item,
 		std::move(action),
+		std::move(fieldTextOverride),
+		std::move(fieldMigratedOverride),
 		base::make_weak(controller));
 }
 
@@ -4439,28 +4716,10 @@ bool IsComposeBoxOpen(
 	return entry && !entry->articleSession.expired();
 }
 
-bool SaveOpenComposeDraftThenEdit(
+bool ActivateEditWindowFor(
 		not_null<Main::Session*> session,
-		PeerId peerId,
-		MsgId topicRootId,
-		PeerId monoforumPeerId,
-		Fn<void()> onSaved) {
-	return ArticleSession::SaveOpenComposeDraftThen(
-		session,
-		peerId,
-		topicRootId,
-		monoforumPeerId,
-		std::move(onSaved));
-}
-
-bool RequestCloseOpenEditWindowThenCompose(
-		not_null<Main::Session*> session,
-		not_null<PeerData*> peer,
-		Fn<void()> onClosed) {
-	return ArticleSession::RequestCloseOpenEditWindowThen(
-		session,
-		peer,
-		std::move(onClosed));
+		FullMsgId itemId) {
+	return ArticleSession::ActivateEditWindow(session, itemId);
 }
 
 rpl::producer<bool> FieldVisibleValue(
@@ -4471,33 +4730,6 @@ rpl::producer<bool> FieldVisibleValue(
 	return ComposeThreadEntryFor(
 		ComposeKey(session, peerId, topicRootId, monoforumPeerId)
 	).fieldVisible.value();
-}
-
-void RegisterThreadFieldBridge(
-		not_null<Main::Session*> session,
-		PeerId peerId,
-		MsgId topicRootId,
-		PeerId monoforumPeerId,
-		ThreadFieldDraftReader readDraft,
-		ThreadFieldDraftSaver saveDraft,
-		ThreadFieldMigratedAway migratedAway) {
-	auto &entry = ComposeThreadEntryFor(
-		ComposeKey(session, peerId, topicRootId, monoforumPeerId));
-	entry.readDraft = std::move(readDraft);
-	entry.saveDraft = std::move(saveDraft);
-	entry.migratedAway = std::move(migratedAway);
-}
-
-void UnregisterThreadFieldBridge(
-		not_null<Main::Session*> session,
-		PeerId peerId,
-		MsgId topicRootId,
-		PeerId monoforumPeerId) {
-	auto &entry = ComposeThreadEntryFor(
-		ComposeKey(session, peerId, topicRootId, monoforumPeerId));
-	entry.readDraft = nullptr;
-	entry.saveDraft = nullptr;
-	entry.migratedAway = nullptr;
 }
 
 void CloseAllWindows() {
