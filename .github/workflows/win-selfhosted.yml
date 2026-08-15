@@ -38,14 +38,14 @@ jobs:
           git submodule update --init --recursive --force
 
       - name: Provide DesktopPrivate signing keys.
-        shell: bash
+        shell: powershell
         env:
           PACKER_B64: ${{ secrets.DESKTOP_PRIVATE_PACKER_B64 }}
           ALPHA_B64: ${{ secrets.DESKTOP_PRIVATE_ALPHA_B64 }}
         run: |
-          mkdir -p "/c/Users/Administrator/DesktopPrivate"
-          echo "$PACKER_B64" | base64 -d > "/c/Users/Administrator/DesktopPrivate/packer_private.h"
-          echo "$ALPHA_B64" | base64 -d > "/c/Users/Administrator/DesktopPrivate/alpha_private.h"
+          New-Item -ItemType Directory -Force -Path $env:PRIVATE_DIR | Out-Null
+          [IO.File]::WriteAllBytes("$env:PRIVATE_DIR\packer_private.h", [Convert]::FromBase64String(($env:PACKER_B64 -replace '\s','')))
+          [IO.File]::WriteAllBytes("$env:PRIVATE_DIR\alpha_private.h", [Convert]::FromBase64String(($env:ALPHA_B64 -replace '\s','')))
 
       - uses: Eden-CI/msvc-dev-cmd@master
         name: Initialize MSVC 14.44 environment.
