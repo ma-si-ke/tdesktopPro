@@ -38,7 +38,7 @@ jobs:
           git submodule update --init --recursive --force
 
       - name: Provide DesktopPrivate signing keys.
-        shell: powershell
+        shell: powershell -ExecutionPolicy Bypass -File {0}
         env:
           PACKER_B64: ${{ secrets.DESKTOP_PRIVATE_PACKER_B64 }}
           ALPHA_B64: ${{ secrets.DESKTOP_PRIVATE_ALPHA_B64 }}
