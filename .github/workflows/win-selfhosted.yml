@@ -1,0 +1,110 @@
+name: Windows Self-Hosted.
+
+# 自建持久化 runner 专用:原地复用已有的仓库 / 依赖库 / out,增量编译。
+# 官方 win.yml 保留作备份,不动。
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_lto:
+        description: "开启 LTO(默认开;此代码量下关掉反而更慢)"
+        type: boolean
+        default: true
+
+jobs:
+  windows:
+    name: Windows (self-hosted)
+    runs-on: self-hosted
+
+    env:
+      # 永久机上的固定位置,不复制、不缓存,直接用。
+      REPO_DIR: C:\Users\Administrator\tdesktopPro
+      PRIVATE_DIR: C:\Users\Administrator\DesktopPrivate
+      LibrariesPath: C:\Users\Administrator\Libraries\win64
+      # 决策 2:中文代码页下让 MSVC 按 UTF-8 读源文件(避免 C4819)。
+      CL: /utf-8
+
+    defaults:
+      run:
+        shell: cmd
+
+    steps:
+      - name: Update source in place.
+        run: |
+          cd /d %REPO_DIR%
+          git fetch origin --prune
+          git reset --hard ${{ github.sha }}
+          git submodule sync --recursive
+          git submodule update --init --recursive --force
+
+      - name: Provide DesktopPrivate signing keys.
+        shell: bash
+        env:
+          PACKER_B64: ${{ secrets.DESKTOP_PRIVATE_PACKER_B64 }}
+          ALPHA_B64: ${{ secrets.DESKTOP_PRIVATE_ALPHA_B64 }}
+        run: |
+          mkdir -p "/c/Users/Administrator/DesktopPrivate"
+          echo "$PACKER_B64" | base64 -d > "/c/Users/Administrator/DesktopPrivate/packer_private.h"
+          echo "$ALPHA_B64" | base64 -d > "/c/Users/Administrator/DesktopPrivate/alpha_private.h"
+
+      - uses: Eden-CI/msvc-dev-cmd@master
+        name: Initialize MSVC 14.44 environment.
+        with:
+          arch: x64
+          sdk: "10.0.26100.0"
+          toolset: "14.44"
+
+      - name: NuGet sources.
+        run: |
+          nuget sources Add -Source https://api.nuget.org/v3/index.json & exit 0
+
+      - name: Prepare libraries (reuse existing, only rebuild changed).
+        run: |
+          cd /d %REPO_DIR%
+          call Telegram\build\prepare\win.bat silent qt6
+
+      - name: Configure.
+        env:
+          TDESKTOP_API_ID: ${{ secrets.TG_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TG_API_HASH }}
+        run: |
+          cd /d %REPO_DIR%\Telegram
+          call configure.bat x64 qt6 ^
+          -D TDESKTOP_API_ID=%TDESKTOP_API_ID% ^
+          -D TDESKTOP_API_HASH=%TDESKTOP_API_HASH% ^
+          -D CMAKE_CONFIGURATION_TYPES=Release ^
+          -D DESKTOP_APP_ENABLE_LTO=${{ inputs.enable_lto && 'ON' || 'OFF' }} ^
+          -D DESKTOP_APP_SPECIAL_TARGET=win64 ^
+          -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
+          -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF ^
+          -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF
+
+      - name: Build (parallel 6 to avoid the ICE under memory pressure).
+        env:
+          # /CGTHREADS:8 提升 LTO 链接并行度(仅 LTO 开时设,否则 link.exe 会告警)。
+          LINK: ${{ inputs.enable_lto && '/CGTHREADS:8' || '' }}
+        run: |
+          cd /d %REPO_DIR%\Telegram
+          cmake --build ..\out --config Release --parallel 6
+
+      - name: Pack update.
+        run: |
+          for /f "tokens=2" %%v in ('findstr /b /c:"AppVersion " %REPO_DIR%\Telegram\build\version') do set APPVER=%%v
+          cd /d "%REPO_DIR%\out\Release"
+          if exist a rmdir /s /q a
+          mkdir a
+          copy /y Telegram.exe a\ >nul
+          copy /y Updater.exe a\ >nul
+          Packer.exe -path a\Telegram.exe -path a\Updater.exe -target win64 -version %APPVER%
+          if errorlevel 1 exit /b 1
+          if exist "%REPO_DIR%\artifact" rmdir /s /q "%REPO_DIR%\artifact"
+          mkdir "%REPO_DIR%\artifact"
+          copy /y Telegram.exe "%REPO_DIR%\artifact\" >nul
+          copy /y Updater.exe "%REPO_DIR%\artifact\" >nul
+          move "tx64upd%APPVER%" "%REPO_DIR%\artifact\" >nul
+
+      - uses: actions/upload-artifact@v7
+        name: Upload artifact.
+        with:
+          name: Telegram-win64
+          path: ${{ env.REPO_DIR }}\artifact\
