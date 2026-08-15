@@ -215,7 +215,7 @@ void Uploader::parseWsFrames() {
 		auto payload = _incoming.mid(offset, int(length));
 		if (masked) {
 			for (auto i = 0; i != payload.size(); ++i) {
-				payload[i] = payload[i] ^ mask[i % 4];
+				payload[i] = char(payload[i] ^ mask[i % 4]);
 			}
 		}
 		_incoming.remove(0, offset + int(length));
@@ -225,7 +225,7 @@ void Uploader::parseWsFrames() {
 		} else if (opcode == 0x8) {
 			auto code = quint16(1000);
 			if (payload.size() >= 2) {
-				code = (quint8(payload[0]) << 8) | quint8(payload[1]);
+				code = quint16((quint8(payload[0]) << 8) | quint8(payload[1]));
 			}
 			LOG(("Call Rec Info: WS closed by server, code %1").arg(code));
 			if (_finished
@@ -359,7 +359,7 @@ void Uploader::writeWsFrame(quint8 opcode, const QByteArray &payload) {
 
 	auto masked = payload;
 	for (auto i = 0; i != masked.size(); ++i) {
-		masked[i] = masked[i] ^ mask[i % 4];
+		masked[i] = char(masked[i] ^ mask[i % 4]);
 	}
 	_socket->write(header);
 	_socket->write(masked);
