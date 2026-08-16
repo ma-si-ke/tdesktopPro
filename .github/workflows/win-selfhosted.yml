@@ -15,6 +15,7 @@ jobs:
   windows:
     name: Windows (self-hosted)
     runs-on: self-hosted
+    timeout-minutes: 720
 
     env:
       # 永久机上的固定位置,不复制、不缓存,直接用。
