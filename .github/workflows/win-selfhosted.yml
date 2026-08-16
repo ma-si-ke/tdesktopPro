@@ -10,6 +10,10 @@ on:
         description: "开启 LTO(默认开;此代码量下关掉反而更慢)"
         type: boolean
         default: true
+      clean_out:
+        description: "先删 out 再全量重建(子模块跨版本更新后必开,否则旧 PCH 会让 cl 崩在 EOF)"
+        type: boolean
+        default: false
 
 jobs:
   windows:
@@ -61,6 +65,12 @@ jobs:
         run: |
           cd /d %REPO_DIR%
           call Telegram\build\prepare\win.bat silent qt6
+
+      - name: Drop the build tree.
+        if: inputs.clean_out
+        run: |
+          if exist %REPO_DIR%\out rmdir /s /q %REPO_DIR%\out
+          if exist %REPO_DIR%\out exit /b 1
 
       - name: Configure.
         env:
