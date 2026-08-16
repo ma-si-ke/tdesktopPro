@@ -91,14 +91,14 @@ jobs:
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF ^
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF
 
-      - name: Build (parallel 4 to avoid the ICE under memory pressure).
+      - name: Build (parallel 6 to avoid the ICE under memory pressure).
         env:
           # /CGTHREADS:8 提升 LTO 链接并行度(仅 LTO 开时设,否则 link.exe 会告警)。
           LINK: ${{ inputs.enable_lto && '/CGTHREADS:8' || '' }}
           CL: /utf-8
         run: |
           cd /d %REPO_DIR%\Telegram
-          cmake --build ..\out --config Release --parallel 4
+          cmake --build ..\out --config Release --parallel 6
 
       - name: Pack update.
         run: |
