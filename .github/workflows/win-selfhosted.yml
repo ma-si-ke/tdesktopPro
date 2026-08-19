@@ -21,8 +21,6 @@ jobs:
       REPO_DIR: C:\Users\Administrator\tdesktopPro
       PRIVATE_DIR: C:\Users\Administrator\DesktopPrivate
       LibrariesPath: C:\Users\Administrator\Libraries\win64
-      # 决策 2:中文代码页下让 MSVC 按 UTF-8 读源文件(避免 C4819)。
-      CL: /utf-8
 
     defaults:
       run:
@@ -67,6 +65,9 @@ jobs:
         env:
           TDESKTOP_API_ID: ${{ secrets.TG_API_ID }}
           TDESKTOP_API_HASH: ${{ secrets.TG_API_HASH }}
+          # 中文代码页下让 MSVC 按 UTF-8 读我们自己的源文件(避免 C4819)。
+          # 只给主程序设,第三方库自带 /source-charset,同时给会 D8016。
+          CL: /utf-8
         run: |
           cd /d %REPO_DIR%\Telegram
           call configure.bat x64 qt6 ^
@@ -83,6 +84,7 @@ jobs:
         env:
           # /CGTHREADS:8 提升 LTO 链接并行度(仅 LTO 开时设,否则 link.exe 会告警)。
           LINK: ${{ inputs.enable_lto && '/CGTHREADS:8' || '' }}
+          CL: /utf-8
         run: |
           cd /d %REPO_DIR%\Telegram
           cmake --build ..\out --config Release --parallel 6
