@@ -45,16 +45,12 @@ jobs:
           [IO.File]::WriteAllBytes("$env:PRIVATE_DIR\packer_private.h", [Convert]::FromBase64String(($env:PACKER_B64 -replace '\s','')))
           [IO.File]::WriteAllBytes("$env:PRIVATE_DIR\alpha_private.h", [Convert]::FromBase64String(($env:ALPHA_B64 -replace '\s','')))
 
-      # 14.44 目录名还是 35207,但文件已被 VS 更新换成 35228,
-      # 该 build 的 c1xx.dll 会 0xc0000005 崩溃(事件日志十余条)。
-      # 14.51 目录里是 36256,手动验证过 /GL + /LTCG 正常。
-      # 换 toolset 后必须删 out,否则 CMakeCache 里还指着旧编译器。
       - uses: Eden-CI/msvc-dev-cmd@master
-        name: Initialize MSVC 14.51 environment.
+        name: Initialize MSVC 14.44 environment.
         with:
           arch: x64
           sdk: "10.0.26100.0"
-          toolset: "14.51"
+          toolset: "14.44"
 
       - name: NuGet sources.
         run: |
