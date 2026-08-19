@@ -45,14 +45,14 @@ jobs:
           [IO.File]::WriteAllBytes("$env:PRIVATE_DIR\packer_private.h", [Convert]::FromBase64String(($env:PACKER_B64 -replace '\s','')))
           [IO.File]::WriteAllBytes("$env:PRIVATE_DIR\alpha_private.h", [Convert]::FromBase64String(($env:ALPHA_B64 -replace '\s','')))
 
-      # 14.44 被 VS 更新推到 35228,该 build 的 c1xx.dll 会 0xc0000005 崩溃
-      # (事件日志十余条),35207 已被覆盖回不去。14.51 是 VS 18.9 原配,已验证正常。
+      # 必须是 14.44.35207。VS 更新推出的 35228 会让 c1xx.dll 崩在 0xc0000005,
+      # 机器上要保持 VS 回滚后的状态,并关闭 VS 自动更新。
       - uses: Eden-CI/msvc-dev-cmd@master
-        name: Initialize MSVC 14.51 environment.
+        name: Initialize MSVC 14.44 environment.
         with:
           arch: x64
           sdk: "10.0.26100.0"
-          toolset: "14.51"
+          toolset: "14.44"
 
       - name: NuGet sources.
         run: |
