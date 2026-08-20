@@ -82,8 +82,9 @@ jobs:
 
       - name: Build (parallel 6 to avoid the ICE under memory pressure).
         env:
-          # /CGTHREADS:8 提升 LTO 链接并行度(仅 LTO 开时设,否则 link.exe 会告警)。
-          LINK: ${{ inputs.enable_lto && '/CGTHREADS:8' || '' }}
+          # /CGTHREADS 控制 LTO 链接期代码生成的并行度(仅 LTO 开时设,
+          # 否则 link.exe 会告警)。8 线程下 c2.dll 崩过 LNK1000,降到 4。
+          LINK: ${{ inputs.enable_lto && '/CGTHREADS:4' || '' }}
           CL: /utf-8
         run: |
           cd /d %REPO_DIR%\Telegram
