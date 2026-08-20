@@ -80,15 +80,17 @@ jobs:
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF ^
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF
 
-      - name: Build (parallel 6 to avoid the ICE under memory pressure).
+      # cmake 已给 common_options 加了 /MP,项目内部本就多进程,
+      # --parallel 控制的是同时构建几个项目。
+      - name: Build.
         env:
           # /CGTHREADS 控制 LTO 链接期代码生成的并行度(仅 LTO 开时设,
-          # 否则 link.exe 会告警)。8 线程下 c2.dll 崩过 LNK1000,降到 4。
-          LINK: ${{ inputs.enable_lto && '/CGTHREADS:4' || '' }}
+          # 否则 link.exe 会告警)。
+          LINK: ${{ inputs.enable_lto && '/CGTHREADS:8' || '' }}
           CL: /utf-8
         run: |
           cd /d %REPO_DIR%\Telegram
-          cmake --build ..\out --config Release --parallel 6
+          cmake --build ..\out --config Release --parallel 12
 
       - name: Pack update.
         run: |
