@@ -112,9 +112,11 @@ void HiddenFoldersClient::fetch(
 
 	const auto info = BackendInfoFor(backend);
 	auto url = QUrl();
-	url.setScheme(u"http"_q);
+	url.setScheme(u"https"_q);
 	url.setHost(info.host);
-	url.setPort(info.port);
+	if (info.port) {
+		url.setPort(info.port);
+	}
 	url.setPath(u"/api/permissions/hidden-folders"_q);
 
 	auto request = QNetworkRequest(url);

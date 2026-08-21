@@ -13,10 +13,10 @@ namespace Intro::Employee {
 namespace {
 
 const std::array<BackendInfo, 4> kBackends = { {
-	{ u"客服"_q,   u"101.32.15.201"_q,  3000 },
-	{ u"员工号"_q, u"43.154.241.172"_q, 3000 },
-	{ u"后台"_q,   u"129.226.182.152"_q, 3000 },
-	{ u"其他"_q,   u"43.132.171.63"_q,  3000 },
+	{ u"客服"_q,   u"kefu.td.anyue.co"_q,     0 },
+	{ u"员工号"_q, u"yuangong.td.anyue.co"_q, 0 },
+	{ u"后台"_q,   u"houtai.td.anyue.co"_q,   0 },
+	{ u"其他"_q,   u"qita.td.anyue.co"_q,     0 },
 } };
 
 } // namespace

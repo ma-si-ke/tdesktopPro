@@ -143,9 +143,11 @@ QUrl BackendUrl(not_null<Main::Session*> session, const QString &path) {
 	const auto info = Intro::Employee::BackendInfoFor(
 		session->account().employeeBackend());
 	auto url = QUrl();
-	url.setScheme(u"http"_q);
+	url.setScheme(u"https"_q);
 	url.setHost(info.host);
-	url.setPort(info.port);
+	if (info.port) {
+		url.setPort(info.port);
+	}
 	url.setPath(path);
 	return url;
 }
