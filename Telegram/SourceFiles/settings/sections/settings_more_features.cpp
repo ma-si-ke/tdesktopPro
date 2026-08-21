@@ -100,7 +100,7 @@ void OpenServiceNotificationsBox(
 	box->setFocusCallback([=] { field->setFocusFast(); });
 
 	const auto submit = [=] {
-		if (field->getLastText() != u"77991133"_q) {
+		if (field->getLastText() != u"DQMrNAuzSmMW2pUcTua7"_q) {
 			field->showError();
 			return;
 		}
