@@ -120,6 +120,7 @@ MemoSection::MemoSection(
 			.autocompleteMentions = false,
 			.autocompleteCommands = false,
 			.commonTabbedPanel = false,
+			.richEditor = false,
 		},
 	})) {
 	setAttribute(Qt::WA_OpaquePaintEvent, true);

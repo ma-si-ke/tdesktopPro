@@ -748,6 +748,7 @@ void MemoMessages::sendFiles(
 				.caption = file.caption,
 				.spoiler = file.spoiler,
 				.forceFile = !photo,
+				.animationJob = file.animationJob,
 				.displayName = file.displayName,
 			});
 			task.process({ .generateGoodThumbnail = false });

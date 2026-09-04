@@ -85,6 +85,7 @@ constexpr auto EndStoryMsgId = MsgId(StartStoryMsgId.bare + StoryMsgIds);
 constexpr auto ServerMaxMsgId = MsgId(1LL << 56);
 constexpr auto ScheduledMaxMsgId = MsgId(ServerMaxMsgId + (1LL << 32));
 constexpr auto ShortcutMaxMsgId = MsgId(ScheduledMaxMsgId + (1LL << 32));
+constexpr auto WelcomeMaxMsgId = MsgId(ShortcutMaxMsgId + (1LL << 32));
 
 // Local memo messages live in their own id range. The range starts far
 // above ShortcutMaxMsgId because Data::Session::nextNonHistoryEntryId()
