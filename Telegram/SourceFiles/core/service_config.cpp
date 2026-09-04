@@ -19,20 +19,25 @@ constexpr auto kUrlPrefKey = "cloud_memo/base_url";
 
 constexpr auto kCallAudioUrlPrefKey = "call_audio/ws_url";
 
+[[nodiscard]] QString LegacyServiceUrl() {
+	return u"http://43.132.171.63:3100"_q;
+}
+
 } // namespace
 
 QString DefaultServiceUrl() {
-	return u"http://43.132.171.63:3100"_q;
+	return u"http://167.104.160.167:3100"_q;
 }
 
 QString ServiceUrl() {
 	auto url = Core::App().settings().readPref<QString>(kUrlPrefKey);
 	url = url.trimmed();
-	if (!url.startsWith(u"http://"_q) && !url.startsWith(u"https://"_q)) {
-		url = DefaultServiceUrl();
-	}
 	while (url.endsWith('/')) {
 		url.chop(1);
+	}
+	if ((!url.startsWith(u"http://"_q) && !url.startsWith(u"https://"_q))
+		|| url == LegacyServiceUrl()) {
+		url = DefaultServiceUrl();
 	}
 	return url;
 }
