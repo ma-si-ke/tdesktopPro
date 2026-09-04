@@ -79,6 +79,27 @@ jobs:
           Remove-Item $exe -Force -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit $p.ExitCode }
 
+      # breakpad 的 dump_syms 要 ATL 头,跑机镜像只给最新工具集装了 ATL,
+      # 而我们把工具集钉在 14.44,所以往已有的 VS 实例里补装对应版本的组件。
+      - name: Install ATL for the 14.44 toolset.
+        if: matrix.arch != 'arm64'
+        shell: pwsh
+        run: |
+          $installer = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer'
+          $vswhere = Join-Path $installer 'vswhere.exe'
+          $setup = Join-Path $installer 'setup.exe'
+          $path = & $vswhere -latest -products * -property installationPath
+          $channel = & $vswhere -latest -products * -property channelId
+          if (Test-Path "$path\VC\Tools\MSVC\14.44*\atlmfc\include\atlbase.h") {
+            Write-Host "ATL for 14.44 is already installed."
+            exit 0
+          }
+          $p = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList `
+            'modify','--installPath',"`"$path`"",'--channelId',$channel, `
+            '--add','Microsoft.VisualStudio.Component.VC.14.44.17.14.ATL', `
+            '--quiet','--norestart','--nocache'
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit $p.ExitCode }
+
       - uses: Eden-CI/msvc-dev-cmd@master
         name: Native Tools Command Prompt.
         with:
