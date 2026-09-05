@@ -1,5 +1,5 @@
 # target: Telegram/lib_ui
-# purpose: trace popup submenu show / paint / mouse routing (SubmenuTrace: lines in log.txt)
+# purpose: trace popup submenu show / paint / mouse routing and Win32 focus messages (SubmenuTrace: lines in log.txt)
 diff --git a/ui/widgets/menu/menu.cpp b/ui/widgets/menu/menu.cpp
 index 5421134..877f1d0 100644
 --- a/ui/widgets/menu/menu.cpp
@@ -212,7 +212,7 @@ index 0787e80..0e22fe7 100644
  	}
  	const auto wasPressed = base::take(_mousePressed);
 diff --git a/ui/widgets/popup_menu.cpp b/ui/widgets/popup_menu.cpp
-index b29624c..88b6616 100644
+index b29624c..d705f9f 100644
 --- a/ui/widgets/popup_menu.cpp
 +++ b/ui/widgets/popup_menu.cpp
 @@ -20,6 +20,7 @@
@@ -223,7 +223,20 @@ index b29624c..88b6616 100644
  #include "ui/ui_utility.h"
  
  #include <QtGui/QtEvents>
-@@ -35,6 +36,46 @@ namespace {
+@@ -30,11 +31,179 @@
+ #include <private/qapplication_p.h>
+ #include <qpa/qplatformwindow_p.h>
+ 
++#ifdef Q_OS_WIN
++#include <QtCore/QAbstractNativeEventFilter>
++#ifndef NOMINMAX
++#define NOMINMAX
++#endif // NOMINMAX
++#include <windows.h>
++#endif // Q_OS_WIN
++
+ namespace Ui {
+ namespace {
  
  constexpr auto kSubmenuAimDelay = crl::time(300);
  
@@ -267,10 +280,139 @@ index b29624c..88b6616 100644
 +		: QStringLiteral("keyboard");
 +}
 +
++[[nodiscard]] QString TraceWindow(const QWindow *window) {
++	if (!window) {
++		return QStringLiteral("null");
++	}
++	const auto widget = QWidget::find(window->winId());
++	return QStringLiteral("%1(%2 type=%3 vis=%4)"
++	).arg(TracePtr(window)
++	).arg(widget
++		? QString::fromLatin1(widget->metaObject()->className())
++		: QStringLiteral("?")
++	).arg(int(window->type())
++	).arg(window->isVisible() ? 1 : 0);
++}
++
++#ifdef Q_OS_WIN
++[[nodiscard]] QString TraceHwnd(HWND hwnd) {
++	if (!hwnd) {
++		return QStringLiteral("0");
++	}
++	const auto widget = QWidget::find(reinterpret_cast<WId>(hwnd));
++	return QStringLiteral("%1(%2)"
++	).arg(TracePtr(hwnd)
++	).arg(widget
++		? QString::fromLatin1(widget->metaObject()->className())
++		: QStringLiteral("?"));
++}
++
++[[nodiscard]] QString TraceNativeState() {
++	return QStringLiteral("focus=%1 active=%2 foreground=%3 capture=%4"
++	).arg(TraceHwnd(GetFocus())
++	).arg(TraceHwnd(GetActiveWindow())
++	).arg(TraceHwnd(GetForegroundWindow())
++	).arg(TraceHwnd(GetCapture()));
++}
++
++[[nodiscard]] const char *TraceNativeName(UINT message) {
++	switch (message) {
++	case WM_MOUSEACTIVATE: return "WM_MOUSEACTIVATE";
++	case WM_SETFOCUS: return "WM_SETFOCUS";
++	case WM_KILLFOCUS: return "WM_KILLFOCUS";
++	case WM_ACTIVATE: return "WM_ACTIVATE";
++	case WM_NCACTIVATE: return "WM_NCACTIVATE";
++	case WM_ACTIVATEAPP: return "WM_ACTIVATEAPP";
++	case WM_CAPTURECHANGED: return "WM_CAPTURECHANGED";
++	case WM_LBUTTONDOWN: return "WM_LBUTTONDOWN";
++	case WM_LBUTTONUP: return "WM_LBUTTONUP";
++	case WM_RBUTTONDOWN: return "WM_RBUTTONDOWN";
++	case WM_NCLBUTTONDOWN: return "WM_NCLBUTTONDOWN";
++	case WM_CANCELMODE: return "WM_CANCELMODE";
++	case WM_WINDOWPOSCHANGED: return "WM_WINDOWPOSCHANGED";
++	case WM_SHOWWINDOW: return "WM_SHOWWINDOW";
++	}
++	return nullptr;
++}
++
++class TraceNativeFilter final : public QAbstractNativeEventFilter {
++public:
++	bool nativeEventFilter(
++			const QByteArray &,
++			void *message,
++			native_event_filter_result *) override {
++		const auto popup = QApplication::activePopupWidget();
++		if (!popup) {
++			return false;
++		}
++		const auto msg = static_cast<MSG*>(message);
++		const auto name = TraceNativeName(msg->message);
++		if (!name) {
++			return false;
++		}
++		LOG((QStringLiteral("SubmenuTrace: native %1 hwnd=%2 wParam=%3 "
++			"wParamHwnd=%4 lParam=%5 lParamHwnd=%6 %7 activePopup=%8"
++		).arg(QString::fromLatin1(name)
++		).arg(TraceHwnd(msg->hwnd)
++		).arg(qulonglong(msg->wParam)
++		).arg(TraceHwnd(reinterpret_cast<HWND>(msg->wParam))
++		).arg(qlonglong(msg->lParam)
++		).arg(TraceHwnd(reinterpret_cast<HWND>(msg->lParam))
++		).arg(TraceNativeState()
++		).arg(TracePtr(popup))));
++		return false;
++	}
++};
++#else // Q_OS_WIN
++[[nodiscard]] QString TraceNativeState() {
++	return QString();
++}
++#endif // Q_OS_WIN
++
++void InstallTraceHooksOnce() {
++	static const auto installed = [] {
++#ifdef Q_OS_WIN
++		QCoreApplication::instance()->installNativeEventFilter(
++			new TraceNativeFilter());
++#endif // Q_OS_WIN
++		QObject::connect(
++			qApp,
++			&QGuiApplication::focusWindowChanged,
++			[](QWindow *window) {
++				LOG((QStringLiteral("SubmenuTrace: focusWindowChanged %1 "
++					"activePopup=%2 %3"
++				).arg(TraceWindow(window)
++				).arg(TracePtr(QApplication::activePopupWidget())
++				).arg(TraceNativeState())));
++			});
++		QObject::connect(
++			qApp,
++			&QApplication::focusChanged,
++			[](QWidget *was, QWidget *now) {
++				LOG((QStringLiteral("SubmenuTrace: focusChanged %1 -> %2 "
++					"activePopup=%3"
++				).arg(TraceWidget(was)
++				).arg(TraceWidget(now)
++				).arg(TracePtr(QApplication::activePopupWidget()))));
++			});
++		return true;
++	}();
++	Q_UNUSED(installed);
++}
++
  [[nodiscard]] bool PointInTriangle(
  		QPoint point,
  		QPoint apex,
-@@ -338,9 +379,51 @@ bool PopupMenu::empty() const {
+@@ -104,6 +273,8 @@ PopupMenu::PopupMenu(QWidget *parent, QMenu *menu, const style::PopupMenu &st)
+ void PopupMenu::init() {
+ 	using namespace rpl::mappers;
+ 
++	InstallTraceHooksOnce();
++
+ 	Integration::Instance().forcePopupMenuHideRequests(
+ 	) | rpl::on_next([=] {
+ 		hideMenu(true);
+@@ -338,9 +509,51 @@ bool PopupMenu::empty() const {
  	return _menu->empty();
  }
  
@@ -322,7 +464,7 @@ index b29624c..88b6616 100644
  	if (_a_show.animating()) {
  		const auto opacity = _a_opacity.value(_hiding ? 0. : 1.);
  		const auto progress = _a_show.value(1.);
-@@ -374,6 +457,8 @@ void PopupMenu::paintEvent(QPaintEvent *e) {
+@@ -374,6 +587,8 @@ void PopupMenu::paintEvent(QPaintEvent *e) {
  			showChildren();
  			_animatePhase = AnimatePhase::Shown;
  			Platform::AcceptAllMouseInput(this);
@@ -331,7 +473,7 @@ index b29624c..88b6616 100644
  		});
  	} else {
  		paintBg(p);
-@@ -390,9 +475,17 @@ void PopupMenu::paintBg(QPainter &p) {
+@@ -390,9 +605,17 @@ void PopupMenu::paintBg(QPainter &p) {
  }
  
  void PopupMenu::handleActivated(const Menu::CallbackData &data) {
@@ -349,7 +491,7 @@ index b29624c..88b6616 100644
  		clearSubmenuAim();
  		if (const auto currentSubmenu = base::take(_activeSubmenu)) {
  			currentSubmenu->hideMenu(true);
-@@ -407,6 +500,12 @@ QAction *PopupMenu::activeSubmenuAction() const {
+@@ -407,6 +630,12 @@ QAction *PopupMenu::activeSubmenuAction() const {
  not_null<PopupMenu::SubmenuAim*> PopupMenu::submenuAim() {
  	if (!_submenuAim) {
  		_submenuAim = std::make_unique<SubmenuAim>([=] {
@@ -362,7 +504,7 @@ index b29624c..88b6616 100644
  			if (isHidden() || _hiding) {
  				return;
  			}
-@@ -427,13 +526,29 @@ void PopupMenu::watchMouseMoves() {
+@@ -427,13 +656,29 @@ void PopupMenu::watchMouseMoves() {
  }
  
  void PopupMenu::handleMouseMoved(QPoint globalPosition) {
@@ -392,7 +534,7 @@ index b29624c..88b6616 100644
  		return;
  	}
  	const auto aim = _submenuAim.get();
-@@ -443,6 +558,7 @@ void PopupMenu::handleMouseMoved(QPoint globalPosition) {
+@@ -443,6 +688,7 @@ void PopupMenu::handleMouseMoved(QPoint globalPosition) {
  	if (owner
  		&& QRect(owner->mapToGlobal(QPoint()), owner->size()).contains(
  			globalPosition)) {
@@ -400,7 +542,7 @@ index b29624c..88b6616 100644
  		aim->apex = globalPosition;
  		aim->aiming = true;
  		aim->timer.cancel();
-@@ -450,9 +566,11 @@ void PopupMenu::handleMouseMoved(QPoint globalPosition) {
+@@ -450,9 +696,11 @@ void PopupMenu::handleMouseMoved(QPoint globalPosition) {
  	} else if (aim->aiming
  		&& !QGuiApplication::mouseButtons()
  		&& insideSubmenuAim(globalPosition)) {
@@ -412,7 +554,7 @@ index b29624c..88b6616 100644
  		clearSubmenuAim();
  	}
  }
-@@ -492,6 +610,12 @@ void PopupMenu::clearSubmenuAim() {
+@@ -492,6 +740,12 @@ void PopupMenu::clearSubmenuAim() {
  }
  
  void PopupMenu::handleTriggered(const Menu::CallbackData &data) {
@@ -425,7 +567,7 @@ index b29624c..88b6616 100644
  	if (!popupSubmenuFromAction(data)) {
  		_triggering = true;
  		if (!data.preventClose) {
-@@ -540,6 +664,13 @@ void PopupMenu::popupSubmenu(
+@@ -540,6 +794,13 @@ void PopupMenu::popupSubmenu(
  		_activeSubmenu = submenu;
  		_activeSubmenu->menu()->clearSelection();
  		_activeSubmenu->setAccessibleName(action->text());
@@ -439,7 +581,7 @@ index b29624c..88b6616 100644
  		if (_activeSubmenu->prepareGeometryFor(
  				geometry().topLeft() + p,
  				this,
-@@ -551,12 +682,17 @@ void PopupMenu::popupSubmenu(
+@@ -551,12 +812,17 @@ void PopupMenu::popupSubmenu(
  			if (!weak) {
  				return;
  			}
@@ -457,7 +599,7 @@ index b29624c..88b6616 100644
  			_activeSubmenu = nullptr;
  		}
  	}
-@@ -599,23 +735,35 @@ void PopupMenu::handleMouseMove(QPoint globalPosition) {
+@@ -599,23 +865,35 @@ void PopupMenu::handleMouseMove(QPoint globalPosition) {
  }
  
  void PopupMenu::handleMousePress(QPoint globalPosition) {
@@ -494,21 +636,22 @@ index b29624c..88b6616 100644
  		hideMenu();
  	}
  }
-@@ -642,6 +790,13 @@ void PopupMenu::mousePressEvent(QMouseEvent *e) {
+@@ -642,6 +920,14 @@ void PopupMenu::mousePressEvent(QMouseEvent *e) {
  	// Mouse presses, synthesized from touch events,
  	// should be ignored, if the touch, that caused
  	// them, started before the menu was created.
 +	LOG((QStringLiteral("SubmenuTrace: mousePressEvent pos=%1 global=%2 "
-+		"source=%3 childAt=%4 %5"
++		"source=%3 childAt=%4 %5 native: %6"
 +	).arg(TracePoint(e->pos())
 +	).arg(TracePoint(e->globalPos())
 +	).arg(int(e->source())
 +	).arg(TraceWidget(childAt(e->pos()))
-+	).arg(traceState())));
++	).arg(traceState()
++	).arg(TraceNativeState())));
  	if (e->source() != Qt::MouseEventSynthesizedBySystem
  		|| (Integration::Instance().touchCounterNow()
  			> _touchBeginCounter)) {
-@@ -681,6 +836,9 @@ bool PopupMenu::eventFilter(QObject *o, QEvent *e) {
+@@ -681,6 +967,9 @@ bool PopupMenu::eventFilter(QObject *o, QEvent *e) {
  }
  
  void PopupMenu::hideMenu(bool fast) {
@@ -518,7 +661,7 @@ index b29624c..88b6616 100644
  	if (isHidden() || (_hiding && !fast)) {
  		return;
  	}
-@@ -701,6 +859,9 @@ void PopupMenu::hideMenu(bool fast) {
+@@ -701,6 +990,9 @@ void PopupMenu::hideMenu(bool fast) {
  }
  
  void PopupMenu::childHiding(PopupMenu *child) {
@@ -528,7 +671,7 @@ index b29624c..88b6616 100644
  	if (_activeSubmenu && _activeSubmenu == child) {
  		_activeSubmenu = nullptr;
  	}
-@@ -840,6 +1001,10 @@ void PopupMenu::showStarted() {
+@@ -840,6 +1132,10 @@ void PopupMenu::showStarted() {
  }
  
  void PopupMenu::startShowAnimation() {
@@ -539,7 +682,7 @@ index b29624c..88b6616 100644
  	if (!_useTransparency) {
  		_a_show.stop();
  		update();
-@@ -864,6 +1029,8 @@ void PopupMenu::startShowAnimation() {
+@@ -864,6 +1160,8 @@ void PopupMenu::startShowAnimation() {
  	_animatePhase = AnimatePhase::StartShow;
  	hideChildren();
  	_a_show.start([this] { showAnimationCallback(); }, 0., 1., _st.showDuration);
@@ -548,7 +691,7 @@ index b29624c..88b6616 100644
  	fireCurrentShowState();
  }
  
-@@ -894,6 +1061,10 @@ void PopupMenu::opacityAnimationCallback() {
+@@ -894,6 +1192,10 @@ void PopupMenu::opacityAnimationCallback() {
  }
  
  void PopupMenu::showAnimationCallback() {
@@ -559,7 +702,7 @@ index b29624c..88b6616 100644
  	update();
  }
  
-@@ -1153,6 +1324,10 @@ bool PopupMenu::prepareGeometryFor(
+@@ -1153,6 +1455,10 @@ bool PopupMenu::prepareGeometryFor(
  }
  
  void PopupMenu::showPrepared(TriggeredSource source) {
@@ -570,12 +713,13 @@ index b29624c..88b6616 100644
  	startShowAnimation();
  
  	if (::Platform::IsWindows()) {
-@@ -1175,6 +1350,8 @@ void PopupMenu::showPrepared(TriggeredSource source) {
+@@ -1175,6 +1481,9 @@ void PopupMenu::showPrepared(TriggeredSource source) {
  	} else {
  		_menu->setShowSource(source);
  	}
-+	LOG((QStringLiteral("SubmenuTrace: showPrepared done %1"
-+	).arg(traceState())));
++	LOG((QStringLiteral("SubmenuTrace: showPrepared done %1 native: %2"
++	).arg(traceState()
++	).arg(TraceNativeState())));
  }
  
  void PopupMenu::setClearLastSeparator(bool clear) {
