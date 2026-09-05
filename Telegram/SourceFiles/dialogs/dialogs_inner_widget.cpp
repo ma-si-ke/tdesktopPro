@@ -249,7 +249,7 @@ constexpr auto kPreviewPostsLimit = 3;
 	Unexpected("Chat type filter in search results.");
 }
 
-[[nodiscard]] BareId ParseExactIdDigits(QStringView digits) {
+[[nodiscard]] BareId ParseExactIdDigits(const QString &digits) {
 	if (digits.isEmpty()) {
 		return 0;
 	}
