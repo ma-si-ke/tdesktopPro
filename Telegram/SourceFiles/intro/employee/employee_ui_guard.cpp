@@ -14,7 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_peer.h"
 #include "ui/rp_widget.h"
 
-#include <QtGui/QAction>
+#include <QAction>
 
 namespace Intro::Employee {
 
