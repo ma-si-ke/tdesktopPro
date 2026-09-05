@@ -7,3 +7,4 @@
 
 # Ensure lottie animations are treated as binary files
 *.lottie binary
+Telegram/build/diagnostics/*.patch -text
