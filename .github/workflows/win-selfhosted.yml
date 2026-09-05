@@ -59,7 +59,7 @@ jobs:
       - name: Prepare libraries (reuse existing, only rebuild changed).
         run: |
           cd /d %REPO_DIR%
-          call Telegram\build\prepare\win.bat silent qt6
+          call Telegram\build\prepare\win.bat silent
 
       - name: Configure.
         env:
@@ -70,7 +70,7 @@ jobs:
           CL: /utf-8
         run: |
           cd /d %REPO_DIR%\Telegram
-          call configure.bat x64 qt6 ^
+          call configure.bat x64 ^
           -D TDESKTOP_API_ID=%TDESKTOP_API_ID% ^
           -D TDESKTOP_API_HASH=%TDESKTOP_API_HASH% ^
           -D CMAKE_CONFIGURATION_TYPES=Release ^

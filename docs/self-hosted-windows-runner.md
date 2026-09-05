@@ -126,12 +126,12 @@ else { Write-Host "有未通过项,先补齐再继续。" -ForegroundColor Yello
    ```
 3. 编依赖(这一步 ~2 小时,冷):
    ```
-   tdesktopPro\Telegram\build\prepare\win.bat silent qt6
+   tdesktopPro\Telegram\build\prepare\win.bat silent
    ```
 4. 配置并编译本体:
    ```
    cd /d D:\TBuild\tdesktopPro\Telegram
-   configure.bat x64 qt6 -D TDESKTOP_API_ID=<你的api_id> -D TDESKTOP_API_HASH=<你的api_hash>
+   configure.bat x64 -D TDESKTOP_API_ID=<你的api_id> -D TDESKTOP_API_HASH=<你的api_hash>
    cmake --build ..\out --config Release --parallel
    ```
    出现 `out\Release\Telegram.exe` 即说明服务器环境 OK。
