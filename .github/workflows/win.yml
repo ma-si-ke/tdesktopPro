@@ -7,6 +7,10 @@ on:
         description: "开启 LTO(默认开;此代码量下关掉反而更慢，别关)"
         type: boolean
         default: true
+      diagnostics:
+        description: "诊断构建:构建前把 Telegram/build/diagnostics/*.patch 打到对应子模块上(只加日志),产物名加 diag 后缀,不要发布"
+        type: boolean
+        default: false
 
 jobs:
 
@@ -46,6 +50,25 @@ jobs:
         with:
           submodules: recursive
           path: ${{ env.TBUILD }}\${{ env.REPO_NAME }}
+
+      # 每个补丁文件的第一行写 "# target: <子模块路径>",git apply 会忽略
+      # diff 之前的说明文字。子模块指针不动,补丁只存在于这次构建里。
+      - name: Apply diagnostic patches.
+        if: inputs.diagnostics
+        shell: bash
+        run: |
+          cd "$TBUILD/$REPO_NAME"
+          shopt -s nullglob
+          for patch in Telegram/build/diagnostics/*.patch; do
+            target=$(sed -n 's/^# target: //p' "$patch" | head -1)
+            if [ -z "$target" ] || [ ! -d "$target" ]; then
+              echo "::error::$patch has no valid '# target:' line."
+              exit 1
+            fi
+            echo "Applying $patch to $target"
+            git -C "$target" apply --whitespace=nowarn "$PWD/$patch"
+            git -C "$target" status --short
+          done
 
       - name: First set up.
         shell: bash
@@ -230,6 +253,9 @@ jobs:
           fi
           echo "TDESKTOP_BUILD_DEFINE=$DEFINE" >> $GITHUB_ENV
 
+          if [ "${{ inputs.diagnostics }}" = "true" ]; then
+            ARTIFACT_NAME="${ARTIFACT_NAME} diag"
+          fi
           echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
 
           if [ -z "$TDESKTOP_API_ID" ] || [ -z "$TDESKTOP_API_HASH" ]; then

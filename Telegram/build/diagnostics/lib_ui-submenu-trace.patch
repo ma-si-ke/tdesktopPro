@@ -1,0 +1,602 @@
+# target: Telegram/lib_ui
+# purpose: trace popup submenu show / paint / mouse routing (SubmenuTrace: lines in log.txt)
+diff --git a/ui/widgets/menu/menu.cpp b/ui/widgets/menu/menu.cpp
+index 5421134..877f1d0 100644
+--- a/ui/widgets/menu/menu.cpp
++++ b/ui/widgets/menu/menu.cpp
+@@ -11,6 +11,7 @@
+ #include "ui/widgets/menu/menu_separator.h"
+ #include "ui/widgets/scroll_area.h"
+ #include "styles/style_widgets.h"
++#include "base/debug_log.h"
+ 
+ #include <QtGui/QtEvents>
+ #include <QtWidgets/QApplication>
+@@ -310,6 +311,19 @@ rpl::producer<ScrollToRequest> Menu::scrollToRequests() const {
+ void Menu::setShowSource(TriggeredSource source) {
+ 	_motions = 0;
+ 	_mousePopupPosition = QCursor::pos();
++	LOG((QStringLiteral("SubmenuTrace: Menu::setShowSource source=%1 "
++		"cursor=%2,%3 menu=%4 vis=%5 visibleRect=%6,%7 %8x%9"
++	).arg((source == TriggeredSource::Mouse)
++		? QStringLiteral("mouse")
++		: QStringLiteral("keyboard")
++	).arg(_mousePopupPosition.x()
++	).arg(_mousePopupPosition.y()
++	).arg(QString::number(reinterpret_cast<quintptr>(this), 16)
++	).arg(isVisible() ? 1 : 0
++	).arg(visibleRect().x()
++	).arg(visibleRect().y()
++	).arg(visibleRect().width()
++	).arg(visibleRect().height())));
+ 	const auto mouseSelection = (source == TriggeredSource::Mouse);
+ 	setSelected([&] {
+ 		if (mouseSelection) {
+@@ -355,6 +369,11 @@ void Menu::setForceWidth(int forceWidth) {
+ 
+ void Menu::updateSelected(QPoint globalPosition) {
+ 	if (_mouseSelectionFrozen) {
++		LOG((QStringLiteral("SubmenuTrace: Menu::updateSelected frozen, "
++			"pos=%1,%2 menu=%3"
++		).arg(globalPosition.x()
++		).arg(globalPosition.y()
++		).arg(QString::number(reinterpret_cast<quintptr>(this), 16))));
+ 		return;
+ 	}
+ 	const auto p = mapFromGlobal(globalPosition) - QPoint(0, _st.skip);
+@@ -473,6 +492,19 @@ void Menu::mouseMoved() {
+ 	_motions++;
+ }
+ 
++QString Menu::mouseMovedDebug(QPoint globalPosition) const {
++	return QStringLiteral("motions=%1 popupPos=%2,%3 pos=%4,%5 distance=%6 "
++		"dragDistance=%7 hasMouseMoved=%8"
++	).arg(_motions
++	).arg(_mousePopupPosition.x()
++	).arg(_mousePopupPosition.y()
++	).arg(globalPosition.x()
++	).arg(globalPosition.y()
++	).arg((_mousePopupPosition - globalPosition).manhattanLength()
++	).arg(QApplication::startDragDistance()
++	).arg(hasMouseMoved(globalPosition) ? 1 : 0);
++}
++
+ void Menu::mouseMoveEvent(QMouseEvent *e) {
+ 	handleMouseMove(e->globalPos());
+ }
+@@ -511,6 +543,33 @@ void Menu::handleMousePress(QPoint globalPosition) {
+ 		&& _lastSelectedByMouse)
+ 		? findSelectedAction()
+ 		: nullptr;
++	const auto selected = findSelectedAction();
++	LOG((QStringLiteral("SubmenuTrace: Menu::handleMousePress menu=%1 vis=%2 "
++		"global=%3,%4 local=%5,%6 rect=%7x%8 visibleRect=%9,%10 %11x%12 "
++		"inner=%13,%14 %15x%16 contains=%17 lastSelectedByMouse=%18 "
++		"frozen=%19 selected=%20 pressed=%21 delegate=%22"
++	).arg(QString::number(reinterpret_cast<quintptr>(this), 16)
++	).arg(isVisible() ? 1 : 0
++	).arg(globalPosition.x()
++	).arg(globalPosition.y()
++	).arg(localPosition.x()
++	).arg(localPosition.y()
++	).arg(width()
++	).arg(height()
++	).arg(visible.x()
++	).arg(visible.y()
++	).arg(visible.width()
++	).arg(visible.height()
++	).arg(inner.x()
++	).arg(inner.y()
++	).arg(inner.width()
++	).arg(inner.height()
++	).arg(inner.contains(localPosition) ? 1 : 0
++	).arg(_lastSelectedByMouse ? 1 : 0
++	).arg(_mouseSelectionFrozen ? 1 : 0
++	).arg(selected ? selected->action()->text() : QStringLiteral("none")
++	).arg(pressed ? 1 : 0
++	).arg(_mousePressDelegate ? 1 : 0)));
+ 	if (pressed) {
+ 		pressed->setClicked();
+ 	} else {
+@@ -521,6 +580,13 @@ void Menu::handleMousePress(QPoint globalPosition) {
+ }
+ 
+ void Menu::handleMouseRelease(QPoint globalPosition) {
++	LOG((QStringLiteral("SubmenuTrace: Menu::handleMouseRelease menu=%1 "
++		"global=%2,%3 pressedOutside=%4 vis=%5"
++	).arg(QString::number(reinterpret_cast<quintptr>(this), 16)
++	).arg(globalPosition.x()
++	).arg(globalPosition.y()
++	).arg(_pressedOutside ? 1 : 0
++	).arg(isVisible() ? 1 : 0)));
+ 	if (_pressedOutside) {
+ 		_pressedOutside = false;
+ 		updateSelected(globalPosition);
+diff --git a/ui/widgets/menu/menu.h b/ui/widgets/menu/menu.h
+index 4fa82b7..c0e365c 100644
+--- a/ui/widgets/menu/menu.h
++++ b/ui/widgets/menu/menu.h
+@@ -97,6 +97,10 @@ public:
+ 	}
+ 
+ 	[[nodiscard]] ItemBase *findSelectedAction() const;
++	[[nodiscard]] QString mouseMovedDebug(QPoint globalPosition) const;
++	[[nodiscard]] QRect visibleRectForTrace() const {
++		return visibleRect();
++	}
+ 
+ 	void setKeyPressDelegate(Fn<bool(int key)> delegate) {
+ 		_keyPressDelegate = std::move(delegate);
+diff --git a/ui/widgets/menu/menu_item_base.cpp b/ui/widgets/menu/menu_item_base.cpp
+index 0787e80..0e22fe7 100644
+--- a/ui/widgets/menu/menu_item_base.cpp
++++ b/ui/widgets/menu/menu_item_base.cpp
+@@ -7,6 +7,7 @@
+ #include "ui/widgets/menu/menu_item_base.h"
+ 
+ #include "ui/widgets/menu/menu.h"
++#include "base/debug_log.h"
+ 
+ #include <QtGui/QtEvents>
+ 
+@@ -69,6 +70,13 @@ void ItemBase::setIndex(int index) {
+ }
+ 
+ void ItemBase::setClicked(TriggeredSource source) {
++	LOG((QStringLiteral("SubmenuTrace: ItemBase::setClicked \"%1\" source=%2 "
++		"enabled=%3"
++	).arg(action()->text()
++	).arg((source == TriggeredSource::Mouse)
++		? QStringLiteral("mouse")
++		: QStringLiteral("keyboard")
++	).arg(isEnabled() ? 1 : 0)));
+ 	if (isEnabled()) {
+ 		_lastTriggeredSource = source;
+ 		_clicks.fire({});
+@@ -147,6 +155,15 @@ void ItemBase::enableMouseSelecting(not_null<RpWidget*> widget) {
+ 					: static_cast<QMouseEvent*>(e.get())->globalPos());
+ #endif // Qt < 6.0.0
+ 			}
++			if (type != QEvent::MouseMove) {
++				LOG((QStringLiteral("SubmenuTrace: ItemBase %1 \"%2\" "
++					"frozen=%3 selected=%4 vis=%5"
++				).arg(leave ? QStringLiteral("leave") : QStringLiteral("enter")
++				).arg(action()->text()
++				).arg(_menu->mouseSelectionFrozen() ? 1 : 0
++				).arg(isSelected() ? 1 : 0
++				).arg(isVisible() ? 1 : 0)));
++			}
+ 			if (!_menu->mouseSelectionFrozen()) {
+ 				setSelected(!leave);
+ 			}
+@@ -181,7 +198,20 @@ void ItemBase::keyReleaseEvent(QKeyEvent *e) {
+ }
+ 
+ void ItemBase::mousePressEvent(QMouseEvent *e) {
++	LOG((QStringLiteral("SubmenuTrace: ItemBase::mousePressEvent \"%1\" "
++		"button=%2 pos=%3,%4 enabled=%5 selected=%6 vis=%7 menuVis=%8 %9"
++	).arg(action()->text()
++	).arg(int(e->button())
++	).arg(e->pos().x()
++	).arg(e->pos().y()
++	).arg(isEnabled() ? 1 : 0
++	).arg(isSelected() ? 1 : 0
++	).arg(isVisible() ? 1 : 0
++	).arg(_menu->isVisible() ? 1 : 0
++	).arg(_menu->mouseMovedDebug(e->globalPos()))));
+ 	if (!_menu->hasMouseMoved(e->globalPos())) {
++		LOG((QStringLiteral("SubmenuTrace: ItemBase::mousePressEvent dropped, "
++			"mouse has not moved")));
+ 		return;
+ 	}
+ 	if (e->button() == Qt::LeftButton) {
+@@ -202,7 +232,20 @@ void ItemBase::mouseMoveEvent(QMouseEvent *e) {
+ }
+ 
+ void ItemBase::mouseReleaseEvent(QMouseEvent *e) {
++	LOG((QStringLiteral("SubmenuTrace: ItemBase::mouseReleaseEvent \"%1\" "
++		"button=%2 pos=%3,%4 inRect=%5 wasPressed=%6 enabled=%7 selected=%8 %9"
++	).arg(action()->text()
++	).arg(int(e->button())
++	).arg(e->pos().x()
++	).arg(e->pos().y()
++	).arg(rect().contains(e->pos()) ? 1 : 0
++	).arg(_mousePressed ? 1 : 0
++	).arg(isEnabled() ? 1 : 0
++	).arg(isSelected() ? 1 : 0
++	).arg(_menu->mouseMovedDebug(e->globalPos()))));
+ 	if (!_menu->hasMouseMoved(e->globalPos())) {
++		LOG((QStringLiteral("SubmenuTrace: ItemBase::mouseReleaseEvent dropped, "
++			"mouse has not moved")));
+ 		return;
+ 	}
+ 	const auto wasPressed = base::take(_mousePressed);
+diff --git a/ui/widgets/popup_menu.cpp b/ui/widgets/popup_menu.cpp
+index b29624c..88b6616 100644
+--- a/ui/widgets/popup_menu.cpp
++++ b/ui/widgets/popup_menu.cpp
+@@ -20,6 +20,7 @@
+ #include "ui/integration.h"
+ #include "ui/screen_reader_mode.h"
+ #include "base/timer.h"
++#include "base/debug_log.h"
+ #include "ui/ui_utility.h"
+ 
+ #include <QtGui/QtEvents>
+@@ -35,6 +36,46 @@ namespace {
+ 
+ constexpr auto kSubmenuAimDelay = crl::time(300);
+ 
++[[nodiscard]] QString TracePtr(const void *pointer) {
++	return QString::number(reinterpret_cast<quintptr>(pointer), 16);
++}
++
++[[nodiscard]] QString TraceRect(QRect rect) {
++	return QStringLiteral("%1,%2 %3x%4"
++	).arg(rect.x()).arg(rect.y()).arg(rect.width()).arg(rect.height());
++}
++
++[[nodiscard]] QString TracePoint(QPoint point) {
++	return QStringLiteral("%1,%2").arg(point.x()).arg(point.y());
++}
++
++[[nodiscard]] QString TraceWidget(const QWidget *widget) {
++	if (!widget) {
++		return QStringLiteral("null");
++	}
++	return QStringLiteral("%1(%2 vis=%3 hidden=%4 geom=%5)"
++	).arg(QString::fromLatin1(widget->metaObject()->className())
++	).arg(TracePtr(widget)
++	).arg(widget->isVisible() ? 1 : 0
++	).arg(widget->isHidden() ? 1 : 0
++	).arg(TraceRect(widget->geometry()));
++}
++
++[[nodiscard]] QString TraceAction(const QAction *action) {
++	return action
++		? (TracePtr(action)
++			+ QStringLiteral(" \"")
++			+ action->text()
++			+ QStringLiteral("\""))
++		: QStringLiteral("null");
++}
++
++[[nodiscard]] QString TraceSource(Menu::TriggeredSource source) {
++	return (source == Menu::TriggeredSource::Mouse)
++		? QStringLiteral("mouse")
++		: QStringLiteral("keyboard");
++}
++
+ [[nodiscard]] bool PointInTriangle(
+ 		QPoint point,
+ 		QPoint apex,
+@@ -338,9 +379,51 @@ bool PopupMenu::empty() const {
+ 	return _menu->empty();
+ }
+ 
++QString PopupMenu::traceState() const {
++	const auto handle = windowHandle();
++	return QStringLiteral("this=%1 parent=%2 vis=%3 hidden=%4 exposed=%5 "
++		"geom=%6 inner=%7 scroll=%8 menu=%9 menuVisibleRect=%10 "
++		"showAnim=%11 opacityAnim=%12 hiding=%13 phase=%14 transparency=%15 "
++		"activePopup=%16 activeSubmenu=%17"
++	).arg(TracePtr(this)
++	).arg(TracePtr(_parent)
++	).arg(isVisible() ? 1 : 0
++	).arg(isHidden() ? 1 : 0
++	).arg((handle && handle->isExposed()) ? 1 : 0
++	).arg(TraceRect(geometry())
++	).arg(TraceRect(_inner)
++	).arg(TraceWidget(_scroll.data())
++	).arg(TraceWidget(_menu.get())
++	).arg(TraceRect(_menu->visibleRectForTrace())
++	).arg(_a_show.animating() ? 1 : 0
++	).arg(_a_opacity.animating() ? 1 : 0
++	).arg(_hiding ? 1 : 0
++	).arg(int(_animatePhase.current())
++	).arg(_useTransparency ? 1 : 0
++	).arg(TracePtr(QApplication::activePopupWidget())
++	).arg(TracePtr(_activeSubmenu.data()));
++}
++
+ void PopupMenu::paintEvent(QPaintEvent *e) {
+ 	QPainter p(this);
+ 
++	const auto traceBranch = _a_show.animating()
++		? QStringLiteral("show-animating")
++		: _a_opacity.animating()
++		? QStringLiteral("opacity-animating")
++		: (_hiding || isHidden())
++		? QStringLiteral("hide-finished")
++		: _showAnimation
++		? QStringLiteral("show-final")
++		: QStringLiteral("bg");
++	if (!_a_show.animating() || !_traceAnimatingLogged) {
++		_traceAnimatingLogged = _a_show.animating();
++		LOG((QStringLiteral("SubmenuTrace: paint branch=%1 progress=%2 %3"
++		).arg(traceBranch
++		).arg(_a_show.value(1.)
++		).arg(traceState())));
++	}
++
+ 	if (_a_show.animating()) {
+ 		const auto opacity = _a_opacity.value(_hiding ? 0. : 1.);
+ 		const auto progress = _a_show.value(1.);
+@@ -374,6 +457,8 @@ void PopupMenu::paintEvent(QPaintEvent *e) {
+ 			showChildren();
+ 			_animatePhase = AnimatePhase::Shown;
+ 			Platform::AcceptAllMouseInput(this);
++			LOG((QStringLiteral("SubmenuTrace: show-final children shown %1"
++			).arg(traceState())));
+ 		});
+ 	} else {
+ 		paintBg(p);
+@@ -390,9 +475,17 @@ void PopupMenu::paintBg(QPainter &p) {
+ }
+ 
+ void PopupMenu::handleActivated(const Menu::CallbackData &data) {
++	LOG((QStringLiteral("SubmenuTrace: activated action=%1 source=%2 "
++		"submenus=%3 this=%4"
++	).arg(TraceAction(data.action)
++	).arg(TraceSource(data.source)
++	).arg(int(_submenus.size())
++	).arg(TracePtr(this))));
+ 	if (data.source != TriggeredSource::Mouse || _submenus.empty()) {
+ 		return;
+ 	} else if (!popupSubmenuFromAction(data)) {
++		LOG((QStringLiteral("SubmenuTrace: activated closes active submenu %1"
++		).arg(TracePtr(_activeSubmenu.data()))));
+ 		clearSubmenuAim();
+ 		if (const auto currentSubmenu = base::take(_activeSubmenu)) {
+ 			currentSubmenu->hideMenu(true);
+@@ -407,6 +500,12 @@ QAction *PopupMenu::activeSubmenuAction() const {
+ not_null<PopupMenu::SubmenuAim*> PopupMenu::submenuAim() {
+ 	if (!_submenuAim) {
+ 		_submenuAim = std::make_unique<SubmenuAim>([=] {
++			LOG((QStringLiteral("SubmenuTrace: aim timer fired hidden=%1 "
++				"hiding=%2 lastMouse=%3 this=%4"
++			).arg(isHidden() ? 1 : 0
++			).arg(_hiding ? 1 : 0
++			).arg(TracePoint(_menu->lastMouseGlobal())
++			).arg(TracePtr(this))));
+ 			if (isHidden() || _hiding) {
+ 				return;
+ 			}
+@@ -427,13 +526,29 @@ void PopupMenu::watchMouseMoves() {
+ }
+ 
+ void PopupMenu::handleMouseMoved(QPoint globalPosition) {
++	const auto traceMove = [&](const QString &branch) {
++		if (_traceLastMoveBranch == branch) {
++			return;
++		}
++		_traceLastMoveBranch = branch;
++		LOG((QStringLiteral("SubmenuTrace: mouse moved branch=%1 pos=%2 "
++			"frozen=%3 this=%4 parent=%5 activeSubmenu=%6"
++		).arg(branch
++		).arg(TracePoint(globalPosition)
++		).arg(_menu->mouseSelectionFrozen() ? 1 : 0
++		).arg(TracePtr(this)
++		).arg(TracePtr(_parent)
++		).arg(TracePtr(_activeSubmenu.data()))));
++	};
+ 	if (_parent
+ 		&& QRect(mapToGlobal(_inner.topLeft()), _inner.size()).contains(
+ 			globalPosition)) {
+ 		// Pointer reached this submenu, not aiming at it anymore.
++		traceMove(QStringLiteral("inside-child-clear-parent-aim"));
+ 		_parent->clearSubmenuAim();
+ 	}
+ 	if (!_activeSubmenu || !_submenuAim) {
++		traceMove(QStringLiteral("no-active-submenu"));
+ 		return;
+ 	}
+ 	const auto aim = _submenuAim.get();
+@@ -443,6 +558,7 @@ void PopupMenu::handleMouseMoved(QPoint globalPosition) {
+ 	if (owner
+ 		&& QRect(owner->mapToGlobal(QPoint()), owner->size()).contains(
+ 			globalPosition)) {
++		traceMove(QStringLiteral("over-owner-item"));
+ 		aim->apex = globalPosition;
+ 		aim->aiming = true;
+ 		aim->timer.cancel();
+@@ -450,9 +566,11 @@ void PopupMenu::handleMouseMoved(QPoint globalPosition) {
+ 	} else if (aim->aiming
+ 		&& !QGuiApplication::mouseButtons()
+ 		&& insideSubmenuAim(globalPosition)) {
++		traceMove(QStringLiteral("aiming-frozen"));
+ 		_menu->setMouseSelectionFrozen(true);
+ 		aim->timer.callOnce(kSubmenuAimDelay);
+ 	} else {
++		traceMove(QStringLiteral("clear-aim"));
+ 		clearSubmenuAim();
+ 	}
+ }
+@@ -492,6 +610,12 @@ void PopupMenu::clearSubmenuAim() {
+ }
+ 
+ void PopupMenu::handleTriggered(const Menu::CallbackData &data) {
++	LOG((QStringLiteral("SubmenuTrace: triggered action=%1 source=%2 "
++		"preventClose=%3 this=%4"
++	).arg(TraceAction(data.action)
++	).arg(TraceSource(data.source)
++	).arg(data.preventClose ? 1 : 0
++	).arg(TracePtr(this))));
+ 	if (!popupSubmenuFromAction(data)) {
+ 		_triggering = true;
+ 		if (!data.preventClose) {
+@@ -540,6 +664,13 @@ void PopupMenu::popupSubmenu(
+ 		_activeSubmenu = submenu;
+ 		_activeSubmenu->menu()->clearSelection();
+ 		_activeSubmenu->setAccessibleName(action->text());
++		LOG((QStringLiteral("SubmenuTrace: popupSubmenu action=%1 source=%2 "
++			"at=%3 actionTop=%4 parentState: %5"
++		).arg(TraceAction(action)
++		).arg(TraceSource(source)
++		).arg(TracePoint(geometry().topLeft() + p)
++		).arg(actionTop
++		).arg(traceState())));
+ 		if (_activeSubmenu->prepareGeometryFor(
+ 				geometry().topLeft() + p,
+ 				this,
+@@ -551,12 +682,17 @@ void PopupMenu::popupSubmenu(
+ 			if (!weak) {
+ 				return;
+ 			}
++			LOG((QStringLiteral("SubmenuTrace: popupSubmenu shown childState: %1"
++			).arg(_activeSubmenu
++				? _activeSubmenu->traceState()
++				: QStringLiteral("gone"))));
+ 			_menu->setChildShownAction(action);
+ 			const auto aim = submenuAim();
+ 			aim->action = action;
+ 			aim->aiming = (source == TriggeredSource::Mouse);
+ 			aim->apex = _menu->lastMouseGlobal();
+ 		} else {
++			LOG((QStringLiteral("SubmenuTrace: popupSubmenu geometry failed")));
+ 			_activeSubmenu = nullptr;
+ 		}
+ 	}
+@@ -599,23 +735,35 @@ void PopupMenu::handleMouseMove(QPoint globalPosition) {
+ }
+ 
+ void PopupMenu::handleMousePress(QPoint globalPosition) {
++	LOG((QStringLiteral("SubmenuTrace: press outside items pos=%1 %2"
++	).arg(TracePoint(globalPosition)
++	).arg(traceState())));
+ 	if (_parent) {
+ 		_parent->forwardMousePress(globalPosition);
+ 	} else {
++		LOG((QStringLiteral("SubmenuTrace: press outside closes the menu")));
+ 		hideMenu();
+ 	}
+ }
+ 
+ void PopupMenu::handleMouseRelease(QPoint globalPosition) {
++	LOG((QStringLiteral("SubmenuTrace: release outside items pos=%1 %2"
++	).arg(TracePoint(globalPosition)
++	).arg(traceState())));
+ 	if (_parent) {
+ 		_parent->forwardMouseRelease(globalPosition);
+ 	} else {
++		LOG((QStringLiteral("SubmenuTrace: release outside closes the menu")));
+ 		hideMenu();
+ 	}
+ }
+ 
+ void PopupMenu::focusOutEvent(QFocusEvent *e) {
+-	if (!InFocusChain(this)) {
++	const auto inChain = InFocusChain(this);
++	LOG((QStringLiteral("SubmenuTrace: focusOut inChain=%1 %2"
++	).arg(inChain ? 1 : 0
++	).arg(traceState())));
++	if (!inChain) {
+ 		hideMenu();
+ 	}
+ }
+@@ -642,6 +790,13 @@ void PopupMenu::mousePressEvent(QMouseEvent *e) {
+ 	// Mouse presses, synthesized from touch events,
+ 	// should be ignored, if the touch, that caused
+ 	// them, started before the menu was created.
++	LOG((QStringLiteral("SubmenuTrace: mousePressEvent pos=%1 global=%2 "
++		"source=%3 childAt=%4 %5"
++	).arg(TracePoint(e->pos())
++	).arg(TracePoint(e->globalPos())
++	).arg(int(e->source())
++	).arg(TraceWidget(childAt(e->pos()))
++	).arg(traceState())));
+ 	if (e->source() != Qt::MouseEventSynthesizedBySystem
+ 		|| (Integration::Instance().touchCounterNow()
+ 			> _touchBeginCounter)) {
+@@ -681,6 +836,9 @@ bool PopupMenu::eventFilter(QObject *o, QEvent *e) {
+ }
+ 
+ void PopupMenu::hideMenu(bool fast) {
++	LOG((QStringLiteral("SubmenuTrace: hideMenu fast=%1 %2"
++	).arg(fast ? 1 : 0
++	).arg(traceState())));
+ 	if (isHidden() || (_hiding && !fast)) {
+ 		return;
+ 	}
+@@ -701,6 +859,9 @@ void PopupMenu::hideMenu(bool fast) {
+ }
+ 
+ void PopupMenu::childHiding(PopupMenu *child) {
++	LOG((QStringLiteral("SubmenuTrace: childHiding child=%1 %2"
++	).arg(TracePtr(child)
++	).arg(traceState())));
+ 	if (_activeSubmenu && _activeSubmenu == child) {
+ 		_activeSubmenu = nullptr;
+ 	}
+@@ -840,6 +1001,10 @@ void PopupMenu::showStarted() {
+ }
+ 
+ void PopupMenu::startShowAnimation() {
++	_traceAnimatingLogged = false;
++	LOG((QStringLiteral("SubmenuTrace: startShowAnimation duration=%1 %2"
++	).arg(_st.showDuration
++	).arg(traceState())));
+ 	if (!_useTransparency) {
+ 		_a_show.stop();
+ 		update();
+@@ -864,6 +1029,8 @@ void PopupMenu::startShowAnimation() {
+ 	_animatePhase = AnimatePhase::StartShow;
+ 	hideChildren();
+ 	_a_show.start([this] { showAnimationCallback(); }, 0., 1., _st.showDuration);
++	LOG((QStringLiteral("SubmenuTrace: show animation started %1"
++	).arg(traceState())));
+ 	fireCurrentShowState();
+ }
+ 
+@@ -894,6 +1061,10 @@ void PopupMenu::opacityAnimationCallback() {
+ }
+ 
+ void PopupMenu::showAnimationCallback() {
++	if (!_a_show.animating()) {
++		LOG((QStringLiteral("SubmenuTrace: show animation finished %1"
++		).arg(traceState())));
++	}
+ 	update();
+ }
+ 
+@@ -1153,6 +1324,10 @@ bool PopupMenu::prepareGeometryFor(
+ }
+ 
+ void PopupMenu::showPrepared(TriggeredSource source) {
++	LOG((QStringLiteral("SubmenuTrace: showPrepared source=%1 screenReader=%2 %3"
++	).arg(TraceSource(source)
++	).arg(Ui::ScreenReaderModeActive() ? 1 : 0
++	).arg(traceState())));
+ 	startShowAnimation();
+ 
+ 	if (::Platform::IsWindows()) {
+@@ -1175,6 +1350,8 @@ void PopupMenu::showPrepared(TriggeredSource source) {
+ 	} else {
+ 		_menu->setShowSource(source);
+ 	}
++	LOG((QStringLiteral("SubmenuTrace: showPrepared done %1"
++	).arg(traceState())));
+ }
+ 
+ void PopupMenu::setClearLastSeparator(bool clear) {
+diff --git a/ui/widgets/popup_menu.h b/ui/widgets/popup_menu.h
+index 7aeafbb..94548e7 100644
+--- a/ui/widgets/popup_menu.h
++++ b/ui/widgets/popup_menu.h
+@@ -182,6 +182,7 @@ private:
+ 
+ 	using TriggeredSource = Menu::TriggeredSource;
+ 	void validateCompositingSupport();
++	[[nodiscard]] QString traceState() const;
+ 	void handleMenuResize();
+ 	void handleActivated(const Menu::CallbackData &data);
+ 	void handleTriggered(const Menu::CallbackData &data);
+@@ -254,6 +255,8 @@ private:
+ 
+ 	bool _useTransparency = true;
+ 	bool _hiding = false;
++	bool _traceAnimatingLogged = false;
++	QString _traceLastMoveBranch;
+ 	QPixmap _cache;
+ 	Animations::Simple _a_opacity;
+ 
