@@ -259,8 +259,12 @@ public:
 		NotContiguous,
 		Done,
 	};
+	struct Screenshot {
+		ScreenshotResult result = ScreenshotResult::Empty;
+		QImage image;
+	};
 	void setScreenshotMode(bool enabled);
-	[[nodiscard]] ScreenshotResult screenshotSelected();
+	[[nodiscard]] Screenshot screenshotSelected();
 	void toggleRemoveFromUserpics(bool remove);
 
 	// -1 if should not be visible, -2 if bad history()
@@ -434,6 +438,11 @@ private:
 		not_null<const Ui::ChatStyle*> st,
 		int width,
 		int height);
+	void paintScreenshotUserpic(
+		Painter &p,
+		not_null<Element*> view,
+		int userpicTop,
+		bool paused);
 
 	QPoint mapPointToItem(QPoint p, const Element *view) const;
 	QPoint mapPointToItem(QPoint p, const HistoryItem *item) const;

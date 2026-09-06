@@ -5972,9 +5972,51 @@ void HistoryInner::setScreenshotMode(bool enabled) {
 	update();
 }
 
-HistoryInner::ScreenshotResult HistoryInner::screenshotSelected() {
+void HistoryInner::paintScreenshotUserpic(
+		Painter &p,
+		not_null<Element*> view,
+		int userpicTop,
+		bool paused) {
+	const auto item = view->data();
+	if (const auto from = item->displayFrom()) {
+		Dialogs::Ui::PaintUserpic(
+			p,
+			from,
+			validateVideoUserpic(from),
+			_userpics[from],
+			st::historyPhotoLeft,
+			userpicTop,
+			width(),
+			st::msgPhotoSize,
+			paused);
+	} else if (const auto info = item->displayHiddenSenderInfo()) {
+		if (info->customUserpic.empty()) {
+			info->emptyUserpic.paintCircle(
+				p,
+				st::historyPhotoLeft,
+				userpicTop,
+				width(),
+				st::msgPhotoSize);
+		} else {
+			auto &userpic = _hiddenSenderUserpics[item->id];
+			const auto valid = info->paintCustomUserpic(
+				p,
+				userpic,
+				st::historyPhotoLeft,
+				userpicTop,
+				width(),
+				st::msgPhotoSize);
+			if (!valid) {
+				info->customUserpic.load(&session(), item->fullId());
+			}
+		}
+	}
+}
+
+HistoryInner::Screenshot HistoryInner::screenshotSelected() {
+	auto result = Screenshot();
 	if (_selected.empty()) {
-		return ScreenshotResult::Empty;
+		return result;
 	}
 
 	auto views = std::vector<not_null<Element*>>();
@@ -6002,19 +6044,33 @@ HistoryInner::ScreenshotResult HistoryInner::screenshotSelected() {
 		}
 	}
 	if (first < 0) {
-		return ScreenshotResult::Empty;
+		return result;
 	}
 	auto height = 0;
 	for (auto i = first; i <= last; ++i) {
 		const auto item = views[i]->data();
 		if (!_selected.contains(item) && item->canBeSelected()) {
-			return ScreenshotResult::NotContiguous;
+			result.result = ScreenshotResult::NotContiguous;
+			return result;
 		}
 		height += views[i]->height();
 	}
 	if (height <= 0 || width() <= 0) {
-		return ScreenshotResult::Empty;
+		return result;
 	}
+
+	// The first message may share its day with the previous (unselected)
+	// one and so carry no date badge of its own. Reserve room for one at
+	// the top of the image in that case so every screenshot starts with
+	// a date, the same way the list pins a date to the top while scrolling.
+	const auto firstView = views[first];
+	const auto extraDateHeight = st::msgServiceMargin.top()
+		+ st::msgServicePadding.top()
+		+ st::msgServiceFont->height
+		+ st::msgServicePadding.bottom()
+		+ st::msgServiceMargin.bottom();
+	const auto extraTop = firstView->displayDate() ? 0 : extraDateHeight;
+	height += extraTop;
 
 	const auto ratio = style::DevicePixelRatio();
 	const auto size = QSize(width(), height);
@@ -6035,7 +6091,8 @@ HistoryInner::ScreenshotResult HistoryInner::screenshotSelected() {
 			width(),
 			std::min(st::msgMaxWidth / 2, width() / 2));
 
-		auto top = 0;
+		// Messages.
+		auto top = extraTop;
 		for (auto i = first; i <= last; ++i) {
 			const auto view = views[i];
 			const auto viewHeight = view->height();
@@ -6055,9 +6112,75 @@ HistoryInner::ScreenshotResult HistoryInner::screenshotSelected() {
 			p.translate(0, -top);
 			top += viewHeight;
 		}
+
+		// Userpics are painted in a separate pass by the list, so repeat
+		// that here. A pack of consecutive messages from one sender shows
+		// the userpic on its last message; if the selection cuts the pack
+		// short, show it on the last selected message instead, the same
+		// way the list does at the bottom of the visible area.
+		if (canHaveFromUserpics()) {
+			top = extraTop;
+			for (auto i = first; i <= last; ++i) {
+				const auto view = views[i];
+				const auto viewHeight = view->height();
+				if (viewHeight <= 0) {
+					continue;
+				}
+				const auto item = view->data();
+				const auto cutsPack = (i == last)
+					&& view->hasFromPhoto()
+					&& view->isAttachedToNext();
+				if (!view->isHidden()
+					&& !item->isService()
+					&& (view->displayFromPhoto() || cutsPack)) {
+					paintScreenshotUserpic(
+						p,
+						view,
+						top + viewHeight
+							- view->marginBottom()
+							- st::msgPhotoSize,
+						context.paused);
+				}
+				top += viewHeight;
+			}
+		}
+
+		// Date badges are painted in a separate pass by the list as well.
+		if (extraTop > 0) {
+			HistoryView::ServiceMessagePainter::PaintDate(
+				p,
+				context.st,
+				firstView->dateTime(),
+				0,
+				_contentWidth,
+				_isChatWide);
+		}
+		top = extraTop;
+		for (auto i = first; i <= last; ++i) {
+			const auto view = views[i];
+			const auto viewHeight = view->height();
+			if (viewHeight <= 0) {
+				continue;
+			}
+			if (view->displayDate()) {
+				if (const auto date = view->Get<HistoryView::DateBadge>()) {
+					date->paint(p, context.st, top, _contentWidth, _isChatWide);
+				} else {
+					HistoryView::ServiceMessagePainter::PaintDate(
+						p,
+						context.st,
+						view->dateTime(),
+						top,
+						_contentWidth,
+						_isChatWide);
+				}
+			}
+			top += viewHeight;
+		}
 	}
-	QGuiApplication::clipboard()->setImage(image);
-	return ScreenshotResult::Done;
+	result.result = ScreenshotResult::Done;
+	result.image = std::move(image);
+	return result;
 }
 
 auto HistoryInner::viewByItem(const HistoryItem *item) const -> Element* {

@@ -221,6 +221,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #endif
 
 #include <QtGui/QWindow>
+#include <QtGui/QClipboard>
+#include <QtGui/QGuiApplication>
 #include <QtCore/QMimeData>
 
 namespace {
@@ -10992,17 +10994,39 @@ void HistoryWidget::screenshotSelected() {
 		return;
 	}
 	using Result = HistoryInner::ScreenshotResult;
-	switch (_list->screenshotSelected()) {
+	auto shot = _list->screenshotSelected();
+	switch (shot.result) {
 	case Result::Empty:
 		controller()->showToast(u"请先选择要截图的消息"_q);
 		break;
 	case Result::NotContiguous:
 		controller()->showToast(u"请选择连续的消息"_q);
 		break;
-	case Result::Done:
+	case Result::Done: {
+		// Put the chat title (userpic, name, status) above the messages.
+		const auto title = _topBar->renderTitleForScreenshot();
+		const auto ratio = style::DevicePixelRatio();
+		const auto titleWidth = title.width() / ratio;
+		const auto titleHeight = title.height() / ratio;
+		const auto listWidth = shot.image.width() / ratio;
+		const auto listHeight = shot.image.height() / ratio;
+		const auto size = QSize(
+			std::max(titleWidth, listWidth),
+			titleHeight + listHeight);
+		auto result = QImage(
+			size * ratio,
+			QImage::Format_ARGB32_Premultiplied);
+		result.setDevicePixelRatio(ratio);
+		result.fill(st::topBarBg->c);
+		{
+			auto p = QPainter(&result);
+			p.drawImage(0, 0, title);
+			p.drawImage(0, titleHeight, shot.image);
+		}
+		QGuiApplication::clipboard()->setImage(result);
 		controller()->showToast(u"截图已复制到剪贴板"_q);
 		setScreenshotMode(false);
-		break;
+	} break;
 	}
 }
 

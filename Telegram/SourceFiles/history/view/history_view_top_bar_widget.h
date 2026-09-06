@@ -129,6 +129,7 @@ public:
 	[[nodiscard]] bool screenshotMode() const {
 		return _screenshotMode;
 	}
+	[[nodiscard]] QImage renderTitleForScreenshot();
 	[[nodiscard]] rpl::producer<> cancelChooseForReportRequest() const {
 		return _cancelChooseForReport.events();
 	}

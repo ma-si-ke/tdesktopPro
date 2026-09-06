@@ -39,6 +39,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text.h"
 #include "ui/text/text_options.h"
 #include "ui/painter.h"
+#include "ui/userpic_view.h"
 #include "ui/unread_badge.h"
 #include "ui/ui_utility.h"
 #include "window/window_adaptive.h"
@@ -1591,6 +1592,52 @@ void TopBarWidget::setScreenshotMode(bool enabled) {
 	} else {
 		updateControlsGeometry();
 	}
+}
+
+QImage TopBarWidget::renderTitleForScreenshot() {
+	const auto ratio = style::DevicePixelRatio();
+	const auto size = QSize(width(), st::topBarHeight);
+	auto image = QImage(
+		size * ratio,
+		QImage::Format_ARGB32_Premultiplied);
+	image.setDevicePixelRatio(ratio);
+	image.fill(st::topBarBg->c);
+	{
+		auto p = Painter(&image);
+
+		// The desktop top bar shows no userpic in the multi-column layout,
+		// so paint one at the left the way the one-column layout does to
+		// make the screenshot self-explanatory.
+		auto left = st::topBarArrowPadding.right();
+		if (const auto peer = titleNamePeer()) {
+			const auto photoSize = infoButtonStyle().photoSize;
+			auto view = Ui::PeerUserpicView();
+			peer->paintUserpicLeft(
+				p,
+				view,
+				left,
+				(st::topBarHeight - photoSize) / 2,
+				width(),
+				photoSize);
+			left += photoSize + st::topBarArrowPadding.right();
+		}
+
+		// paintTopBar() lays the name and status out from _leftTaken to
+		// width() - _rightTaken, so substitute the icon-free layout while
+		// painting and restore the live values afterwards.
+		const auto wasLeftTaken = _leftTaken;
+		const auto wasRightTaken = _rightTaken;
+		_leftTaken = left;
+		_rightTaken = st::topBarArrowPadding.right();
+		paintTopBar(p);
+		_leftTaken = wasLeftTaken;
+		_rightTaken = wasRightTaken;
+
+		p.fillRect(
+			QRect(0, st::topBarHeight - st::lineWidth, width(), st::lineWidth),
+			st::shadowFg);
+	}
+	return image;
 }
 
 void TopBarWidget::updateScreenshotNumbers() {
