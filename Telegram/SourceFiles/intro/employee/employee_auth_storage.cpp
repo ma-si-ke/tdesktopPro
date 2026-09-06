@@ -19,6 +19,7 @@ constexpr quint32 kVersionV1 = 1u;
 constexpr quint32 kVersionV2 = 2u;
 constexpr quint32 kVersionV3 = 3u;
 constexpr quint32 kVersionV4 = 4u;
+constexpr quint32 kVersionV5 = 5u;
 
 } // namespace
 
@@ -26,7 +27,7 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 	auto bytes = QByteArray();
 	auto stream = QDataStream(&bytes, QIODevice::WriteOnly);
 	stream.setVersion(QDataStream::Qt_5_15);
-	stream << kMagic << kVersionV4;
+	stream << kMagic << kVersionV5;
 	stream << snap.token.toUtf8();
 	// Permissions are packed into a 16-bit mask; adding a 17th permission
 	// requires widening `bits` (and a snapshot version bump).
@@ -45,6 +46,7 @@ QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap) {
 	}
 	stream << snap.openTime.toUtf8();
 	stream << quint32(static_cast<uchar>(snap.type));
+	stream << snap.employeeId.toUtf8();
 	return bytes;
 }
 
@@ -60,7 +62,8 @@ std::optional<AuthSnapshot> DeserializeAuthSnapshot(const QByteArray &bytes) {
 		|| (version != kVersionV1
 			&& version != kVersionV2
 			&& version != kVersionV3
-			&& version != kVersionV4)) {
+			&& version != kVersionV4
+			&& version != kVersionV5)) {
 		return std::nullopt;
 	}
 
@@ -125,6 +128,14 @@ std::optional<AuthSnapshot> DeserializeAuthSnapshot(const QByteArray &bytes) {
 		snap.type = (typeRaw <= maxType)
 			? static_cast<EmployeeType>(typeRaw)
 			: EmployeeType::None;
+	}
+	if (version >= kVersionV5) {
+		QByteArray employeeIdBytes;
+		stream >> employeeIdBytes;
+		if (stream.status() != QDataStream::Ok) {
+			return std::nullopt;
+		}
+		snap.employeeId = QString::fromUtf8(employeeIdBytes);
 	}
 	return snap;
 }

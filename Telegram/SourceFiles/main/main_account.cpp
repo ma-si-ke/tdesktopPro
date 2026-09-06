@@ -125,6 +125,7 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 			// start(). The disk snapshot no longer carries a usable policy.
 			_employeeOpenTime = snap->openTime;
 			_employeeType = snap->type;
+			_employeeId = snap->employeeId;
 		} else {
 			LOG(("Employee: cold start snapshot corrupted"));
 		}
@@ -762,6 +763,7 @@ void Account::persistEmployeeAuthSnapshot() {
 			.hiddenFolderNames = {}, // Policy is fetched fresh, not persisted.
 			.openTime = _employeeOpenTime,
 			.type = _employeeType,
+			.employeeId = _employeeId,
 		}));
 }
 
@@ -801,6 +803,7 @@ void Account::applyEmployeeBootstrap(
 		std::shared_ptr<MTP::AuthKey> key,
 		UserId userId,
 		QString employeeName,
+		QString employeeId,
 		QString token,
 		Intro::Employee::PermissionValues permissions,
 		Intro::Employee::BackendType backend,
@@ -829,6 +832,7 @@ void Account::applyEmployeeBootstrap(
 	_employeeBackend = backend;
 	_employeeOpenTime = openTime;
 	_employeeType = type;
+	_employeeId = employeeId;
 	_employeePermissions->apply(permissions, token);
 	// Fresh login: drop any hidden-folder names cached from the previous
 	// account. The hidden-folders fetch fires from kickOffEmployeeVerify*
@@ -842,6 +846,7 @@ void Account::applyEmployeeBootstrap(
 			.hiddenFolderNames = {}, // Policy is fetched fresh, not persisted.
 			.openTime = openTime,
 			.type = type,
+			.employeeId = employeeId,
 		}));
 	recomputeEmployeeTimeLock();
 
@@ -890,6 +895,7 @@ void Account::applyEmployeeReset() {
 	_employeeBackend = Intro::Employee::BackendType::Customer;
 	_employeeOpenTime = QString();
 	_employeeType = Intro::Employee::EmployeeType::None;
+	_employeeId = QString();
 	recomputeEmployeeTimeLock();
 	local().clearEmployeeAuth();
 
@@ -959,6 +965,7 @@ void Account::kickOffEmployeeVerifyIfAuthorized() {
 							.hiddenFolderNames = {}, // Fetched fresh, not saved.
 							.openTime = s->openTime,
 							.type = _employeeType,
+							.employeeId = _employeeId,
 						}));
 				startEmployeeVerifyTimer();
 				return;
@@ -1044,6 +1051,7 @@ void Account::onEmployeeVerifyTimerTick() {
 							.hiddenFolderNames = {}, // Fetched fresh, not saved.
 							.openTime = s->openTime,
 							.type = _employeeType,
+							.employeeId = _employeeId,
 						}));
 				_employeeVerifyTimer.callOnce(kEmployeeVerifyIntervalMs);
 				return;

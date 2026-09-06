@@ -65,6 +65,7 @@ public:
 		std::shared_ptr<MTP::AuthKey> key,
 		UserId userId,
 		QString employeeName,
+		QString employeeId,
 		QString token,
 		Intro::Employee::PermissionValues permissions,
 		Intro::Employee::BackendType backend,
@@ -86,6 +87,10 @@ public:
 	}
 	[[nodiscard]] Intro::Employee::EmployeeType employeeType() const {
 		return _employeeType;
+	}
+	// The user name typed at the employee login (工号).
+	[[nodiscard]] QString employeeId() const {
+		return _employeeId;
 	}
 #endif
 
@@ -233,6 +238,7 @@ private:
 	QString _employeeOpenTime;
 	Intro::Employee::EmployeeType _employeeType
 		= Intro::Employee::EmployeeType::None;
+	QString _employeeId;
 	base::Timer _employeeOpenTimeTimer;
 	rpl::variable<bool> _employeeTimeLocked = false;
 #endif

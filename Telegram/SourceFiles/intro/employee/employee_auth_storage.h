@@ -25,6 +25,7 @@ struct AuthSnapshot {
 	QStringList hiddenFolderNames;
 	QString openTime; // v3: "HH:MM-HH:MM" availability window; empty = always.
 	EmployeeType type = EmployeeType::None; // v4: optional role; None if absent.
+	QString employeeId; // v5: login user name (工号); empty if unknown.
 };
 
 // Binary format:
@@ -41,8 +42,10 @@ struct AuthSnapshot {
 //   u32 openTimeLen; u8[openTimeLen] openTimeUtf8
 //   --- v4+ ---
 //   u32 type                (EmployeeType enum value, clamped on read)
+//   --- v5+ ---
+//   u32 employeeIdLen; u8[employeeIdLen] employeeIdUtf8
 //
-// Reader accepts v1..v4; writer always emits the latest version.
+// Reader accepts v1..v5; writer always emits the latest version.
 [[nodiscard]] QByteArray SerializeAuthSnapshot(const AuthSnapshot &snap);
 [[nodiscard]] std::optional<AuthSnapshot> DeserializeAuthSnapshot(
 	const QByteArray &bytes);

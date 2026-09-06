@@ -349,6 +349,7 @@ void EmployeeLoginStep::injectAndFetchSelf(AuthSuccess result) {
 		std::move(key),
 		result.userId,
 		result.employeeName,
+		_username->getLastText().trimmed(),
 		result.token,
 		result.permissions,
 		_chosenBackend,

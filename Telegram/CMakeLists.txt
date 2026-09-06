@@ -1214,6 +1214,8 @@ PRIVATE
     history/history_view_pull_to_next_channel.h
     history/history_view_swipe_back_session.cpp
     history/history_view_swipe_back_session.h
+    history/history_screenshot_watermark.cpp
+    history/history_screenshot_watermark.h
     history/history_widget.cpp
     history/history_widget.h
     info/bot/earn/info_bot_earn_list.cpp
@@ -2165,6 +2167,8 @@ PRIVATE
     ui/widgets/chat_filters_tabs_strip.h
     ui/widgets/peer_bubble.cpp
     ui/widgets/peer_bubble.h
+    ui/blind_watermark.cpp
+    ui/blind_watermark.h
     ui/countryinput.cpp
     ui/countryinput.h
     ui/dynamic_thumbnails.cpp

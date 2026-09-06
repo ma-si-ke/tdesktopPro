@@ -220,6 +220,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_account.h"
 #endif
 
+#include "history/history_screenshot_watermark.h"
+
 #include <QtGui/QWindow>
 #include <QtGui/QClipboard>
 #include <QtGui/QGuiApplication>
@@ -11023,6 +11025,7 @@ void HistoryWidget::screenshotSelected() {
 			p.drawImage(0, 0, title);
 			p.drawImage(0, titleHeight, shot.image);
 		}
+		HistoryView::ApplyScreenshotWatermark(result, &session());
 		QGuiApplication::clipboard()->setImage(result);
 		controller()->showToast(u"截图已复制到剪贴板"_q);
 		setScreenshotMode(false);
