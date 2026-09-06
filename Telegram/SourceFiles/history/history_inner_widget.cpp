@@ -63,6 +63,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/screen_reader_mode.h"
 #include "ui/ui_utility.h"
 #include "window/window_session_controller.h"
+#include "window/section_widget.h"
 #include "window/window_controller.h"
 #include "window/window_peer_menu.h"
 #include "window/notifications_manager.h"
@@ -814,7 +815,7 @@ void HistoryInner::setupSwipeReplyAndBack() {
 }
 
 bool HistoryInner::hasSelectRestriction() const {
-	if (_chooseForReportReason.has_value()) {
+	if (_chooseForReportReason.has_value() || _screenshotMode) {
 		return false;
 	} else if (session().frozen()) {
 		return true;
@@ -5169,7 +5170,7 @@ HistoryView::SelectionModeResult HistoryInner::inSelectionMode() const {
 		const auto isSelecting = _mouseAction == MouseAction::Selecting;
 		if (isSelecting && _dragSelFrom && _dragSelTo) {
 			return true;
-		} else if (_chooseForReportReason.has_value()) {
+		} else if (_chooseForReportReason.has_value() || _screenshotMode) {
 			return true;
 		} else if (_lastInSelectionMode && isSelecting) {
 			return true;
@@ -5961,6 +5962,102 @@ void HistoryInner::setChooseReportReason(Data::ReportInput reportInput) {
 
 void HistoryInner::clearChooseReportReason() {
 	_chooseForReportReason = std::nullopt;
+}
+
+void HistoryInner::setScreenshotMode(bool enabled) {
+	if (_screenshotMode == enabled) {
+		return;
+	}
+	_screenshotMode = enabled;
+	update();
+}
+
+HistoryInner::ScreenshotResult HistoryInner::screenshotSelected() {
+	if (_selected.empty()) {
+		return ScreenshotResult::Empty;
+	}
+
+	auto views = std::vector<not_null<Element*>>();
+	const auto collect = [&](History *history) {
+		if (!history) {
+			return;
+		}
+		for (const auto &block : history->blocks) {
+			for (const auto &view : block->messages) {
+				views.push_back(view.get());
+			}
+		}
+	};
+	collect(_migrated);
+	collect(_history);
+
+	auto first = -1;
+	auto last = -1;
+	for (auto i = 0; i != int(views.size()); ++i) {
+		if (_selected.contains(views[i]->data())) {
+			if (first < 0) {
+				first = i;
+			}
+			last = i;
+		}
+	}
+	if (first < 0) {
+		return ScreenshotResult::Empty;
+	}
+	auto height = 0;
+	for (auto i = first; i <= last; ++i) {
+		const auto item = views[i]->data();
+		if (!_selected.contains(item) && item->canBeSelected()) {
+			return ScreenshotResult::NotContiguous;
+		}
+		height += views[i]->height();
+	}
+	if (height <= 0 || width() <= 0) {
+		return ScreenshotResult::Empty;
+	}
+
+	const auto ratio = style::DevicePixelRatio();
+	const auto size = QSize(width(), height);
+	auto image = QImage(
+		size * ratio,
+		QImage::Format_ARGB32_Premultiplied);
+	image.setDevicePixelRatio(ratio);
+	image.fill(Qt::transparent);
+	{
+		auto p = Painter(&image);
+		const auto full = QRect(QPoint(), size);
+		Window::SectionWidget::PaintBackground(p, _theme.get(), size, full);
+
+		auto context = preparePaintContext(full);
+		context.highlightPathCache = &_highlightPathCache;
+		_pathGradient->startFrame(
+			0,
+			width(),
+			std::min(st::msgMaxWidth / 2, width() / 2));
+
+		auto top = 0;
+		for (auto i = first; i <= last; ++i) {
+			const auto view = views[i];
+			const auto viewHeight = view->height();
+			if (viewHeight <= 0) {
+				continue;
+			}
+			context.reactionInfo = nullptr;
+			context.outbg = view->hasOutLayout();
+			context.selection = TextSelection();
+			context.fullMessageSelected = false;
+			context.messageSelection = nullptr;
+			context.highlight = Ui::ChatPaintHighlight();
+			context.translate(0, -top);
+			p.translate(0, top);
+			view->draw(p, context);
+			context.translate(0, top);
+			p.translate(0, -top);
+			top += viewHeight;
+		}
+	}
+	QGuiApplication::clipboard()->setImage(image);
+	return ScreenshotResult::Done;
 }
 
 auto HistoryInner::viewByItem(const HistoryItem *item) const -> Element* {

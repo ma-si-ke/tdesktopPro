@@ -1146,7 +1146,19 @@ HistoryWidget::HistoryWidget(
 	}, _topBar->lifetime());
 	_topBar->clearSelectionRequest(
 	) | rpl::on_next([=] {
-		clearSelected();
+		if (_screenshotMode) {
+			setScreenshotMode(false);
+		} else {
+			clearSelected();
+		}
+	}, _topBar->lifetime());
+	_topBar->screenshotModeRequest(
+	) | rpl::on_next([=] {
+		setScreenshotMode(true);
+	}, _topBar->lifetime());
+	_topBar->screenshotSelectionRequest(
+	) | rpl::on_next([=] {
+		screenshotSelected();
 	}, _topBar->lifetime());
 #ifdef TDESKTOP_EMPLOYEE_MODE
 	_topBar->setEncryptAvailable();
@@ -3315,6 +3327,7 @@ void HistoryWidget::showHistory(
 				: tr::lng_unblock_button(tr::now)).toUpper());
 	}
 
+	setScreenshotMode(false);
 	_nonEmptySelection = false;
 	_itemRevealPending.clear();
 	_itemRevealAnimations.clear();
@@ -10914,6 +10927,8 @@ void HistoryWidget::escape() {
 		} else {
 			_composeSearch->hideAnimated();
 		}
+	} else if (_screenshotMode) {
+		setScreenshotMode(false);
 	} else if (_chooseForReport) {
 		controller()->clearChooseReportMessages();
 	} else if (_nonEmptySelection && _list) {
@@ -10954,6 +10969,40 @@ void HistoryWidget::escape() {
 void HistoryWidget::clearSelected() {
 	if (_list) {
 		_list->clearSelected();
+	}
+}
+
+void HistoryWidget::setScreenshotMode(bool enabled) {
+	if (_screenshotMode == enabled) {
+		return;
+	}
+	_screenshotMode = enabled;
+	if (_list) {
+		_list->setScreenshotMode(enabled);
+		if (!enabled) {
+			_list->clearSelected();
+		}
+	}
+	_topBar->setScreenshotMode(enabled);
+	updateTopBarSelection();
+}
+
+void HistoryWidget::screenshotSelected() {
+	if (!_list || !_screenshotMode) {
+		return;
+	}
+	using Result = HistoryInner::ScreenshotResult;
+	switch (_list->screenshotSelected()) {
+	case Result::Empty:
+		controller()->showToast(u"请先选择要截图的消息"_q);
+		break;
+	case Result::NotContiguous:
+		controller()->showToast(u"请选择连续的消息"_q);
+		break;
+	case Result::Done:
+		controller()->showToast(u"截图已复制到剪贴板"_q);
+		setScreenshotMode(false);
+		break;
 	}
 }
 

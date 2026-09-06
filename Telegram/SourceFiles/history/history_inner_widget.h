@@ -253,6 +253,14 @@ public:
 
 	void setChooseReportReason(Data::ReportInput reportInput);
 	void clearChooseReportReason();
+
+	enum class ScreenshotResult {
+		Empty,
+		NotContiguous,
+		Done,
+	};
+	void setScreenshotMode(bool enabled);
+	[[nodiscard]] ScreenshotResult screenshotSelected();
 	void toggleRemoveFromUserpics(bool remove);
 
 	// -1 if should not be visible, -2 if bad history()
@@ -629,6 +637,7 @@ private:
 	TextForMimeData _selectedText;
 	HistoryView::KeyboardTextSelection _keyboardTextSelection;
 	std::optional<Data::ReportInput> _chooseForReportReason;
+	bool _screenshotMode = false;
 
 	const std::unique_ptr<Ui::PathShiftGradient> _pathGradient;
 	QPainterPath _highlightPathCache;

@@ -311,6 +311,8 @@ public:
 	void encryptSelected();
 	void confirmDeleteSelected();
 	void clearSelected();
+	void setScreenshotMode(bool enabled);
+	void screenshotSelected();
 
 	[[nodiscard]] SendMenu::Details sendMenuDetails() const override;
 	bool processChosenSticker(ChatHelpers::FileChosen &&chosen) override;
@@ -1008,6 +1010,7 @@ private:
 	std::unique_ptr<HistoryView::StickerToast> _stickerToast;
 	std::unique_ptr<HistoryView::SelfForwardsTagger> _selfForwardsTagger;
 	std::unique_ptr<ChooseMessagesForReport> _chooseForReport;
+	bool _screenshotMode = false;
 
 	std::unique_ptr<HistoryView::PaidReactionToast> _paidReactionToast;
 

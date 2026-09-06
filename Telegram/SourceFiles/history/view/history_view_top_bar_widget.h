@@ -119,6 +119,16 @@ public:
 		return _encryptSelection.events();
 	}
 	void setEncryptAvailable();
+	[[nodiscard]] rpl::producer<> screenshotModeRequest() const {
+		return _screenshotModeRequests.events();
+	}
+	[[nodiscard]] rpl::producer<> screenshotSelectionRequest() const {
+		return _screenshotSelection.events();
+	}
+	void setScreenshotMode(bool enabled);
+	[[nodiscard]] bool screenshotMode() const {
+		return _screenshotMode;
+	}
 	[[nodiscard]] rpl::producer<> cancelChooseForReportRequest() const {
 		return _cancelChooseForReport.events();
 	}
@@ -212,6 +222,7 @@ private:
 	void updateUnreadBadge();
 	void setChooseForReportReason(std::optional<Data::ReportInput>);
 	void toggleSelectedControls(bool shown);
+	void updateScreenshotNumbers();
 	[[nodiscard]] bool showSelectedActions() const;
 
 	const not_null<Window::SessionController*> _controller;
@@ -231,6 +242,7 @@ private:
 	bool _canSendNow = false;
 	bool _canEncrypt = false;
 	bool _encryptAvailable = false;
+	bool _screenshotMode = false;
 	bool _searchMode = false;
 
 	Ui::Animations::Simple _selectedShown;
@@ -238,6 +250,7 @@ private:
 
 	object_ptr<Ui::RoundButton> _clear;
 	object_ptr<Ui::RoundButton> _forward, _sendNow, _delete, _encrypt;
+	object_ptr<Ui::RoundButton> _screenshot;
 	object_ptr<Ui::InputField> _searchField = { nullptr };
 	object_ptr<Ui::FadeWrapScaled<Ui::IconButton>> _chooseFromUser
 		= { nullptr };
@@ -259,6 +272,7 @@ private:
 	object_ptr<Ui::IconButton> _call;
 	object_ptr<Ui::IconButton> _groupCall;
 	object_ptr<Ui::IconButton> _search;
+	object_ptr<Ui::IconButton> _screenshotToggle;
 	object_ptr<Ui::IconButton> _memoToggle;
 	object_ptr<Ui::IconButton> _infoToggle;
 	object_ptr<Ui::IconButton> _menuToggle;
@@ -287,6 +301,8 @@ private:
 	rpl::event_stream<> _sendNowSelection;
 	rpl::event_stream<> _deleteSelection;
 	rpl::event_stream<> _clearSelection;
+	rpl::event_stream<> _screenshotModeRequests;
+	rpl::event_stream<> _screenshotSelection;
 	rpl::event_stream<> _encryptSelection;
 	rpl::event_stream<> _cancelChooseForReport;
 

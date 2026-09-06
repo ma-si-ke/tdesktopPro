@@ -936,6 +936,11 @@ topBarCloseChoose: IconButton(topBarSearch) {
 	iconPosition: point(10px, -1px);
 	rippleAreaPosition: point(7px, 7px);
 }
+topBarScreenshot: IconButton(topBarSearch) {
+	icon: icon {{ "menu/image", menuIconFg }};
+	iconOver: icon {{ "menu/image", menuIconFgOver }};
+	iconPosition: point(8px, 15px);
+}
 topBarSkip: -5px;
 topBarCallSkip: -1px;
 topBarMenuToggle: IconButton(topBarSearch) {
